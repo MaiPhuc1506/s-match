@@ -1,0 +1,45 @@
+// S-Match — Prisma Schema
+// SMM-8 — User Database & Backend Connection (Sprint 1).
+//
+// Scope is intentionally limited to Auth-adjacent tables (Role, User).
+// Other sprint tickets own their own tables and should add their models here
+// as their own work, e.g.:
+//   - SMM-6  Authentication Backend        -> may add refresh-token storage, etc.
+//   - SMM-14/16 Court Management            -> CourtFacility, Court, TimeSlotTemplate, ...
+//   - SMM-18/20 Court Booking                -> Booking, OpenMatch, ...
+//   - SMM-10/12 Player & Community Profile   -> PlayerProfile, PlayingPreference, ...
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleName {
+  ADMIN
+  COURT_OWNER
+  PLAYER
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        RoleName @unique
+  description String?
+  users       User[]
+  createdAt   DateTime @default(now())
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  fullName  String?
+  phone     String?
+  roleId    Int
+  role      Role     @relation(fields: [roleId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
