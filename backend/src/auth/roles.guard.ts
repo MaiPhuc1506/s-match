@@ -39,7 +39,12 @@ export class RolesGuard implements CanActivate {
         return true;
       }
 
-      const hasRole = requiredRoles.includes(payload.role);
+      // Chuẩn hóa về chữ thường để so sánh không bị lỗi hoa/thường
+      const userRole = String(payload.role || '').toLowerCase();
+      const hasRole = requiredRoles.some(
+        (role) => String(role).toLowerCase() === userRole,
+      );
+
       if (!hasRole) {
         throw new ForbiddenException('Bạn không có quyền truy cập chức năng này');
       }

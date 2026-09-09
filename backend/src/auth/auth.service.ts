@@ -1,3 +1,4 @@
+import { PrismaService } from '../prisma/prisma.service';
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -17,7 +18,10 @@ interface UserRecord {
 export class AuthService {
   private readonly mockUsers: UserRecord[] = [];
 
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+  private readonly prisma: PrismaService,
+  private readonly jwtService: JwtService,
+) {}
 
   async register(registerDto: RegisterDto) {
     const existingUser = this.mockUsers.find((u) => u.email === registerDto.email);
@@ -49,36 +53,39 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto) {
-    const user = this.mockUsers.find((u) => u.email === loginDto.email);
-    if (!user) {
-      throw new UnauthorizedException('Sai email hoặc mật khẩu');
-    }
+  const user = await this.prisma.user.findUnique({
+    where: { email: loginDto.email },
+    include: { role: true },
+  });
 
-    const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Sai email hoặc mật khẩu');
-    }
-
-    const payload = { sub: user.id, email: user.email, role: user.role };
-    
-    // Tạo Access Token (15 phút) và Refresh Token (7 ngày)
-    const accessToken = await this.jwtService.signAsync(payload, { expiresIn: '15m' });
-    const refreshToken = await this.jwtService.signAsync(payload, { expiresIn: '7d' });
-
-    user.refreshToken = refreshToken;
-
-    return {
-      message: 'Đăng nhập thành công',
-      accessToken,
-      refreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role,
-      },
-    };
+  if (!user) {
+    throw new UnauthorizedException('Sai email hoặc mật khẩu');
   }
+
+  const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
+  if (!isPasswordValid) {
+    throw new UnauthorizedException('Sai email hoặc mật khẩu');
+  }
+
+  const roleName = user.role?.name || 'PLAYER';
+  const payload = { sub: user.id, email: user.email, role: roleName };
+  
+  // Tạo Access Token (15 phút) và Refresh Token (7 ngày)
+  const accessToken = await this.jwtService.signAsync(payload, { expiresIn: '15m' });
+  const refreshToken = await this.jwtService.signAsync(payload, { expiresIn: '7d' });
+
+  return {
+    message: 'Đăng nhập thành công',
+    accessToken,
+    refreshToken,
+    user: {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: roleName,
+    },
+  };
+}
 
   async refreshTokens(refreshToken: string) {
     try {
