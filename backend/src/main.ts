@@ -1,3 +1,4 @@
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module.js';
@@ -5,10 +6,18 @@ import { AppModule } from './app.module.js';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Cấu hình tài liệu Swagger cho S-Match
+  app.enableCors();
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+
   const config = new DocumentBuilder()
     .setTitle('S-Match API Documentation')
-    .setDescription('Tài liệu API hệ thống đặt sân và ghép người chơi S-Match')
+    .setDescription('Tài liệu API hệ thống S-Match')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
@@ -16,6 +25,10 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  await app.listen(3000);
+  const port = 3000;
+  await app.listen(port);
+
+  console.log(`\n Server running at: http://localhost:${port}`);
+  console.log(`Swagger Docs at:   http://localhost:${port}/api\n`);
 }
 bootstrap();
