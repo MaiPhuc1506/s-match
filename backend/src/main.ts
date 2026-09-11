@@ -1,7 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { AppModule } from './app.module';
+import { AppModule } from './app.module.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -16,19 +16,15 @@ async function bootstrap() {
   );
 
   const config = new DocumentBuilder()
-    .setTitle('S-Match API')
-    .setDescription(
-      'SMM-8 — User Database & Backend Connection. Only the User/Role database layer is exposed here; ' +
-        'Auth (SMM-6), Matchmaking Service Setup (SMM-7) and later-sprint modules are separate tickets.',
-    )
-    .setVersion('0.1.0')
+    .setTitle('S-Match API Documentation')
+    .setDescription('Tài liệu API hệ thống S-Match')
+    .setVersion('1.0')
+    .addBearerAuth()
     .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document);
 
-  const port = process.env.PORT ?? 3000;
-  await app.listen(port);
-  // eslint-disable-next-line no-console
-  console.log(`S-Match backend listening on http://localhost:${port} (Swagger at /docs)`);
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
+
+  await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();
