@@ -42,4 +42,34 @@ model User {
   role      Role     @relation(fields: [roleId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Bổ sung 2 dòng quan hệ này:
+  playingPreference PlayingPreference?
+  availabilities    Availability[]
+}
+
+model PlayingPreference {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @unique
+  user          User     @relation(fields: [userId], references: [id])
+  preferredMode String
+  purpose       String
+  minSkillLevel Int
+  maxSkillLevel Int
+  maxDistanceKm Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Availability {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, dayOfWeek, startTime])
 }
