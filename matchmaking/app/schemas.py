@@ -1,26 +1,41 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
+from datetime import datetime
 
-class PlayerProfile(BaseModel):
+class SkillPreference(BaseModel):
+    level: int = Field(..., ge=1, le=5)
+    preferred_min: int = Field(..., ge=1, le=5)
+    preferred_max: int = Field(..., ge=1, le=5)
+
+class Location(BaseModel):
+    latitude: float = Field(..., ge=-90.0, le=90.0)
+    longitude: float = Field(..., ge=-180.0, le=180.0)
+
+class PlayerProfileInput(BaseModel):
     user_id: str
-    skill_level: int           # Trình độ: 1 (Mới chơi) -> 5 (Vận động viên/Chuyên nghiệp)
-    preferred_skill_min: int   # Trình độ đối thủ mong muốn (Min)
-    preferred_skill_max: int   # Trình độ đối thủ mong muốn (Max)
-    available_time_slots: List[str] # Khung giờ rảnh (vd: ["2026-09-07T18:00", "2026-09-07T20:00"])
-    location_x: float          # Vị trí tọa độ
-    location_y: float
-    playing_style: List[str]   # Phong cách: ["Tấn công", "Phòng thủ", "Đôi nam nữ"]
-    reliability_score: float   # Điểm uy tín cộng đồng (Post-match feedback): 0.0 -> 5.0
+    skill: SkillPreference
+    available_time_slots: List[datetime]
+    location: Location
+    playing_style: List[str] = []
+    reliability_score: float = Field(5.0, ge=0.0, le=5.0)
 
-class MatchRequest(BaseModel):
-    current_user: PlayerProfile
-    candidates: List[PlayerProfile]
-    limit: Optional[int] = 10
+class MatchmakingRequest(BaseModel):
+    current_user: PlayerProfileInput
+    candidates: List[PlayerProfileInput]
+    limit: Optional[int] = Field(5, ge=1, le=20)
 
-class MatchResult(BaseModel):
+class BreakdownScores(BaseModel):
+    skill_score: float
+    time_score: float
+    distance_score: float
+    style_score: float
+    reliability_score: float
+
+class MatchedUserResult(BaseModel):
     user_id: str
-    score: float
-    reasons: List[str]
+    match_score: float
+    breakdown: Optional[BreakdownScores] = None
 
-class MatchResponse(BaseModel):
-    matched_users: List[MatchResult]
+class MatchmakingResponse(BaseModel):
+    matched_users: List[MatchedUserResult]
+    total_candidates_processed: int
