@@ -1,3 +1,4 @@
+import { PlayersModule } from './players/players.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller.js';
@@ -12,6 +13,7 @@ import { UsersModule } from './users/users.module.js';
     PrismaModule,
     UsersModule,
     AuthModule,
+    PlayersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
