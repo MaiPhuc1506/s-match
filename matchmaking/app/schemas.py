@@ -3,7 +3,12 @@ from typing import List, Optional
 from datetime import datetime
 
 class SkillPreference(BaseModel):
-    level: int = Field(..., ge=1, le=5)
+    smash: float = Field(0.0, ge=0.0, le=5.0)
+    defense: float = Field(0.0, ge=0.0, le=5.0)
+    net_play: float = Field(0.0, ge=0.0, le=5.0)
+    stamina: float = Field(0.0, ge=0.0, le=5.0)
+    footwork: float = Field(0.0, ge=0.0, le=5.0)
+    serve: float = Field(0.0, ge=0.0, le=5.0)
     preferred_min: int = Field(..., ge=1, le=5)
     preferred_max: int = Field(..., ge=1, le=5)
 
