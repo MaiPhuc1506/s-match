@@ -33,30 +33,73 @@ model Role {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  fullName  String?
-  phone     String?
-  roleId    Int
-  role      Role     @relation(fields: [roleId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Bổ sung 2 dòng quan hệ này:
+  id                Int                @id @default(autoincrement())
+  email             String             @unique
+  password          String
+  fullName          String?
+  phone             String?
+  roleId            Int
+  role              Role               @relation(fields: [roleId], references: [id])
+  playerProfile     PlayerProfile?
   playingPreference PlayingPreference?
   availabilities    Availability[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model PlayerProfile {
+  id         Int     @id @default(autoincrement())
+  userId     Int     @unique
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nickname   String?
+  avatarUrl  String?
+  skillLevel String? @default("BEGINNER") // BEGINNER, INTERMEDIATE, ADVANCED
+  bio        String?
+  gender     String?
+
+  // SMM-12 / SMM-13: Bổ sung bảng Skill nối với PlayerProfile
+  skill Skill?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Bảng Skill mới được yêu cầu cho màn hình Radar Kỹ năng
+model Skill {
+  id              Int           @id @default(autoincrement())
+  playerProfileId Int           @unique
+  playerProfile   PlayerProfile @relation(fields: [playerProfileId], references: [id], onDelete: Cascade)
+  smash           Float         @default(0)
+  defense         Float         @default(0)
+  netPlay         Float         @default(0)
+  stamina         Float         @default(0)
+  footwork        Float         @default(0)
+  serve           Float         @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+enum MatchMode {
+  SINGLES
+  DOUBLES
+}
+
+enum MatchPurpose {
+  CASUAL
+  TRAINING
+  COMPETITIVE
 }
 
 model PlayingPreference {
-  id            Int      @id @default(autoincrement())
-  userId        Int      @unique
-  user          User     @relation(fields: [userId], references: [id])
-  preferredMode String
-  purpose       String
+  id            Int          @id @default(autoincrement())
+  userId        Int          @unique
+  user          User         @relation(fields: [userId], references: [id])
+  preferredMode MatchMode    @default(DOUBLES)
+  purpose       MatchPurpose @default(CASUAL)
   minSkillLevel Int
   maxSkillLevel Int
-  maxDistanceKm Int
+  maxDistanceKm Float        // Should probably be float or int. Let's keep Int based on original. Wait, the DTO says Int/Number.
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

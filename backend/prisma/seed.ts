@@ -21,7 +21,7 @@ async function main() {
 
   const admin = await prisma.user.upsert({
     where: { email: 'admin@smatch.dev' },
-    update: {},
+    update: { password: passwordHash },
     create: {
       email: 'admin@smatch.dev',
       password: passwordHash,
@@ -32,7 +32,7 @@ async function main() {
 
   const owner = await prisma.user.upsert({
     where: { email: 'owner@smatch.dev' },
-    update: {},
+    update: { password: passwordHash },
     create: {
       email: 'owner@smatch.dev',
       password: passwordHash,
@@ -43,7 +43,7 @@ async function main() {
 
   const player = await prisma.user.upsert({
     where: { email: 'player@smatch.dev' },
-    update: {},
+    update: { password: passwordHash },
     create: {
       email: 'player@smatch.dev',
       password: passwordHash,
@@ -76,6 +76,33 @@ async function main() {
     where: { userId_dayOfWeek_startTime: { userId: player.id, dayOfWeek: 6, startTime: '08:00' } },
     update: {},
     create: { userId: player.id, dayOfWeek: 6, startTime: '08:00', endTime: '11:00' },
+  });
+
+  // 4. Seed SMM-10 & SMM-13 demo data (PlayerProfile & Skill) for the demo player
+  const playerProfile = await (prisma as any).playerProfile.upsert({
+    where: { userId: player.id },
+    update: {},
+    create: {
+      userId: player.id,
+      nickname: 'Siêu Cấp Vip Pro',
+      skillLevel: 'INTERMEDIATE',
+      bio: 'Giao lưu học hỏi là chính, đập cầu là chủ yếu!',
+      gender: 'MALE',
+    },
+  });
+
+  await (prisma as any).skill.upsert({
+    where: { playerProfileId: playerProfile.id },
+    update: {},
+    create: {
+      playerProfileId: playerProfile.id,
+      smash: 4.5,
+      defense: 3.5,
+      netPlay: 4.0,
+      stamina: 3.0,
+      footwork: 3.5,
+      serve: 4.0,
+    },
   });
 
   console.log('Seed completed:', {
