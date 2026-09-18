@@ -1,14 +1,11 @@
-from fastapi import APIRouter
-from app.schemas import MatchRequest, MatchResponse
-from app.services.matcher import MatchmakingEngine
+from fastapi import APIRouter, status
+from app.schemas import MatchmakingRequest, MatchmakingResponse
 
-router = APIRouter(prefix="/api/v1", tags=["Matchmaking"])
+router = APIRouter()
 
-@router.post("/match", response_model=MatchResponse)
-def process_matchmaking(request: MatchRequest):
-    results = MatchmakingEngine.run_pipeline(
-        user=request.current_user,
-        candidates=request.candidates,
-        limit=request.limit or 10
+@router.post("/match", response_model=MatchmakingResponse, status_code=status.HTTP_200_OK)
+async def find_players(payload: MatchmakingRequest):
+    return MatchmakingResponse(
+        matched_users=[],
+        total_candidates_processed=len(payload.candidates)
     )
-    return MatchResponse(matched_users=results)
