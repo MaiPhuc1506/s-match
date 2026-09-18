@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../widgets/primary_button.dart';
 import 'login_screen.dart';
+import 'player_profile_screen.dart';
 
 class PlayerWelcomeScreen extends StatelessWidget {
   const PlayerWelcomeScreen({super.key});
@@ -52,7 +53,26 @@ class PlayerWelcomeScreen extends StatelessWidget {
                   PrimaryButton(
                     text: 'Continue',
                     onPressed: () {
-                      // Xử lý vào màn hình chính (Home) sau này
+                      Navigator.of(context).push(
+                        PageRouteBuilder(
+                          transitionDuration: const Duration(milliseconds: 250),
+                          pageBuilder: (
+                            context,
+                            animation,
+                            secondaryAnimation,
+                          ) => const PlayerProfileScreen(),
+                          transitionsBuilder:
+                              (context, animation, secondaryAnimation, child) {
+                                return FadeTransition(
+                                  opacity: CurvedAnimation(
+                                    parent: animation,
+                                    curve: Curves.easeOut,
+                                  ),
+                                  child: child,
+                                );
+                              },
+                        ),
+                      );
                     },
                   ),
                   const SizedBox(height: 12),
