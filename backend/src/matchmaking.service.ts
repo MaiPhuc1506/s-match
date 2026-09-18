@@ -1,6 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { AxiosResponse } from 'axios';
 
 @Injectable()
 export class MatchmakingService {
@@ -11,7 +12,7 @@ export class MatchmakingService {
 
     try {
       const response = await firstValueFrom(
-        this.httpService.post(pythonApiUrl, matchPayload),
+        this.httpService.post<any>(pythonApiUrl, matchPayload),
       );
       return response.data;
     } catch (error) {
