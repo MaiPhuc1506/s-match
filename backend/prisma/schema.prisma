@@ -43,6 +43,9 @@ model User {
   playerProfile     PlayerProfile?
   playingPreference PlayingPreference?
   availabilities    Availability[]
+  
+  facilities        Facility[]
+
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 }
@@ -115,4 +118,46 @@ model Availability {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, dayOfWeek, startTime])
+}
+enum CourtStatus {
+  ACTIVE
+  MAINTENANCE
+  INACTIVE
+}
+model Facility {
+  id             Int              @id @default(autoincrement())
+  ownerId        Int
+  owner          User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name           String
+  address        String
+  latitude       Float?
+  longitude      Float?
+  contactPhone   String?
+  description    String?
+  courts         Court[]
+  operatingHours OperatingHours[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+model Court {
+  id         Int         @id @default(autoincrement())
+  facilityId Int
+  facility   Facility    @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  name       String      // Ví dụ: Sân 1, Sân 2, Sân VIP
+  courtType  String?     @default("INDOOR") // INDOOR, OUTDOOR
+  status     CourtStatus @default(ACTIVE)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+model OperatingHours {
+  id         Int      @id @default(autoincrement())
+  facilityId Int
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  dayOfWeek  Int      // 0: Chủ Nhật, 1: Thứ 2, ..., 6: Thứ 7
+  openTime   String   // Ví dụ: "06:00"
+  closeTime  String   // Ví dụ: "22:00"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([facilityId, dayOfWeek])
 }

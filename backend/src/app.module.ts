@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { PlayersModule } from './players/players.module';
 import { AvailabilityPreferenceModule } from './availability-preference/availability-preference.module.js';
+import { FacilitiesModule } from './facilities/facilities.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { AvailabilityPreferenceModule } from './availability-preference/availabi
     AuthModule,
     PlayersModule,
     AvailabilityPreferenceModule,
+    FacilitiesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
