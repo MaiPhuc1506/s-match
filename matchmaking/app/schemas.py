@@ -44,3 +44,13 @@ class MatchedUserResult(BaseModel):
 class MatchmakingResponse(BaseModel):
     matched_users: List[MatchedUserResult]
     total_candidates_processed: int
+
+
+class DistanceRequest(BaseModel):
+    point_a: Location
+    point_b: Location
+
+
+class DistanceResponse(BaseModel):
+    distance_km: Optional[float]
+    unit: str = "km"
