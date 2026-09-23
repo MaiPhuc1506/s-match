@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -17,6 +19,8 @@ import {
 import { FacilitiesService } from './facilities.service';
 import { CreateFacilityDto } from './dto/create-facility.dto';
 import { CreateCourtDto } from './dto/create-court.dto';
+import { UpdateFacilityDto } from './dto/update-facility.dto';
+import { UpdateCourtDto } from './dto/update-court.dto';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '../auth/roles.enum';
@@ -25,6 +29,8 @@ import { Role } from '../auth/roles.enum';
 @Controller('facilities')
 export class FacilitiesController {
   constructor(private readonly facilitiesService: FacilitiesService) {}
+
+  /* ── Facility CRUD ─────────────────────────────── */
 
   @Post()
   @ApiBearerAuth()
@@ -57,6 +63,38 @@ export class FacilitiesController {
     return this.facilitiesService.getFacilityById(id);
   }
 
+  @Patch(':id')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(Role.OWNER, Role.ADMIN)
+  @ApiOperation({ summary: 'Chủ sân cập nhật thông tin cơ sở' })
+  @ApiResponse({ status: 200, description: 'Cập nhật cơ sở thành công.' })
+  @ApiResponse({ status: 403, description: 'Không có quyền cập nhật cơ sở này.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy cơ sở.' })
+  updateFacility(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateFacilityDto,
+  ) {
+    const ownerId = Number(req.user.sub);
+    return this.facilitiesService.updateFacility(ownerId, id, dto);
+  }
+
+  @Delete(':id')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(Role.OWNER, Role.ADMIN)
+  @ApiOperation({ summary: 'Chủ sân xóa cơ sở (cascade xóa tất cả sân con)' })
+  @ApiResponse({ status: 200, description: 'Xóa cơ sở thành công.' })
+  @ApiResponse({ status: 403, description: 'Không có quyền xóa cơ sở này.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy cơ sở.' })
+  deleteFacility(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
+    const ownerId = Number(req.user.sub);
+    return this.facilitiesService.deleteFacility(ownerId, id);
+  }
+
+  /* ── Court CRUD ────────────────────────────────── */
+
   @Post(':id/courts')
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
@@ -71,5 +109,40 @@ export class FacilitiesController {
   ) {
     const ownerId = Number(req.user.sub);
     return this.facilitiesService.addCourt(ownerId, facilityId, dto);
+  }
+
+  @Patch(':id/courts/:courtId')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(Role.OWNER, Role.ADMIN)
+  @ApiOperation({ summary: 'Chủ sân cập nhật thông tin sân con' })
+  @ApiResponse({ status: 200, description: 'Cập nhật sân thành công.' })
+  @ApiResponse({ status: 403, description: 'Không có quyền cập nhật sân này.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy sân.' })
+  updateCourt(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) facilityId: number,
+    @Param('courtId', ParseIntPipe) courtId: number,
+    @Body() dto: UpdateCourtDto,
+  ) {
+    const ownerId = Number(req.user.sub);
+    return this.facilitiesService.updateCourt(ownerId, facilityId, courtId, dto);
+  }
+
+  @Delete(':id/courts/:courtId')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(Role.OWNER, Role.ADMIN)
+  @ApiOperation({ summary: 'Chủ sân xóa sân con khỏi cơ sở' })
+  @ApiResponse({ status: 200, description: 'Xóa sân thành công.' })
+  @ApiResponse({ status: 403, description: 'Không có quyền xóa sân này.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy sân.' })
+  deleteCourt(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) facilityId: number,
+    @Param('courtId', ParseIntPipe) courtId: number,
+  ) {
+    const ownerId = Number(req.user.sub);
+    return this.facilitiesService.deleteCourt(ownerId, facilityId, courtId);
   }
 }
