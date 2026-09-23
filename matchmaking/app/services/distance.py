@@ -1,5 +1,6 @@
 import math
-from typing import Optional
+from typing import Optional, Union
+from app.schemas import Location
 
 
 def calculate_haversine_distance(
@@ -30,34 +31,48 @@ def calculate_haversine_distance(
 
 
 def calculate_player_to_player_distance(
-    player1_location: dict, player2_location: dict
+    player1_location: Union[Location, dict],
+    player2_location: Union[Location, dict],
 ) -> Optional[float]:
     """
     Tính khoảng cách giữa 2 Người chơi (Player - Player).
-    Location dict format: {"latitude": float, "longitude": float}
+    Location có thể là Location model hoặc dict: {"latitude": float, "longitude": float}
     """
     try:
-        lat1 = player1_location.get("latitude")
-        lon1 = player1_location.get("longitude")
-        lat2 = player2_location.get("latitude")
-        lon2 = player2_location.get("longitude")
+        if isinstance(player1_location, Location):
+            lat1, lon1 = player1_location.latitude, player1_location.longitude
+        elif isinstance(player1_location, dict):
+            lat1 = player1_location.get("latitude")
+            lon1 = player1_location.get("longitude")
+        else:
+            return None
+
+        if isinstance(player2_location, Location):
+            lat2, lon2 = player2_location.latitude, player2_location.longitude
+        elif isinstance(player2_location, dict):
+            lat2 = player2_location.get("latitude")
+            lon2 = player2_location.get("longitude")
+        else:
+            return None
 
         if None in (lat1, lon1, lat2, lon2):
             return None
 
-        return calculate_haversine_distance(lat1, lon1, lat2, lon2)
+        return calculate_haversine_distance(float(lat1), float(lon1), float(lat2), float(lon2))
     except Exception:
         return None
 
 
 def calculate_player_to_court_distance(
-    player_location: dict, court_location: dict
+    player_location: Union[Location, dict],
+    court_location: Union[Location, dict],
 ) -> Optional[float]:
     """
     Tính khoảng cách từ Người chơi tới Sân cầu lông (Player - Court).
-    Location dict format: {"latitude": float, "longitude": float}
+    Location có thể là Location model hoặc dict: {"latitude": float, "longitude": float}
     """
     return calculate_player_to_player_distance(player_location, court_location)
+
 
 # --- Đoạn code chạy thử bằng cách nhập thủ công từ bàn phím ---
 if __name__ == "__main__":
