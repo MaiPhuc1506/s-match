@@ -13,7 +13,6 @@ import { UpdateCourtDto } from './dto/update-court.dto';
 export class FacilitiesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // 1. Tạo cơ sở sân mới (Chỉ dành cho Court Owner)
   async createFacility(ownerId: number, dto: CreateFacilityDto) {
     return this.prisma.facility.create({
       data: {
@@ -28,7 +27,6 @@ export class FacilitiesService {
     });
   }
 
-  // 2. Lấy danh sách các cơ sở thuộc về chính Owner đang đăng nhập
   async getMyFacilities(ownerId: number) {
     return this.prisma.facility.findMany({
       where: { ownerId },
@@ -40,7 +38,6 @@ export class FacilitiesService {
     });
   }
 
-  // 3. Xem chi tiết một cơ sở (kèm danh sách sân con)
   async getFacilityById(id: number) {
     const facility = await this.prisma.facility.findUnique({
       where: { id },
@@ -57,7 +54,6 @@ export class FacilitiesService {
     return facility;
   }
 
-  // 4. Thêm sân cầu lông con vào một cơ sở (Kiểm tra quyền sở hữu)
   async addCourt(ownerId: number, facilityId: number, dto: CreateCourtDto) {
     const facility = await this.prisma.facility.findUnique({
       where: { id: facilityId },
@@ -81,7 +77,6 @@ export class FacilitiesService {
     });
   }
 
-  // 5. Cập nhật thông tin cơ sở (Kiểm tra quyền sở hữu)
   async updateFacility(ownerId: number, facilityId: number, dto: UpdateFacilityDto) {
     const facility = await this.prisma.facility.findUnique({
       where: { id: facilityId },
@@ -109,7 +104,6 @@ export class FacilitiesService {
     });
   }
 
-  // 6. Xóa cơ sở (Kiểm tra quyền sở hữu, cascade xóa courts)
   async deleteFacility(ownerId: number, facilityId: number) {
     const facility = await this.prisma.facility.findUnique({
       where: { id: facilityId },
@@ -130,7 +124,6 @@ export class FacilitiesService {
     return { message: `Đã xóa cơ sở "${facility.name}" thành công` };
   }
 
-  // 7. Cập nhật sân con (Kiểm tra quyền sở hữu + sân thuộc cơ sở)
   async updateCourt(ownerId: number, facilityId: number, courtId: number, dto: UpdateCourtDto) {
     const facility = await this.prisma.facility.findUnique({
       where: { id: facilityId },
@@ -162,7 +155,6 @@ export class FacilitiesService {
     });
   }
 
-  // 8. Xóa sân con (Kiểm tra quyền sở hữu + sân thuộc cơ sở)
   async deleteCourt(ownerId: number, facilityId: number, courtId: number) {
     const facility = await this.prisma.facility.findUnique({
       where: { id: facilityId },
