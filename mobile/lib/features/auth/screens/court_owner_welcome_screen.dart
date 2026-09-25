@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../widgets/primary_button.dart';
 import 'login_screen.dart';
+import '../../facility/screens/facility_list_screen.dart';
 
 class CourtOwnerWelcomeScreen extends StatelessWidget {
   const CourtOwnerWelcomeScreen({super.key});
@@ -52,7 +53,12 @@ class CourtOwnerWelcomeScreen extends StatelessWidget {
                   PrimaryButton(
                     text: 'Continue',
                     onPressed: () {
-                      // Xử lý vào không gian quản lý sân sau này
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const FacilityListScreen(),
+                        ),
+                      );
                     },
                   ),
                   const SizedBox(height: 12),
