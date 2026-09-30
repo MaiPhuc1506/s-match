@@ -8,7 +8,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { PlayersModule } from './players/players.module';
 import { AvailabilityPreferenceModule } from './availability-preference/availability-preference.module.js';
 import { FacilitiesModule } from './facilities/facilities.module';
-
+import { BookingsModule } from './bookings/bookings.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -18,6 +18,7 @@ import { FacilitiesModule } from './facilities/facilities.module';
     PlayersModule,
     AvailabilityPreferenceModule,
     FacilitiesModule,
+    BookingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
