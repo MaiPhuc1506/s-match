@@ -105,10 +105,53 @@ async function main() {
     },
   });
 
+  // 5. Seed SMM-14/16/20 demo data (Facility, Court, OperatingHours, TimeSlot)
+  const facility = await (prisma as any).facility.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      id: 1,
+      ownerId: owner.id,
+      name: 'S-Match Demo Badminton Center',
+      address: '123 Nguyễn Văn Linh, Đà Nẵng',
+      latitude: 16.047079,
+      longitude: 108.20623,
+      contactPhone: '0900000000',
+      description: 'Cơ sở demo dùng để test API',
+    },
+  });
+
+  for (let dayOfWeek = 0; dayOfWeek <= 6; dayOfWeek += 1) {
+    await (prisma as any).operatingHours.upsert({
+      where: { facilityId_dayOfWeek: { facilityId: facility.id, dayOfWeek } },
+      update: {},
+      create: { facilityId: facility.id, dayOfWeek, openTime: '06:00', closeTime: '22:00' },
+    });
+  }
+
+  const court = await (prisma as any).court.upsert({
+    where: { id: 1 },
+    update: {},
+    create: { id: 1, facilityId: facility.id, name: 'Sân 1', courtType: 'INDOOR' },
+  });
+
+  await (prisma as any).timeSlot.upsert({
+    where: { courtId_dayOfWeek_startTime: { courtId: court.id, dayOfWeek: 1, startTime: '18:00' } },
+    update: {},
+    create: { courtId: court.id, dayOfWeek: 1, startTime: '18:00', endTime: '19:00', price: 240000 },
+  });
+  await (prisma as any).timeSlot.upsert({
+    where: { courtId_dayOfWeek_startTime: { courtId: court.id, dayOfWeek: 6, startTime: '08:00' } },
+    update: {},
+    create: { courtId: court.id, dayOfWeek: 6, startTime: '08:00', endTime: '09:00', price: 200000 },
+  });
+
   console.log('Seed completed:', {
     admin: admin.email,
     owner: owner.email,
     player: player.email,
+    facilityId: facility.id,
+    courtId: court.id,
   });
 }
 
