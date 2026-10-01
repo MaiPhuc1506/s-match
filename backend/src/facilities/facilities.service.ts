@@ -8,6 +8,7 @@ import { CreateFacilityDto } from './dto/create-facility.dto';
 import { CreateCourtDto } from './dto/create-court.dto';
 import { UpdateFacilityDto } from './dto/update-facility.dto';
 import { UpdateCourtDto } from './dto/update-court.dto';
+import { Role } from '../auth/roles.enum';
 
 @Injectable()
 export class FacilitiesService {
@@ -54,7 +55,7 @@ export class FacilitiesService {
     return facility;
   }
 
-  async addCourt(ownerId: number, facilityId: number, dto: CreateCourtDto) {
+  async addCourt(ownerId: number, facilityId: number, dto: CreateCourtDto, userRole?: string) {
     const facility = await this.prisma.facility.findUnique({
       where: { id: facilityId },
     });
@@ -63,7 +64,7 @@ export class FacilitiesService {
       throw new NotFoundException(`Không tìm thấy cơ sở với ID ${facilityId}`);
     }
 
-    if (facility.ownerId !== ownerId) {
+    if (userRole !== Role.ADMIN && facility.ownerId !== ownerId) {
       throw new ForbiddenException('Bạn không có quyền thêm sân vào cơ sở này');
     }
 
@@ -77,7 +78,7 @@ export class FacilitiesService {
     });
   }
 
-  async updateFacility(ownerId: number, facilityId: number, dto: UpdateFacilityDto) {
+  async updateFacility(ownerId: number, facilityId: number, dto: UpdateFacilityDto, userRole?: string) {
     const facility = await this.prisma.facility.findUnique({
       where: { id: facilityId },
     });
@@ -86,7 +87,7 @@ export class FacilitiesService {
       throw new NotFoundException(`Không tìm thấy cơ sở với ID ${facilityId}`);
     }
 
-    if (facility.ownerId !== ownerId) {
+    if (userRole !== Role.ADMIN && facility.ownerId !== ownerId) {
       throw new ForbiddenException('Bạn không có quyền cập nhật cơ sở này');
     }
 
@@ -104,7 +105,7 @@ export class FacilitiesService {
     });
   }
 
-  async deleteFacility(ownerId: number, facilityId: number) {
+  async deleteFacility(ownerId: number, facilityId: number, userRole?: string) {
     const facility = await this.prisma.facility.findUnique({
       where: { id: facilityId },
     });
@@ -113,7 +114,7 @@ export class FacilitiesService {
       throw new NotFoundException(`Không tìm thấy cơ sở với ID ${facilityId}`);
     }
 
-    if (facility.ownerId !== ownerId) {
+    if (userRole !== Role.ADMIN && facility.ownerId !== ownerId) {
       throw new ForbiddenException('Bạn không có quyền xóa cơ sở này');
     }
 
@@ -124,7 +125,7 @@ export class FacilitiesService {
     return { message: `Đã xóa cơ sở "${facility.name}" thành công` };
   }
 
-  async updateCourt(ownerId: number, facilityId: number, courtId: number, dto: UpdateCourtDto) {
+  async updateCourt(ownerId: number, facilityId: number, courtId: number, dto: UpdateCourtDto, userRole?: string) {
     const facility = await this.prisma.facility.findUnique({
       where: { id: facilityId },
     });
@@ -133,7 +134,7 @@ export class FacilitiesService {
       throw new NotFoundException(`Không tìm thấy cơ sở với ID ${facilityId}`);
     }
 
-    if (facility.ownerId !== ownerId) {
+    if (userRole !== Role.ADMIN && facility.ownerId !== ownerId) {
       throw new ForbiddenException('Bạn không có quyền cập nhật sân trong cơ sở này');
     }
 
@@ -155,7 +156,7 @@ export class FacilitiesService {
     });
   }
 
-  async deleteCourt(ownerId: number, facilityId: number, courtId: number) {
+  async deleteCourt(ownerId: number, facilityId: number, courtId: number, userRole?: string) {
     const facility = await this.prisma.facility.findUnique({
       where: { id: facilityId },
     });
@@ -164,7 +165,7 @@ export class FacilitiesService {
       throw new NotFoundException(`Không tìm thấy cơ sở với ID ${facilityId}`);
     }
 
-    if (facility.ownerId !== ownerId) {
+    if (userRole !== Role.ADMIN && facility.ownerId !== ownerId) {
       throw new ForbiddenException('Bạn không có quyền xóa sân trong cơ sở này');
     }
 

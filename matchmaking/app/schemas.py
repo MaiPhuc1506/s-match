@@ -21,6 +21,7 @@ class PlayerProfileInput(BaseModel):
     skill: SkillPreference
     available_time_slots: List[datetime]
     location: Location
+    max_distance_km: Optional[float] = Field(10.0, ge=0.0)
     playing_style: List[str] = []
     reliability_score: float = Field(5.0, ge=0.0, le=5.0)
 

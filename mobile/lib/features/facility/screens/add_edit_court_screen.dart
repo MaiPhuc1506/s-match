@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import 'package:mobile/core/theme/app_colors.dart';
+
+import '../services/facility_service.dart';
 
 class AddEditCourtScreen extends StatefulWidget {
   final int facilityId;
@@ -15,28 +17,14 @@ class AddEditCourtScreen extends StatefulWidget {
 
 class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
   final _nameController = TextEditingController();
-  final _numberController = TextEditingController();
-  final _descriptionController = TextEditingController();
 
   String _courtType = 'Indoor'; // 'Indoor' hoặc 'Outdoor'
   String _status = 'ACTIVE'; // 'ACTIVE', 'MAINTENANCE', 'INACTIVE'
-  int _charCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _descriptionController.addListener(() {
-      setState(() {
-        _charCount = _descriptionController.text.length;
-      });
-    });
-  }
+  bool _isLoading = false;
 
   @override
   void dispose() {
     _nameController.dispose();
-    _numberController.dispose();
-    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -86,18 +74,7 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
 
                 const SizedBox(height: 16),
 
-                // 2. Court Number
-                _buildLabel('Court Number'),
-                const SizedBox(height: 8),
-                _buildTextField(
-                  controller: _numberController,
-                  hintText: 'e.g. Court 01',
-                  keyboardType: TextInputType.number,
-                ),
-
-                const SizedBox(height: 16),
-
-                // 3. Court Type (Indoor / Outdoor)
+                // 2. Court Type (Indoor / Outdoor)
                 _buildLabel('Court Type'),
                 const SizedBox(height: 8),
                 Row(
@@ -124,7 +101,7 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
 
                 const SizedBox(height: 16),
 
-                // 4. Status Dropdown
+                // 3. Status Dropdown
                 _buildLabel('Status'),
                 const SizedBox(height: 8),
                 Container(
@@ -164,40 +141,6 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 16),
-
-                // 5. Description Multiline
-                _buildLabel('Description'),
-                const SizedBox(height: 8),
-                Container(
-                  height: 112,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border, width: 1),
-                  ),
-                  child: TextField(
-                    controller: _descriptionController,
-                    maxLines: 4,
-                    maxLength: 200,
-                    style: GoogleFonts.plusJakartaSans(fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: 'Thảm thi đấu, đèn LED chống chói...',
-                      hintStyle: GoogleFonts.plusJakartaSans(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
-                      ),
-                      border: InputBorder.none,
-                      counterText: '$_charCount/200',
-                      counterStyle: GoogleFonts.plusJakartaSans(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                ),
-
                 const SizedBox(height: 120), // Khoảng trống cho nút Save Court
               ],
             ),
@@ -212,15 +155,47 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: () {
-                  // Sau khi lưu xong thì quay về màn hình trước
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Lưu thông tin sân thành công!'),
-                    ),
-                  );
-                  Navigator.of(context).pop();
-                },
+                onPressed: _isLoading
+                    ? null
+                    : () async {
+                        final name = _nameController.text.trim();
+                        if (name.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Vui lòng nhập tên sân'),
+                            ),
+                          );
+                          return;
+                        }
+
+                        setState(() => _isLoading = true);
+                        final success = await FacilityService.instance.addCourt(
+                          facilityId: widget.facilityId,
+                          name: name,
+                          courtType: _courtType,
+                          status: _status,
+                        );
+
+                        if (!context.mounted) return;
+                        setState(() => _isLoading = false);
+
+                        if (success) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Thêm sân thành công!'),
+                            ),
+                          );
+                          Navigator.of(context).pop(true);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Lưu thông tin thất bại. Vui lòng thử lại!',
+                              ),
+                            ),
+                          );
+                        }
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   shape: RoundedRectangleBorder(
@@ -228,14 +203,23 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
                   ),
                   elevation: 0,
                 ),
-                child: Text(
-                  'Save Court',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.white,
-                  ),
-                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: AppColors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : Text(
+                        'Save Court',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.white,
+                        ),
+                      ),
               ),
             ),
           ),

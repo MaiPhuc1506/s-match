@@ -35,3 +35,8 @@ build/
 *.key
 *.p12
 *.jks
+
+# VS Code / IDE
+.vscode/
+.idea/
+*.code-workspace

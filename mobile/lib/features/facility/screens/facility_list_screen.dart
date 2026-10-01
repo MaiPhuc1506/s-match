@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import 'package:mobile/core/theme/app_colors.dart';
+
+import '../services/facility_service.dart';
 import '../widgets/facility_card.dart';
 import 'facility_detail_screen.dart';
 
@@ -15,32 +17,49 @@ class FacilityListScreen extends StatefulWidget {
 class _FacilityListScreenState extends State<FacilityListScreen> {
   int _currentNavIndex = 1; // Tab Facilities đang active
 
-  final List<FacilityCardItem> _facilities = const [
-    FacilityCardItem(
-      id: 1,
-      name: 'Sunrise Badminton Center',
-      address: '123 Nguyen Van Linh, Da Nang',
-      courtCount: 6,
-      operatingHours: '06:00 - 22:00',
-      isOpen: true,
-    ),
-    FacilityCardItem(
-      id: 2,
-      name: 'Dragon Court Arena',
-      address: '456 Tran Phu, Hai Chau, Da Nang',
-      courtCount: 8,
-      operatingHours: '05:30 - 23:00',
-      isOpen: true,
-    ),
-    FacilityCardItem(
-      id: 3,
-      name: 'Han River Sports Complex',
-      address: '789 Bach Dang, Da Nang',
-      courtCount: 4,
-      operatingHours: '07:00 - 21:00',
-      isOpen: false,
-    ),
-  ];
+  List<FacilityCardItem> _facilities = [];
+  bool _isLoading = true;
+  bool _loadFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFacilities();
+  }
+
+  Future<void> _loadFacilities() async {
+    setState(() => _isLoading = true);
+    final data = await FacilityService.instance.getMyFacilities();
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      _loadFailed = data == null;
+      if (data != null) {
+        _facilities = data.map((facility) {
+          final hours = facility['operatingHours'];
+          String hoursText = 'Chưa thiết lập';
+          if (hours is List && hours.isNotEmpty && hours.first is Map) {
+            final open = hours.first['openTime'];
+            final close = hours.first['closeTime'];
+            if (open is String &&
+                close is String &&
+                open.length >= 5 &&
+                close.length >= 5) {
+              hoursText = '${open.substring(0, 5)} - ${close.substring(0, 5)}';
+            }
+          }
+          return FacilityCardItem(
+            id: facility['id'] as int,
+            name: facility['name'] as String? ?? '',
+            address: facility['address'] as String? ?? '',
+            courtCount: (facility['courts'] as List?)?.length ?? 0,
+            operatingHours: hoursText,
+            isOpen: hours is List && hours.isNotEmpty,
+          );
+        }).toList();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,40 +80,52 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
-                    children: _facilities
-                        .map(
-                          (item) => Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: FacilityCard(
-                              facility: item,
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  PageRouteBuilder(
-                                    pageBuilder: (
-                                      context,
-                                      animation,
-                                      secondaryAnimation,
-                                    ) => FacilityDetailScreen(facility: item),
-                                    transitionDuration: const Duration(
-                                      milliseconds: 250,
-                                    ),
-                                    transitionsBuilder:
-                                        (
-                                          context,
-                                          animation,
-                                          secondaryAnimation,
-                                          child,
-                                        ) => FadeTransition(
-                                          opacity: animation,
-                                          child: child,
-                                        ),
-                                  ),
-                                );
-                              },
-                            ),
+                    children: [
+                      if (_isLoading)
+                        const CircularProgressIndicator()
+                      else if (_loadFailed)
+                        TextButton(
+                          onPressed: _loadFacilities,
+                          child: const Text(
+                            'Không tải được cơ sở. Nhấn để thử lại.',
                           ),
                         )
-                        .toList(),
+                      else if (_facilities.isEmpty)
+                        const Text('Bạn chưa có cơ sở nào.'),
+                      ..._facilities.map(
+                        (item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: FacilityCard(
+                            facility: item,
+                            onTap: () async {
+                              await Navigator.of(context).push(
+                                PageRouteBuilder(
+                                  pageBuilder: (
+                                    context,
+                                    animation,
+                                    secondaryAnimation,
+                                  ) => FacilityDetailScreen(facility: item),
+                                  transitionDuration: const Duration(
+                                    milliseconds: 250,
+                                  ),
+                                  transitionsBuilder:
+                                      (
+                                        context,
+                                        animation,
+                                        secondaryAnimation,
+                                        child,
+                                      ) => FadeTransition(
+                                        opacity: animation,
+                                        child: child,
+                                      ),
+                                ),
+                              );
+                              _loadFacilities();
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
