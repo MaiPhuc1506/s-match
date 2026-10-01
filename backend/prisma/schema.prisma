@@ -176,7 +176,7 @@ model Booking {
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   courtId     Int
   court       Court         @relation(fields: [courtId], references: [id], onDelete: Cascade)
-  
+
   startTime   DateTime
   endTime     DateTime
   totalPrice  Float         @default(0)
