@@ -44,11 +44,18 @@ class MatchmakingEngine:
                 c.skill.preferred_min <= user_avg_skill <= c.skill.preferred_max
             )
 
-            if has_common_time and skill_match:
+            # 3. Lọc bán kính khoảng cách địa lý (Hai chiều)
+            dist_km = calculate_player_to_player_distance(user.location, c.location)
+            within_distance = True
+            if dist_km is not None:
+                user_max = user.max_distance_km if user.max_distance_km is not None else 10.0
+                cand_max = c.max_distance_km if c.max_distance_km is not None else 10.0
+                within_distance = (dist_km <= user_max) and (dist_km <= cand_max)
+
+            if has_common_time and skill_match and within_distance:
                 filtered.append(c)
 
         return filtered
-
     @staticmethod
     def calculate_score(user: PlayerProfileInput, candidate: PlayerProfileInput) -> MatchedUserResult:
         """Tính điểm tương thích đa tiêu chí (Trình độ, Vị trí/Khoảng cách GPS, Style, Độ uy tín, Thời gian)"""

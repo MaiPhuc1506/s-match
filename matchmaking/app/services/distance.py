@@ -72,28 +72,3 @@ def calculate_player_to_court_distance(
     Location có thể là Location model hoặc dict: {"latitude": float, "longitude": float}
     """
     return calculate_player_to_player_distance(player_location, court_location)
-
-
-# --- Đoạn code chạy thử bằng cách nhập thủ công từ bàn phím ---
-if __name__ == "__main__":
-    print("=== CHƯƠNG TRÌNH TÍNH KHOẢNG CÁCH S-MATCH ===")
-    try:
-        print("\n--- Nhập vị trí 1 (Người chơi 1 / Vị trí hiện tại) ---")
-        lat1 = float(input("Nhập Vĩ độ (Latitude 1, ví dụ 16.0611): "))
-        lon1 = float(input("Nhập Kinh độ (Longitude 1, ví dụ 108.2272): "))
-
-        print("\n--- Nhập vị trí 2 (Người chơi 2 / Sân cầu lông) ---")
-        lat2 = float(input("Nhập Vĩ độ (Latitude 2, ví dụ 16.0538): "))
-        lon2 = float(input("Nhập Kinh độ (Longitude 2, ví dụ 108.1993): "))
-
-        p1 = {"latitude": lat1, "longitude": lon1}
-        p2 = {"latitude": lat2, "longitude": lon2}
-
-        dist = calculate_player_to_player_distance(p1, p2)
-
-        print("\n-------------------------------------------")
-        print(f"📍 Khoảng cách giữa 2 điểm là: {dist} km")
-        print("-------------------------------------------")
-
-    except ValueError:
-        print("\n❌ Lỗi: Vui lòng nhập số thực hợp lệ cho tọa độ!")

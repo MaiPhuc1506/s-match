@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import 'package:mobile/core/theme/app_colors.dart';
+
+import '../services/facility_service.dart';
 import '../widgets/court_schedule_grid.dart';
 import '../widgets/facility_card.dart';
 import 'add_edit_court_screen.dart';
@@ -19,6 +21,48 @@ class FacilityDetailScreen extends StatefulWidget {
 class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
   int _selectedTabIndex = 0; // 0 = Court Schedule, 1 = Facility Info
   int _selectedDateIndex = 0;
+  late int _courtCount;
+  late String _operatingHoursText;
+
+  @override
+  void initState() {
+    super.initState();
+    _courtCount = widget.facility.courtCount;
+    _operatingHoursText = widget.facility.operatingHours.isEmpty
+        ? 'Chưa thiết lập'
+        : widget.facility.operatingHours;
+    _loadFacilityData();
+  }
+
+  Future<void> _loadFacilityData() async {
+    final data = await FacilityService.instance.getFacilityDetails(
+      widget.facility.id,
+    );
+    if (!mounted || data == null) return;
+    setState(() {
+      if (data['courts'] != null && data['courts'] is List) {
+        _courtCount = (data['courts'] as List).length;
+      }
+      if (data['operatingHours'] is List) {
+        final hours = data['operatingHours'] as List;
+        _operatingHoursText = 'Chưa thiết lập';
+        if (hours.isNotEmpty && hours.first is Map) {
+          final first = hours.first;
+          final open = first['openTime'];
+          final close = first['closeTime'];
+          if (open is String &&
+              close is String &&
+              RegExp(r'^\d{2}:\d{2}').hasMatch(open) &&
+              RegExp(r'^\d{2}:\d{2}').hasMatch(close)) {
+            _operatingHoursText =
+                '${open.substring(0, 5)} - ${close.substring(0, 5)}';
+          }
+        }
+      } else {
+        _operatingHoursText = 'Chưa thiết lập';
+      }
+    });
+  }
 
   final List<String> _dates = [
     'Today',
@@ -90,8 +134,8 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
 
                   const SizedBox(height: 14),
 
-                  // 5. Court Schedule Grid (Ma trận 6 sân x 9 mốc giờ)
-                  CourtScheduleGrid(courtCount: widget.facility.courtCount),
+                  // 5. Court Schedule Grid
+                  CourtScheduleGrid(courtCount: _courtCount),
                 ] else ...[
                   // Tab Facility Info
                   _buildFacilityInfoTab(),
@@ -113,8 +157,8 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push(
+                onPressed: () async {
+                  final result = await Navigator.of(context).push(
                     PageRouteBuilder(
                       pageBuilder: (context, animation, secondaryAnimation) =>
                           AddEditCourtScreen(facilityId: widget.facility.id),
@@ -127,6 +171,9 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
                       ) => FadeTransition(opacity: animation, child: child),
                     ),
                   );
+                  if (result == true) {
+                    _loadFacilityData();
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
@@ -234,39 +281,49 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
 
   Widget _buildStatCards() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _buildStatItem(
-          label: 'Courts',
-          value: '${widget.facility.courtCount}',
-          subtitle: 'Available',
-          onTap: null,
+        Expanded(
+          child: _buildStatItem(
+            label: 'Courts',
+            value: '$_courtCount',
+            subtitle: 'Available',
+            onTap: null,
+          ),
         ),
-        _buildStatItem(
-          label: 'Hours',
-          value: '06-22h',
-          subtitle: 'Tap to edit',
-          onTap: () {
-            Navigator.of(context).push(
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) =>
-                    OperatingHoursScreen(facilityId: widget.facility.id),
-                transitionDuration: const Duration(milliseconds: 250),
-                transitionsBuilder: (
-                  context,
-                  animation,
-                  secondaryAnimation,
-                  child,
-                ) => FadeTransition(opacity: animation, child: child),
-              ),
-            );
-          },
+        const SizedBox(width: 10),
+        Expanded(
+          child: _buildStatItem(
+            label: 'Hours',
+            value: _operatingHoursText,
+            subtitle: 'Tap to edit',
+            onTap: () async {
+              final result = await Navigator.of(context).push(
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) =>
+                      OperatingHoursScreen(facilityId: widget.facility.id),
+                  transitionDuration: const Duration(milliseconds: 250),
+                  transitionsBuilder: (
+                    context,
+                    animation,
+                    secondaryAnimation,
+                    child,
+                  ) => FadeTransition(opacity: animation, child: child),
+                ),
+              );
+              if (result == true) {
+                _loadFacilityData();
+              }
+            },
+          ),
         ),
-        _buildStatItem(
-          label: 'Type',
-          value: 'Indoor',
-          subtitle: 'Standard',
-          onTap: null,
+        const SizedBox(width: 10),
+        Expanded(
+          child: _buildStatItem(
+            label: 'Type',
+            value: 'Indoor',
+            subtitle: 'Standard',
+            onTap: null,
+          ),
         ),
       ],
     );
@@ -281,8 +338,7 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 105,
-        height: 72,
+        height: 78,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: AppColors.white,
@@ -295,6 +351,8 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
           children: [
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
@@ -302,16 +360,24 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              value,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                maxLines: 1,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
               ),
             ),
+            const SizedBox(height: 1),
             Text(
               subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 9,
                 fontWeight: FontWeight.w400,
@@ -447,7 +513,7 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
           ),
           const SizedBox(height: 10),
           _buildInfoRow('Contact Phone', '0901234567'),
-          _buildInfoRow('Operating Hours', widget.facility.operatingHours),
+          _buildInfoRow('Operating Hours', _operatingHoursText),
           _buildInfoRow('Flooring', 'Yonex Competition Mat'),
           _buildInfoRow('Amenities', 'Parking, Shower, Free Wifi, Drinks'),
         ],

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import 'package:mobile/core/theme/app_colors.dart';
+
+import '../services/facility_service.dart';
 
 class DaySchedule {
   final String dayName;
@@ -30,6 +32,7 @@ class OperatingHoursScreen extends StatefulWidget {
 
 class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
   late List<DaySchedule> _schedules;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -85,6 +88,36 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
         closeTime: '20:00',
       ),
     ];
+    _loadExistingHours();
+  }
+
+  Future<void> _loadExistingHours() async {
+    final data = await FacilityService.instance.getFacilityDetails(
+      widget.facilityId,
+    );
+    if (!mounted || data == null) return;
+    if (data['operatingHours'] is List) {
+      final hoursList = data['operatingHours'] as List;
+      setState(() {
+        for (var schedule in _schedules) {
+          final match = hoursList.cast<Map<String, dynamic>?>().firstWhere(
+            (item) => item?['dayOfWeek'] == schedule.dayOfWeek,
+            orElse: () => null,
+          );
+          if (match != null) {
+            schedule.isOpen = true;
+            final open = (match['openTime'] as String? ?? '06:00');
+            final close = (match['closeTime'] as String? ?? '22:00');
+            schedule.openTime = open.length >= 5 ? open.substring(0, 5) : open;
+            schedule.closeTime = close.length >= 5
+                ? close.substring(0, 5)
+                : close;
+          } else {
+            schedule.isOpen = false;
+          }
+        }
+      });
+    }
   }
 
   void _applyMondayToAll() {
@@ -233,12 +266,58 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Lưu giờ mở cửa thành công!')),
-                  );
-                  Navigator.of(context).pop();
-                },
+                onPressed: _isLoading
+                    ? null
+                    : () async {
+                        final openDays = _schedules
+                            .where((s) => s.isOpen)
+                            .map(
+                              (s) => {
+                                'dayOfWeek': s.dayOfWeek,
+                                'openTime': s.openTime,
+                                'closeTime': s.closeTime,
+                              },
+                            )
+                            .toList();
+
+                        if (openDays.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Vui lòng mở cửa ít nhất 1 ngày trong tuần',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+
+                        setState(() => _isLoading = true);
+                        final success = await FacilityService.instance
+                            .updateOperatingHours(
+                              facilityId: widget.facilityId,
+                              days: openDays,
+                            );
+
+                        if (!context.mounted) return;
+                        setState(() => _isLoading = false);
+
+                        if (success) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Lưu giờ mở cửa thành công!'),
+                            ),
+                          );
+                          Navigator.of(context).pop(true);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Lưu giờ mở cửa thất bại. Vui lòng thử lại!',
+                              ),
+                            ),
+                          );
+                        }
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   shape: RoundedRectangleBorder(
@@ -246,14 +325,23 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                   ),
                   elevation: 0,
                 ),
-                child: Text(
-                  'Save Hours',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.white,
-                  ),
-                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: AppColors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : Text(
+                        'Save Hours',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.white,
+                        ),
+                      ),
               ),
             ),
           ),
