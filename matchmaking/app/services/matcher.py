@@ -14,7 +14,7 @@ class MatchmakingEngine:
             if c.user_id == user.user_id:
                 continue
 
-            # 1. Lọc trùng khung giờ rảnh (nếu cả 2 có set lịch rảnh)
+            # 1. Lọc trùng khung giờ rảnh
             cand_slots = set(c.available_time_slots)
             has_common_time = True
             if user_slots and cand_slots:
@@ -58,7 +58,7 @@ class MatchmakingEngine:
         return filtered
     @staticmethod
     def calculate_score(user: PlayerProfileInput, candidate: PlayerProfileInput) -> MatchedUserResult:
-        """Tính điểm tương thích đa tiêu chí (Trình độ, Vị trí/Khoảng cách GPS, Style, Độ uy tín, Thời gian)"""
+        """Tính điểm tương thích đa tiêu chí"""
         # 1. Điểm Tương thích Trình độ (Tối đa 30 điểm)
         user_avg = (
             user.skill.smash
@@ -83,7 +83,6 @@ class MatchmakingEngine:
         dist_km = calculate_player_to_player_distance(user.location, candidate.location)
         if dist_km is None:
             dist_km = 999.0
-        # Điểm giảm dần theo km: 0km -> 25đ, 25km+ -> 0đ
         distance_score = max(0.0, 25.0 - (dist_km * 1.0))
 
         # 3. Điểm Thời gian rảnh (Tối đa 15 điểm)
@@ -92,7 +91,7 @@ class MatchmakingEngine:
         common_slots = user_slots.intersection(cand_slots)
         time_score = min(15.0, len(common_slots) * 5.0) if (user_slots and cand_slots) else 10.0
 
-        # 4. Điểm Độ uy tín Cộng đồng (reliability_score từ 0 -> 5: Tối đa 15 điểm)
+        # 4. Điểm Độ uy tín Cộng đồng (Tối đa 15 điểm)
         reliability_score = (candidate.reliability_score / 5.0) * 15.0
 
         # 5. Điểm Phong cách chơi chung (Tối đa 15 điểm)
