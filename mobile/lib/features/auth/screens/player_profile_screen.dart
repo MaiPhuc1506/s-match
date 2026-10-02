@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile/features/auth/screens/edit_profile_screen.dart';
 import 'package:mobile/features/auth/screens/skill_assessment_screen.dart';
 import 'package:mobile/features/auth/screens/match_preferences_screen.dart';
+import 'package:mobile/features/booking/screens/booking_flow_screen.dart';
 
 /// Player Profile — Figma frame 195:178 (393 × 852).
 class PlayerProfileScreen extends StatelessWidget {
@@ -52,7 +53,7 @@ class PlayerProfileScreen extends StatelessWidget {
               children: [
                 _buildAppBar(context),
                 Expanded(child: _buildProfileContent(context)),
-                _buildBottomNavigation(),
+                _buildBottomNavigation(context),
               ],
             ),
           ),
@@ -407,7 +408,7 @@ class PlayerProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomNavigation() {
+  Widget _buildBottomNavigation(BuildContext context) {
     const items = [
       ('assets/icons/profile_nav_home.svg', 'Home', false),
       ('assets/icons/profile_nav_courts.svg', 'Courts', false),
@@ -432,6 +433,13 @@ class PlayerProfileScreen extends StatelessWidget {
                 asset: item.$1,
                 label: item.$2,
                 active: item.$3,
+                onTap: item.$2 == 'Courts'
+                    ? () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const BookingFlowScreen(),
+                        ),
+                      )
+                    : null,
               ),
             )
             .toList(),
@@ -629,11 +637,13 @@ class _NavigationItem extends StatelessWidget {
     required this.asset,
     required this.label,
     required this.active,
+    this.onTap,
   });
 
   final String asset;
   final String label;
   final bool active;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -641,33 +651,37 @@ class _NavigationItem extends StatelessWidget {
         ? PlayerProfileScreen._brandText
         : PlayerProfileScreen._textSecondary;
 
-    return SizedBox(
-      width: 64,
-      height: 48,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 22,
-            height: 22,
-            child: Center(
-              child: Opacity(
-                opacity: active ? 1 : 0.52,
-                child: SvgPicture.asset(asset, width: 17.6, height: 17.6),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        width: 64,
+        height: 48,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: Center(
+                child: Opacity(
+                  opacity: active ? 1 : 0.52,
+                  child: SvgPicture.asset(asset, width: 17.6, height: 17.6),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: PlayerProfileScreen._textStyle(
-              size: 12,
-              lineHeight: 16,
-              weight: FontWeight.w400,
-              color: color,
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: PlayerProfileScreen._textStyle(
+                size: 12,
+                lineHeight: 16,
+                weight: FontWeight.w400,
+                color: color,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
