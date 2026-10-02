@@ -20,7 +20,7 @@ class SMatchApp extends StatelessWidget {
         scaffoldBackgroundColor: AppColors.background,
         useMaterial3: true,
       ),
-      home: const SplashScreen(), // ← khôi phục lại
+      home: const SplashScreen(),
     );
   }
 }

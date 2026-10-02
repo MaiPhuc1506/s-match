@@ -55,6 +55,9 @@ class PlayerWelcomeScreen extends StatelessWidget {
                     onPressed: () {
                       Navigator.of(context).push(
                         PageRouteBuilder(
+                          settings: const RouteSettings(
+                            name: '/player-profile',
+                          ),
                           transitionDuration: const Duration(milliseconds: 250),
                           pageBuilder: (
                             context,
@@ -149,7 +152,7 @@ class PlayerWelcomeScreen extends StatelessWidget {
             child: Icon(
               Icons.sports_tennis_rounded,
               size: 56,
-              color: AppColors.iconPrimary.withOpacity(0.85),
+              color: AppColors.iconPrimary.withValues(alpha: 0.85),
             ),
           ),
         ],
@@ -242,7 +245,7 @@ class _CourtLinesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.primary.withOpacity(0.18)
+      ..color = AppColors.primary.withValues(alpha: 0.18)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
 
