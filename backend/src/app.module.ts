@@ -9,6 +9,7 @@ import { PlayersModule } from './players/players.module';
 import { AvailabilityPreferenceModule } from './availability-preference/availability-preference.module.js';
 import { FacilitiesModule } from './facilities/facilities.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { MatchesModule } from './matches/matches.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -19,6 +20,7 @@ import { BookingsModule } from './bookings/bookings.module';
     AvailabilityPreferenceModule,
     FacilitiesModule,
     BookingsModule,
+    MatchesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
