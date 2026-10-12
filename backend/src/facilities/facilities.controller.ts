@@ -55,6 +55,12 @@ export class FacilitiesController {
     return this.facilitiesService.getMyFacilities(ownerId);
   }
 
+  @Get()
+  @ApiOperation({ summary: 'Danh sách cơ sở và trạng thái sân (Public)' })
+  getPublicFacilities() {
+    return this.facilitiesService.getPublicFacilities();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Xem chi tiết cơ sở và danh sách sân con (Public)' })
   @ApiResponse({ status: 200, description: 'Thông tin chi tiết cơ sở.' })

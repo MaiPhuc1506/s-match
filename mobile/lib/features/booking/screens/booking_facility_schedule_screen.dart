@@ -168,19 +168,53 @@ class _BookingFacilityScheduleScreenState
               const SizedBox(height: 16),
               _buildTabs(),
               const SizedBox(height: 12),
-              _buildDateSelector(),
-              const SizedBox(height: 12),
-              _buildScheduleGrid(),
-              const SizedBox(height: 12),
-              _buildLegend(),
-              const SizedBox(height: 14),
-              _buildSelectedSlotBar(),
-              const SizedBox(height: 14),
-              _buildContinueButton(context),
+              if (_activeTab == 0) ...[
+                _buildDateSelector(),
+                const SizedBox(height: 12),
+                _buildScheduleGrid(),
+                const SizedBox(height: 12),
+                _buildLegend(),
+                const SizedBox(height: 14),
+                _buildSelectedSlotBar(),
+                const SizedBox(height: 14),
+                _buildContinueButton(context),
+              ] else
+                _buildFacilityInfo(),
               const SizedBox(height: 24),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFacilityInfo() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: BookingColors.cardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: BookingColors.borderStat),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Sunrise Badminton Club',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          SizedBox(height: 12),
+          Text('Address: 123 Le Van Viet, D9, HCMC'),
+          SizedBox(height: 8),
+          Text('Opening hours: 06:00 – 22:00'),
+          SizedBox(height: 8),
+          Text('Courts: 6 indoor badminton courts'),
+          SizedBox(height: 8),
+          Text(
+            'Standard badminton facility with international flooring and modern lighting.',
+          ),
+        ],
       ),
     );
   }

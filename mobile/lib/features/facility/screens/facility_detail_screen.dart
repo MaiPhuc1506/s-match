@@ -23,6 +23,8 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
   int _selectedDateIndex = 0;
   late int _courtCount;
   late String _operatingHoursText;
+  List<Map<String, dynamic>> _courts = [];
+  int? _updatingSlotId;
 
   @override
   void initState() {
@@ -41,7 +43,10 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
     if (!mounted || data == null) return;
     setState(() {
       if (data['courts'] != null && data['courts'] is List) {
-        _courtCount = (data['courts'] as List).length;
+        _courts = (data['courts'] as List)
+            .map((court) => Map<String, dynamic>.from(court as Map))
+            .toList();
+        _courtCount = _courts.length;
       }
       if (data['operatingHours'] is List) {
         final hours = data['operatingHours'] as List;
@@ -141,6 +146,9 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
                   _buildFacilityInfoTab(),
                 ],
 
+                const SizedBox(height: 20),
+                _buildCourtManagement(),
+
                 const SizedBox(
                   height: 100,
                 ), // Khoảng trống cho nút Add Court ở đáy
@@ -197,6 +205,205 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildCourtManagement() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Manage Courts',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (_courts.isEmpty)
+          const Text('Chưa có sân. Bấm Add Court để tạo sân.'),
+        ..._courts.map((court) {
+          final slots = court['timeSlots'] as List? ?? [];
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${court['name']} · ${court['status']}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  Wrap(
+                    spacing: 4,
+                    children: [
+                      TextButton(
+                        onPressed: () async {
+                          final changed = await Navigator.of(context)
+                              .push<bool>(
+                                MaterialPageRoute(
+                                  builder: (_) => AddEditCourtScreen(
+                                    facilityId: widget.facility.id,
+                                    courtId: court['id'] as int,
+                                    court: court,
+                                  ),
+                                ),
+                              );
+                          if (changed == true) _loadFacilityData();
+                        },
+                        child: const Text('Edit / Maintenance'),
+                      ),
+                      TextButton(
+                        onPressed: () => _addTimeSlot(court['id'] as int),
+                        child: const Text('Add Slot'),
+                      ),
+                    ],
+                  ),
+                  ...slots.map((slot) {
+                    final id = slot['id'] as int;
+                    return SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: Text(
+                        '${slot['startTime']}–${slot['endTime']} · Day ${slot['dayOfWeek']}',
+                      ),
+                      subtitle: const Text('Tắt để khóa khung giờ cho Player'),
+                      value: slot['isActive'] == true,
+                      onChanged: _updatingSlotId != null
+                          ? null
+                          : (active) async {
+                              setState(() => _updatingSlotId = id);
+                              final success = await FacilityService.instance
+                                  .setTimeSlotActive(
+                                    facilityId: widget.facility.id,
+                                    courtId: court['id'] as int,
+                                    slotId: id,
+                                    isActive: active,
+                                  );
+                              if (!mounted) return;
+                              setState(() => _updatingSlotId = null);
+                              if (success) {
+                                _loadFacilityData();
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Không cập nhật được khung giờ',
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                    );
+                  }),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Future<void> _addTimeSlot(int courtId) async {
+    final startController = TextEditingController(text: '17:00');
+    final endController = TextEditingController(text: '17:30');
+    final priceController = TextEditingController(text: '40000');
+    var day = DateTime.now().weekday % 7;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, updateDialog) => AlertDialog(
+          title: const Text('Add Time Slot'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<int>(
+                  initialValue: day,
+                  decoration: const InputDecoration(
+                    labelText: 'Ngày trong tuần',
+                  ),
+                  items: List.generate(
+                    7,
+                    (index) => DropdownMenuItem(
+                      value: index,
+                      child: Text(index == 0 ? 'Chủ Nhật' : 'Thứ ${index + 1}'),
+                    ),
+                  ),
+                  onChanged: (value) => updateDialog(() => day = value ?? day),
+                ),
+                TextField(
+                  controller: startController,
+                  decoration: const InputDecoration(
+                    labelText: 'Bắt đầu (HH:mm)',
+                  ),
+                ),
+                TextField(
+                  controller: endController,
+                  decoration: const InputDecoration(
+                    labelText: 'Kết thúc (HH:mm)',
+                  ),
+                ),
+                TextField(
+                  controller: priceController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Giá (VND)'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Hủy'),
+            ),
+            TextButton(
+              onPressed: () async {
+                final start = startController.text.trim();
+                final end = endController.text.trim();
+                final price = double.tryParse(priceController.text.trim());
+                final pattern = RegExp(r'^([01]\d|2[0-3]):[0-5]\d$');
+                if (!pattern.hasMatch(start) ||
+                    !pattern.hasMatch(end) ||
+                    start.compareTo(end) >= 0 ||
+                    price == null ||
+                    price < 0) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Kiểm tra giờ HH:mm và giá')),
+                  );
+                  return;
+                }
+                final success = await FacilityService.instance.addTimeSlot(
+                  facilityId: widget.facility.id,
+                  courtId: courtId,
+                  dayOfWeek: day,
+                  startTime: start,
+                  endTime: end,
+                  price: price,
+                );
+                if (!dialogContext.mounted) return;
+                if (success) {
+                  Navigator.pop(dialogContext, true);
+                } else {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Không thêm được slot. Kiểm tra giờ mở cửa hoặc slot trùng.',
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Lưu'),
+            ),
+          ],
+        ),
+      ),
+    );
+    startController.dispose();
+    endController.dispose();
+    priceController.dispose();
+    if (saved == true) _loadFacilityData();
   }
 
   Widget _buildHeroCard() {

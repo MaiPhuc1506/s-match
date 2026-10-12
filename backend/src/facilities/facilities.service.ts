@@ -39,11 +39,21 @@ export class FacilitiesService {
     });
   }
 
+  async getPublicFacilities() {
+    return this.prisma.facility.findMany({
+      include: {
+        courts: { include: { timeSlots: true } },
+        operatingHours: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async getFacilityById(id: number) {
     const facility = await this.prisma.facility.findUnique({
       where: { id },
       include: {
-        courts: true,
+        courts: { include: { timeSlots: true } },
         operatingHours: true,
       },
     });

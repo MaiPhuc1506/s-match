@@ -9,6 +9,18 @@ class FacilityService {
 
   final _client = ApiClient.instance;
 
+  Future<List<Map<String, dynamic>>?> getPublicFacilities() async {
+    try {
+      final res = await _client.dio.get('/facilities');
+      return (res.data as List)
+          .map((facility) => Map<String, dynamic>.from(facility as Map))
+          .toList();
+    } catch (e) {
+      debugPrint('Lỗi lấy danh sách cơ sở công khai: $e');
+      return null;
+    }
+  }
+
   Future<List<Map<String, dynamic>>?> getMyFacilities() async {
     try {
       if (await _client.ensureOwnerToken() == null) return null;
@@ -62,6 +74,75 @@ class FacilityService {
       return false;
     } catch (e) {
       debugPrint('[ADD COURT ERROR] Lỗi: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateCourt({
+    required int facilityId,
+    required int courtId,
+    required String name,
+    required String courtType,
+    required String status,
+  }) async {
+    try {
+      if (await _client.ensureOwnerToken() == null) return false;
+      final res = await _client.dio.patch(
+        '/facilities/$facilityId/courts/$courtId',
+        data: {
+          'name': name,
+          'courtType': courtType.toUpperCase(),
+          'status': status,
+        },
+      );
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('Lỗi cập nhật sân: $e');
+      return false;
+    }
+  }
+
+  Future<bool> setTimeSlotActive({
+    required int facilityId,
+    required int courtId,
+    required int slotId,
+    required bool isActive,
+  }) async {
+    try {
+      if (await _client.ensureOwnerToken() == null) return false;
+      final res = await _client.dio.patch(
+        '/facilities/$facilityId/courts/$courtId/time-slots/$slotId',
+        data: {'isActive': isActive},
+      );
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('Lỗi khóa/mở khung giờ: $e');
+      return false;
+    }
+  }
+
+  Future<bool> addTimeSlot({
+    required int facilityId,
+    required int courtId,
+    required int dayOfWeek,
+    required String startTime,
+    required String endTime,
+    required double price,
+  }) async {
+    try {
+      if (await _client.ensureOwnerToken() == null) return false;
+      final res = await _client.dio.post(
+        '/facilities/$facilityId/courts/$courtId/time-slots',
+        data: {
+          'dayOfWeek': dayOfWeek,
+          'startTime': startTime,
+          'endTime': endTime,
+          'price': price,
+        },
+      );
+      return res.statusCode == 201;
+    } catch (e) {
+      debugPrint('Lỗi thêm khung giờ: $e');
       return false;
     }
   }
