@@ -7,11 +7,116 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMatchDto } from './dto/create-match.dto';
 import { UpdateMatchDto } from './dto/update-match.dto';
-import { MatchPrivacy, MatchState, ParticipantRole, ParticipantStatus, Prisma } from '@prisma/client';
+import { BookingStatus, MatchPrivacy, MatchState, ParticipantRole, ParticipantStatus, Prisma } from '@prisma/client';
+import { CreateOpenMatchDto, QueryOpenMatchDto } from './dto/open-match.dto';
 
 @Injectable()
 export class MatchesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async createFromBooking(hostUserId: number, bookingId: number, dto: CreateOpenMatchDto) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { court: { include: { facility: true } }, match: true },
+    });
+    if (!booking) {
+      throw new NotFoundException(`Không tìm thấy đơn đặt sân ID ${bookingId}`);
+    }
+    if (booking.userId !== hostUserId) {
+      throw new ForbiddenException('Chỉ người đã đặt sân mới có thể mở trận đấu cho đơn này');
+    }
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BadRequestException('Chỉ có thể mở trận đấu cho đơn đặt sân đã xác nhận');
+    }
+    if (booking.match) {
+      throw new BadRequestException('Đơn đặt sân này đã có trận đấu');
+    }
+    if (dto.minSkillLevel > dto.maxSkillLevel) {
+      throw new BadRequestException('minSkillLevel không được lớn hơn maxSkillLevel');
+    }
+
+    const maxPlayers = dto.neededPlayers + 1;
+    return this.prisma.match.create({
+      data: {
+        title: `Open Match - ${booking.court.facility.name}`,
+        privacy: MatchPrivacy.OPEN,
+        status: MatchState.OPEN,
+        hostId: hostUserId,
+        bookingId,
+        startTime: booking.startTime,
+        endTime: booking.endTime,
+        location: booking.court.facility.name,
+        maxPlayers,
+        feePerPlayer: booking.totalPrice / maxPlayers,
+        mode: dto.mode,
+        purpose: dto.purpose,
+        minSkillLevel: dto.minSkillLevel,
+        maxSkillLevel: dto.maxSkillLevel,
+        participants: {
+          create: { userId: hostUserId, role: ParticipantRole.HOST, status: ParticipantStatus.ACCEPTED },
+        },
+      },
+      include: { booking: { include: { court: { include: { facility: true } } } }, participants: true },
+    });
+  }
+
+  findAll(query: QueryOpenMatchDto) {
+    return this.prisma.match.findMany({
+      where: {
+        privacy: MatchPrivacy.OPEN,
+        status: MatchState.OPEN,
+        ...(query.mode && { mode: query.mode }),
+        ...(query.purpose && { purpose: query.purpose }),
+      },
+      include: {
+        booking: { include: { court: { include: { facility: true } } } },
+        participants: { include: { user: { select: { id: true, fullName: true, email: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  findOneOrThrow(id: number) {
+    return this.findOne(id);
+  }
+
+  async respondToRequest(hostUserId: number, matchId: number, participantId: number, accept: boolean) {
+    const match = await this.findOne(matchId);
+    if (match.hostId !== hostUserId) {
+      throw new ForbiddenException('Chỉ host mới có quyền duyệt yêu cầu tham gia');
+    }
+    const participant = match.participants.find((entry) => entry.id === participantId);
+    if (!participant) {
+      throw new NotFoundException(`Không tìm thấy yêu cầu tham gia ID ${participantId}`);
+    }
+    if (participant.status !== ParticipantStatus.REQUESTED) {
+      throw new BadRequestException('Yêu cầu này đã được xử lý trước đó');
+    }
+    return accept
+      ? this.hostApproveRequest(matchId, hostUserId, participant.userId)
+      : this.hostRejectRequest(matchId, hostUserId, participant.userId);
+  }
+
+  async leave(userId: number, matchId: number) {
+    const match = await this.findOne(matchId);
+    if (match.hostId === userId) {
+      throw new BadRequestException('Host không thể rời trận đấu của mình');
+    }
+    const participant = match.participants.find((entry) => entry.userId === userId);
+    if (!participant || (
+      participant.status !== ParticipantStatus.REQUESTED &&
+      participant.status !== ParticipantStatus.INVITED &&
+      participant.status !== ParticipantStatus.ACCEPTED
+    )) {
+      throw new NotFoundException('Bạn không có lời mời hoặc yêu cầu tham gia đang hoạt động');
+    }
+    await this.prisma.matchParticipant.update({
+      where: { id: participant.id },
+      data: { status: ParticipantStatus.CANCELLED },
+    });
+    await this.checkAndUpdateMatchFullState(matchId);
+    return this.findOne(matchId);
+  }
 
   // 1. Tạo Match mới (Người tạo tự động thành HOST và status ACCEPTED)
   async createMatch(userId: number, dto: CreateMatchDto) {
@@ -180,6 +285,9 @@ export class MatchesService {
     });
 
     if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
+    if (match.status !== MatchState.OPEN) {
+      throw new BadRequestException('Trận đấu này hiện không mở để tham gia');
+    }
     if (match.privacy === MatchPrivacy.PRIVATE) {
       throw new BadRequestException('Đây là trận đấu kín (Private), cần có lời mời từ Host');
     }
@@ -308,14 +416,19 @@ export class MatchesService {
   private async checkAndUpdateMatchFullState(matchId: number) {
     const match = await this.prisma.match.findUnique({
       where: { id: matchId },
-      include: { participants: { where: { status: ParticipantStatus.ACCEPTED } } },
+      include: {
+        booking: true,
+        participants: { where: { status: ParticipantStatus.ACCEPTED } },
+      },
     });
 
-    if (match && match.participants.length >= match.maxPlayers) {
-      await this.prisma.match.update({
-        where: { id: matchId },
-        data: { status: MatchState.FULL },
-      });
-    }
+    if (!match || (match.status !== MatchState.OPEN && match.status !== MatchState.FULL)) return;
+    await this.prisma.match.update({
+      where: { id: matchId },
+      data: {
+        status: match.participants.length >= match.maxPlayers ? MatchState.FULL : MatchState.OPEN,
+        ...(match.booking && { feePerPlayer: match.booking.totalPrice / Math.max(1, match.participants.length) }),
+      },
+    });
   }
 }

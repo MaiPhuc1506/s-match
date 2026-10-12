@@ -6,6 +6,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -15,6 +16,9 @@ import { CreateMatchDto } from './dto/create-match.dto';
 import { UpdateMatchDto } from './dto/update-match.dto';
 import { InviteUserDto } from './dto/participant-action.dto';
 import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { Role } from '../auth/roles.enum';
+import { CreateOpenMatchDto, QueryOpenMatchDto } from './dto/open-match.dto';
 
 @ApiTags('Matches')
 @ApiBearerAuth()
@@ -124,5 +128,78 @@ export class MatchesController {
   ) {
     const hostUserId = this.extractUserId(req);
     return this.matchesService.hostRejectRequest(id, hostUserId, applicantUserId);
+  }
+}
+
+@ApiTags('Open Match (Invitation & Participation)')
+@Controller()
+export class OpenMatchesController {
+  constructor(private readonly matchesService: MatchesService) {}
+
+  private userId(request: any): number {
+    const user = request.user || request.raw?.user;
+    return Number(user?.id ?? user?.sub ?? user?.userId);
+  }
+
+  @Post('bookings/:bookingId/open-match')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(Role.PLAYER)
+  createFromBooking(
+    @Request() request: any,
+    @Param('bookingId', ParseIntPipe) bookingId: number,
+    @Body() dto: CreateOpenMatchDto,
+  ) {
+    return this.matchesService.createFromBooking(this.userId(request), bookingId, dto);
+  }
+
+  @Get('open-matches')
+  findAll(@Query() query: QueryOpenMatchDto) {
+    return this.matchesService.findAll(query);
+  }
+
+  @Get('open-matches/:id')
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.matchesService.findOneOrThrow(id);
+  }
+
+  @Post('open-matches/:id/join')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(Role.PLAYER)
+  requestToJoin(@Request() request: any, @Param('id', ParseIntPipe) id: number) {
+    return this.matchesService.requestToJoin(id, this.userId(request));
+  }
+
+  @Patch('open-matches/:id/participants/:participantId/accept')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(Role.PLAYER)
+  accept(
+    @Request() request: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('participantId', ParseIntPipe) participantId: number,
+  ) {
+    return this.matchesService.respondToRequest(this.userId(request), id, participantId, true);
+  }
+
+  @Patch('open-matches/:id/participants/:participantId/reject')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(Role.PLAYER)
+  reject(
+    @Request() request: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('participantId', ParseIntPipe) participantId: number,
+  ) {
+    return this.matchesService.respondToRequest(this.userId(request), id, participantId, false);
+  }
+
+  @Patch('open-matches/:id/leave')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(Role.PLAYER)
+  leave(@Request() request: any, @Param('id', ParseIntPipe) id: number) {
+    return this.matchesService.leave(this.userId(request), id);
   }
 }
