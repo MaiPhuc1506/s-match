@@ -6,6 +6,7 @@ import 'package:mobile/features/auth/screens/edit_profile_screen.dart';
 import 'package:mobile/features/auth/screens/skill_assessment_screen.dart';
 import 'package:mobile/features/auth/screens/match_preferences_screen.dart';
 import 'package:mobile/features/booking/screens/booking_flow_screen.dart';
+import 'package:mobile/features/match/screens/match_list_screen.dart';
 
 /// Player Profile — Figma frame 195:178 (393 × 852).
 class PlayerProfileScreen extends StatelessWidget {
@@ -439,6 +440,8 @@ class PlayerProfileScreen extends StatelessWidget {
                           builder: (_) => const BookingFlowScreen(),
                         ),
                       )
+                    : item.$2 == 'Match'
+                    ? () => _navigateDissolve(context, const MatchListScreen())
                     : null,
               ),
             )

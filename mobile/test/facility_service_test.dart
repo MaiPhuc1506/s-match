@@ -59,11 +59,33 @@ void main() {
         isTrue,
       );
 
+      expect(
+        await FacilityService.instance.updateCourt(
+          facilityId: 42,
+          courtId: 7,
+          name: 'Court 1',
+          courtType: 'Indoor',
+          status: 'MAINTENANCE',
+        ),
+        isTrue,
+      );
+      expect(
+        await FacilityService.instance.setTimeSlotActive(
+          facilityId: 42,
+          courtId: 7,
+          slotId: 9,
+          isActive: false,
+        ),
+        isTrue,
+      );
+
       expect(requests.map((request) => request.path), [
         '/auth/login',
         '/facilities/my',
         '/facilities/42/courts',
         '/facilities/42/operating-hours/bulk',
+        '/facilities/42/courts/7',
+        '/facilities/42/courts/7/time-slots/9',
       ]);
       for (final request in requests.skip(1)) {
         expect(request.headers['Authorization'], 'Bearer test-token');
@@ -74,6 +96,8 @@ void main() {
         'status': 'ACTIVE',
       });
       expect(requests[3].data, {'days': days});
+      expect(requests[4].data['status'], 'MAINTENANCE');
+      expect(requests[5].data, {'isActive': false});
     },
   );
 }

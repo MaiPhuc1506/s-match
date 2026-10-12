@@ -8,8 +8,14 @@ import '../services/facility_service.dart';
 class AddEditCourtScreen extends StatefulWidget {
   final int facilityId;
   final int? courtId;
+  final Map<String, dynamic>? court;
 
-  const AddEditCourtScreen({super.key, required this.facilityId, this.courtId});
+  const AddEditCourtScreen({
+    super.key,
+    required this.facilityId,
+    this.courtId,
+    this.court,
+  });
 
   @override
   State<AddEditCourtScreen> createState() => _AddEditCourtScreenState();
@@ -21,6 +27,19 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
   String _courtType = 'Indoor'; // 'Indoor' hoặc 'Outdoor'
   String _status = 'ACTIVE'; // 'ACTIVE', 'MAINTENANCE', 'INACTIVE'
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final court = widget.court;
+    if (court != null) {
+      _nameController.text = court['name'] as String? ?? '';
+      _courtType = (court['courtType'] as String? ?? 'INDOOR') == 'OUTDOOR'
+          ? 'Outdoor'
+          : 'Indoor';
+      _status = court['status'] as String? ?? 'ACTIVE';
+    }
+  }
 
   @override
   void dispose() {
@@ -169,12 +188,20 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
                         }
 
                         setState(() => _isLoading = true);
-                        final success = await FacilityService.instance.addCourt(
-                          facilityId: widget.facilityId,
-                          name: name,
-                          courtType: _courtType,
-                          status: _status,
-                        );
+                        final success = isEditing
+                            ? await FacilityService.instance.updateCourt(
+                                facilityId: widget.facilityId,
+                                courtId: widget.courtId!,
+                                name: name,
+                                courtType: _courtType,
+                                status: _status,
+                              )
+                            : await FacilityService.instance.addCourt(
+                                facilityId: widget.facilityId,
+                                name: name,
+                                courtType: _courtType,
+                                status: _status,
+                              );
 
                         if (!context.mounted) return;
                         setState(() => _isLoading = false);
@@ -182,7 +209,7 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
                         if (success) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Thêm sân thành công!'),
+                              content: Text('Lưu sân thành công!'),
                             ),
                           );
                           Navigator.of(context).pop(true);
@@ -213,7 +240,7 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
                         ),
                       )
                     : Text(
-                        'Save Court',
+                        isEditing ? 'Save Changes' : 'Save Court',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,

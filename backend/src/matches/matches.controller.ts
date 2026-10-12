@@ -11,50 +11,154 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { MatchesService } from './matches.service';
+import { CreateMatchDto } from './dto/create-match.dto';
+import { UpdateMatchDto } from './dto/update-match.dto';
+import { InviteUserDto } from './dto/participant-action.dto';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '../auth/roles.enum';
-import { MatchesService } from './matches.service';
 import { CreateOpenMatchDto, QueryOpenMatchDto } from './dto/open-match.dto';
 
-@ApiTags('Open Match (Invitation & Participation)')
-@Controller()
+@ApiTags('Matches')
+@ApiBearerAuth()
+@UseGuards(RolesGuard)
+@Controller('matches')
 export class MatchesController {
   constructor(private readonly matchesService: MatchesService) {}
 
   private extractUserId(req: any): number {
     const user = req.user || req.raw?.user;
-    const id = user?.id ?? user?.sub ?? user?.userId;
-    return Number(id);
+    return Number(user?.id ?? user?.sub ?? user?.userId);
+  }
+
+  // --- MATCH LIFECYCLE ---
+
+  @Post()
+  @ApiOperation({ summary: 'Tạo trận đấu mới (Open hoặc Private)' })
+  @ApiResponse({ status: 201, description: 'Tạo trận thành công.' })
+  async createMatch(@Request() req: any, @Body() dto: CreateMatchDto) {
+    const userId = this.extractUserId(req);
+    return this.matchesService.createMatch(userId, dto);
+  }
+
+  @Get('open')
+  @ApiOperation({ summary: 'Xem danh sách các kèo Open Match đang tìm người' })
+  @ApiResponse({ status: 200, description: 'Danh sách trận đấu mở.' })
+  async findOpenMatches() {
+    return this.matchesService.findOpenMatches();
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Xem chi tiết trận đấu và danh sách người tham gia' })
+  @ApiResponse({ status: 200, description: 'Thông tin trận đấu.' })
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.matchesService.findOne(id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Cập nhật thông tin trận đấu (Chỉ Host)' })
+  async updateMatch(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+    @Body() dto: UpdateMatchDto,
+  ) {
+    const userId = this.extractUserId(req);
+    return this.matchesService.updateMatch(id, userId, dto);
+  }
+
+  @Patch(':id/cancel')
+  @ApiOperation({ summary: 'Hủy trận đấu (Chỉ Host)' })
+  async cancelMatch(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    const userId = this.extractUserId(req);
+    return this.matchesService.cancelMatch(id, userId);
+  }
+
+  // --- INVITATIONS & JOIN REQUESTS ---
+
+  @Post(':id/invite')
+  @ApiOperation({ summary: 'Host gửi lời mời một người chơi tham gia trận' })
+  async inviteUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+    @Body() dto: InviteUserDto,
+  ) {
+    const hostUserId = this.extractUserId(req);
+    return this.matchesService.inviteUser(id, hostUserId, dto.targetUserId);
+  }
+
+  @Post(':id/join-request')
+  @ApiOperation({ summary: 'Người chơi gửi yêu cầu xin tham gia Open Match' })
+  async requestToJoin(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    const userId = this.extractUserId(req);
+    return this.matchesService.requestToJoin(id, userId);
+  }
+
+  @Patch(':id/invitations/accept')
+  @ApiOperation({ summary: 'Người chơi chấp nhận lời mời từ Host' })
+  async acceptInvitation(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    const userId = this.extractUserId(req);
+    return this.matchesService.acceptInvitation(id, userId);
+  }
+
+  @Patch(':id/invitations/reject')
+  @ApiOperation({ summary: 'Người chơi từ chối lời mời từ Host' })
+  async rejectInvitation(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    const userId = this.extractUserId(req);
+    return this.matchesService.rejectInvitation(id, userId);
+  }
+
+  @Patch(':id/requests/:userId/approve')
+  @ApiOperation({ summary: 'Host duyệt yêu cầu tham gia trận của người chơi' })
+  async hostApproveRequest(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('userId', ParseIntPipe) applicantUserId: number,
+    @Request() req: any,
+  ) {
+    const hostUserId = this.extractUserId(req);
+    return this.matchesService.hostApproveRequest(id, hostUserId, applicantUserId);
+  }
+
+  @Patch(':id/requests/:userId/reject')
+  @ApiOperation({ summary: 'Host từ chối yêu cầu tham gia trận của người chơi' })
+  async hostRejectRequest(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('userId', ParseIntPipe) applicantUserId: number,
+    @Request() req: any,
+  ) {
+    const hostUserId = this.extractUserId(req);
+    return this.matchesService.hostRejectRequest(id, hostUserId, applicantUserId);
+  }
+}
+
+@ApiTags('Open Match (Invitation & Participation)')
+@Controller()
+export class OpenMatchesController {
+  constructor(private readonly matchesService: MatchesService) {}
+
+  private userId(request: any): number {
+    const user = request.user || request.raw?.user;
+    return Number(user?.id ?? user?.sub ?? user?.userId);
   }
 
   @Post('bookings/:bookingId/open-match')
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles(Role.PLAYER)
-  @ApiOperation({ summary: 'Mở một đơn đặt sân đã xác nhận thành Open Match để mời thêm người' })
-  @ApiResponse({ status: 201, description: 'Mở Open Match thành công.' })
-  @ApiResponse({ status: 403, description: 'Không phải người đã đặt sân này.' })
   createFromBooking(
-    @Request() req: any,
+    @Request() request: any,
     @Param('bookingId', ParseIntPipe) bookingId: number,
     @Body() dto: CreateOpenMatchDto,
   ) {
-    const userId = this.extractUserId(req);
-    return this.matchesService.createFromBooking(userId, bookingId, dto);
+    return this.matchesService.createFromBooking(this.userId(request), bookingId, dto);
   }
 
   @Get('open-matches')
-  @ApiOperation({ summary: 'Duyệt danh sách Open Match đang mở (Public)' })
-  @ApiResponse({ status: 200, description: 'Danh sách Open Match.' })
   findAll(@Query() query: QueryOpenMatchDto) {
     return this.matchesService.findAll(query);
   }
 
   @Get('open-matches/:id')
-  @ApiOperation({ summary: 'Xem chi tiết một Open Match, kèm danh sách người tham gia (Public)' })
-  @ApiResponse({ status: 200, description: 'Chi tiết Open Match.' })
-  @ApiResponse({ status: 404, description: 'Không tìm thấy Open Match.' })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.matchesService.findOneOrThrow(id);
   }
@@ -63,53 +167,39 @@ export class MatchesController {
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles(Role.PLAYER)
-  @ApiOperation({ summary: 'Gửi yêu cầu tham gia một Open Match' })
-  @ApiResponse({ status: 201, description: 'Gửi yêu cầu tham gia thành công.' })
-  requestToJoin(@Request() req: any, @Param('id', ParseIntPipe) id: number) {
-    const userId = this.extractUserId(req);
-    return this.matchesService.requestToJoin(userId, id);
+  requestToJoin(@Request() request: any, @Param('id', ParseIntPipe) id: number) {
+    return this.matchesService.requestToJoin(id, this.userId(request));
   }
 
   @Patch('open-matches/:id/participants/:participantId/accept')
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles(Role.PLAYER)
-  @ApiOperation({ summary: 'Host duyệt (chấp nhận) một yêu cầu tham gia' })
-  @ApiResponse({ status: 200, description: 'Duyệt yêu cầu thành công.' })
-  @ApiResponse({ status: 403, description: 'Không phải host của trận đấu.' })
   accept(
-    @Request() req: any,
+    @Request() request: any,
     @Param('id', ParseIntPipe) id: number,
     @Param('participantId', ParseIntPipe) participantId: number,
   ) {
-    const userId = this.extractUserId(req);
-    return this.matchesService.respondToRequest(userId, id, participantId, true);
+    return this.matchesService.respondToRequest(this.userId(request), id, participantId, true);
   }
 
   @Patch('open-matches/:id/participants/:participantId/reject')
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles(Role.PLAYER)
-  @ApiOperation({ summary: 'Host từ chối một yêu cầu tham gia' })
-  @ApiResponse({ status: 200, description: 'Từ chối yêu cầu thành công.' })
-  @ApiResponse({ status: 403, description: 'Không phải host của trận đấu.' })
   reject(
-    @Request() req: any,
+    @Request() request: any,
     @Param('id', ParseIntPipe) id: number,
     @Param('participantId', ParseIntPipe) participantId: number,
   ) {
-    const userId = this.extractUserId(req);
-    return this.matchesService.respondToRequest(userId, id, participantId, false);
+    return this.matchesService.respondToRequest(this.userId(request), id, participantId, false);
   }
 
   @Patch('open-matches/:id/leave')
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles(Role.PLAYER)
-  @ApiOperation({ summary: 'Rời khỏi Open Match (hoặc rút yêu cầu tham gia đang chờ)' })
-  @ApiResponse({ status: 200, description: 'Rời trận đấu thành công.' })
-  leave(@Request() req: any, @Param('id', ParseIntPipe) id: number) {
-    const userId = this.extractUserId(req);
-    return this.matchesService.leave(userId, id);
+  leave(@Request() request: any, @Param('id', ParseIntPipe) id: number) {
+    return this.matchesService.leave(this.userId(request), id);
   }
 }

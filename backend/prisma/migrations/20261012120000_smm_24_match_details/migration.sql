@@ -1,0 +1,7 @@
+ALTER TABLE "Match"
+ADD COLUMN "mode" "MatchMode" NOT NULL DEFAULT 'DOUBLES',
+ADD COLUMN "purpose" "MatchPurpose" NOT NULL DEFAULT 'CASUAL',
+ADD COLUMN "minSkillLevel" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN "maxSkillLevel" INTEGER NOT NULL DEFAULT 5;
+
+CREATE UNIQUE INDEX "Match_bookingId_key" ON "Match"("bookingId");
