@@ -5,12 +5,25 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile/features/auth/screens/edit_profile_screen.dart';
 import 'package:mobile/features/auth/screens/skill_assessment_screen.dart';
 import 'package:mobile/features/auth/screens/match_preferences_screen.dart';
-import 'package:mobile/features/booking/screens/booking_flow_screen.dart';
-import 'package:mobile/features/match/screens/match_list_screen.dart';
+import 'package:mobile/features/booking/screens/booking_history_screen.dart';
+import 'package:mobile/features/navigation/player_bottom_navigation.dart';
 
 /// Player Profile — Figma frame 195:178 (393 × 852).
 class PlayerProfileScreen extends StatelessWidget {
-  const PlayerProfileScreen({super.key});
+  final VoidCallback? onNavigateHome;
+  final VoidCallback? onNavigateMap;
+  final VoidCallback? onNavigateMatch;
+  final VoidCallback? onNavigateFeedback;
+  final VoidCallback? onNavigateProfile;
+
+  const PlayerProfileScreen({
+    super.key,
+    this.onNavigateHome,
+    this.onNavigateMap,
+    this.onNavigateMatch,
+    this.onNavigateFeedback,
+    this.onNavigateProfile,
+  });
 
   static const _background = Color(0xFFF7F8F5);
   static const _primary = Color(0xFF05644F);
@@ -54,7 +67,14 @@ class PlayerProfileScreen extends StatelessWidget {
               children: [
                 _buildAppBar(context),
                 Expanded(child: _buildProfileContent(context)),
-                _buildBottomNavigation(context),
+                PlayerBottomNavigation(
+                  currentTab: PlayerNavTab.profile,
+                  onNavigateHome: onNavigateHome,
+                  onNavigateMap: onNavigateMap,
+                  onNavigateMatch: onNavigateMatch,
+                  onNavigateFeedback: onNavigateFeedback,
+                  onNavigateProfile: onNavigateProfile,
+                ),
               ],
             ),
           ),
@@ -115,7 +135,7 @@ class PlayerProfileScreen extends StatelessWidget {
         children: [
           _buildProfileHeader(context),
           const SizedBox(height: 12),
-          _buildQuickStats(),
+          _buildQuickStats(context),
           const SizedBox(height: 12),
           _buildSkillOverview(context),
           const SizedBox(height: 12),
@@ -202,40 +222,53 @@ class PlayerProfileScreen extends StatelessWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Container(
-                            width: 122,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFDDEFE7),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SvgPicture.asset(
-                                  'assets/icons/profile_level_racket.svg',
-                                  width: 18,
-                                  height: 18,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Intermediate',
-                                  style: _textStyle(
-                                    size: 14,
-                                    lineHeight: 20,
-                                    weight: FontWeight.w500,
+                          Flexible(
+                            child: Container(
+                              height: 24,
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDDEFE7),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SvgPicture.asset(
+                                    'assets/icons/profile_level_racket.svg',
+                                    width: 18,
+                                    height: 18,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        'Intermediate',
+                                        style: _textStyle(
+                                          size: 14,
+                                          lineHeight: 20,
+                                          weight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           const SizedBox(width: 10),
-                          Text(
-                            '★ 4.6  (24 reviews)',
-                            style: _textStyle(
-                              size: 13,
-                              lineHeight: 18,
-                              weight: FontWeight.w600,
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                '★ 4.6  (24 reviews)',
+                                style: _textStyle(
+                                  size: 13,
+                                  lineHeight: 18,
+                                  weight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -278,7 +311,7 @@ class PlayerProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildQuickStats() {
+  Widget _buildQuickStats(BuildContext context) {
     return Container(
       width: 345,
       height: 88,
@@ -294,12 +327,22 @@ class PlayerProfileScreen extends StatelessWidget {
           ),
         ],
       ),
-      child: const Row(
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _StatItem(value: '24', label: 'Matches'),
-          _StatItem(value: '18', label: 'Completed'),
-          _StatItem(value: '4.6', label: 'Rating'),
+          const _StatItem(value: '24', label: 'Matches'),
+          _StatItem(
+            value: '18',
+            label: 'Completed',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const BookingHistoryScreen(),
+                ),
+              );
+            },
+          ),
+          const _StatItem(value: '4.6', label: 'Rating'),
         ],
       ),
     );
@@ -320,21 +363,31 @@ class PlayerProfileScreen extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Skill Overview',
-                    style: _textStyle(
-                      size: 20,
-                      lineHeight: 28,
-                      weight: FontWeight.w600,
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Skill Overview',
+                        style: _textStyle(
+                          size: 20,
+                          lineHeight: 28,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
-                  Text(
-                    'View details',
-                    style: _textStyle(
-                      size: 13,
-                      lineHeight: 18,
-                      weight: FontWeight.w500,
-                      color: _primary,
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'View details',
+                        style: _textStyle(
+                          size: 13,
+                          lineHeight: 18,
+                          weight: FontWeight.w500,
+                          color: _primary,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -409,47 +462,6 @@ class PlayerProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomNavigation(BuildContext context) {
-    const items = [
-      ('assets/icons/profile_nav_home.svg', 'Home', false),
-      ('assets/icons/profile_nav_courts.svg', 'Courts', false),
-      ('assets/icons/profile_nav_match.svg', 'Match', false),
-      ('assets/icons/profile_nav_messages.svg', 'Messages', false),
-      ('assets/icons/profile_nav_user.svg', 'Profile', true),
-    ];
-
-    return Container(
-      width: 393,
-      height: 84,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFDDE5E1))),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: items
-            .map(
-              (item) => _NavigationItem(
-                asset: item.$1,
-                label: item.$2,
-                active: item.$3,
-                onTap: item.$2 == 'Courts'
-                    ? () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const BookingFlowScreen(),
-                        ),
-                      )
-                    : item.$2 == 'Match'
-                    ? () => _navigateDissolve(context, const MatchListScreen())
-                    : null,
-              ),
-            )
-            .toList(),
-      ),
-    );
-  }
-
   static TextStyle _textStyle({
     required double size,
     required double lineHeight,
@@ -467,41 +479,61 @@ class PlayerProfileScreen extends StatelessWidget {
 }
 
 class _StatItem extends StatelessWidget {
-  const _StatItem({required this.value, required this.label});
+  const _StatItem({
+    required this.value,
+    required this.label,
+    this.onTap,
+  });
 
   final String value;
   final String label;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    final content = SizedBox(
       width: 96,
-      height: 56,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            value,
-            style: PlayerProfileScreen._textStyle(
-              size: 22,
-              lineHeight: 28,
-              weight: FontWeight.w700,
-              color: PlayerProfileScreen._brandText,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: PlayerProfileScreen._textStyle(
+                size: 22,
+                lineHeight: 28,
+                weight: FontWeight.w700,
+                color: PlayerProfileScreen._brandText,
+              ),
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            label,
-            style: PlayerProfileScreen._textStyle(
-              size: 13,
-              lineHeight: 18,
-              weight: FontWeight.w400,
-              color: PlayerProfileScreen._textSecondary,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              style: PlayerProfileScreen._textStyle(
+                size: 13,
+                lineHeight: 18,
+                weight: FontWeight.w400,
+                color: PlayerProfileScreen._textSecondary,
+              ),
             ),
           ),
         ],
       ),
     );
+
+    if (onTap != null) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: content,
+      );
+    }
+    return content;
   }
 }
 
@@ -635,57 +667,3 @@ class _StyleChip extends StatelessWidget {
   }
 }
 
-class _NavigationItem extends StatelessWidget {
-  const _NavigationItem({
-    required this.asset,
-    required this.label,
-    required this.active,
-    this.onTap,
-  });
-
-  final String asset;
-  final String label;
-  final bool active;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = active
-        ? PlayerProfileScreen._brandText
-        : PlayerProfileScreen._textSecondary;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: SizedBox(
-        width: 64,
-        height: 48,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 22,
-              height: 22,
-              child: Center(
-                child: Opacity(
-                  opacity: active ? 1 : 0.52,
-                  child: SvgPicture.asset(asset, width: 17.6, height: 17.6),
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: PlayerProfileScreen._textStyle(
-                size: 12,
-                lineHeight: 16,
-                weight: FontWeight.w400,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

@@ -8,6 +8,7 @@ import 'match_invitations_screen.dart';
 import '../widgets/match_card.dart';
 import 'create_match_screen.dart';
 import 'match_detail_open_screen.dart';
+import 'package:mobile/features/navigation/player_bottom_navigation.dart';
 
 /// Screen 01: Match List (Figma Node 413:884)
 /// Reference viewport: 393 × 852, Background: #F7F8F5
@@ -15,12 +16,20 @@ class MatchListScreen extends StatefulWidget {
   final VoidCallback? onCreateMatch;
   final VoidCallback? onMyMatches;
   final ValueChanged<MatchItem>? onMatchDetail;
+  final VoidCallback? onNavigateHome;
+  final VoidCallback? onNavigateMap;
+  final VoidCallback? onNavigateFeedback;
+  final VoidCallback? onNavigateProfile;
 
   const MatchListScreen({
     super.key,
     this.onCreateMatch,
     this.onMyMatches,
     this.onMatchDetail,
+    this.onNavigateHome,
+    this.onNavigateMap,
+    this.onNavigateFeedback,
+    this.onNavigateProfile,
   });
 
   @override
@@ -31,7 +40,6 @@ class _MatchListScreenState extends State<MatchListScreen> {
   int _selectedTabIndex = 0; // 0: Open Matches, 1: My Matches
   int _selectedFilterIndex = 0; // 0: Today, 1: This week, 2: Filter
   String? _level;
-  int _bottomNavIndex = 1; // 1: Matches (Active)
 
   List<MatchItem> get _visible => MatchUiStore.instance.visible(
     mine: _selectedTabIndex == 1,
@@ -136,8 +144,14 @@ class _MatchListScreenState extends State<MatchListScreen> {
                 ),
               ),
 
-              // 3. Bottom Navigation (Height: 65)
-              _buildBottomNavigation(),
+              // 3. Bottom Navigation (Height: 84)
+              PlayerBottomNavigation(
+                currentTab: PlayerNavTab.match,
+                onNavigateHome: widget.onNavigateHome,
+                onNavigateMap: widget.onNavigateMap,
+                onNavigateFeedback: widget.onNavigateFeedback,
+                onNavigateProfile: widget.onNavigateProfile,
+              ),
             ],
           ),
         ),
@@ -405,70 +419,5 @@ class _MatchListScreenState extends State<MatchListScreen> {
     );
   }
 
-  // ==========================================
-  // 4. BOTTOM NAVIGATION (393 × 65)
-  // ==========================================
-  Widget _buildBottomNavigation() {
-    const items = [
-      ('assets/icons/profile_nav_home.svg', 'Home'),
-      ('assets/icons/profile_nav_match.svg', 'Matches'),
-      ('assets/icons/sprint4_search.svg', 'Explore'),
-      ('assets/icons/profile_nav_messages.svg', 'Messages'),
-      ('assets/icons/profile_nav_user.svg', 'Profile'),
-    ];
-
-    return Container(
-      width: 393,
-      height: 65,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
-      decoration: const BoxDecoration(
-        color: MatchColors.white,
-        border: Border(top: BorderSide(color: Color(0xFFE2E8E4), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: List.generate(items.length, (index) {
-          final isActive = _bottomNavIndex == index;
-          final color = isActive
-              ? MatchColors.primaryGreen
-              : MatchColors.mutedText;
-
-          return GestureDetector(
-            onTap: () {
-              setState(() => _bottomNavIndex = index);
-            },
-            behavior: HitTestBehavior.opaque,
-            child: SizedBox(
-              width: 62,
-              height: 52,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: SvgPicture.asset(
-                      items[index].$1,
-                      width: 20,
-                      height: 20,
-                      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    items[index].$2,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 10,
-                      fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                      color: color,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
 }
+
