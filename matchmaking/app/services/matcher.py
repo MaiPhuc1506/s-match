@@ -1,132 +1,181 @@
-from typing import List
-from app.schemas import PlayerProfileInput, MatchedUserResult, BreakdownScores
-from app.services.distance import calculate_player_to_player_distance
+import math
+from typing import List, Optional
+from app.schemas import (
+    PlayerProfileInput,
+    MatchedUserResult,
+    MatchmakingResponse,
+    BreakdownScores,
+)
+
+
+def calculate_haversine_distance(
+    lat1: float, lon1: float, lat2: float, lon2: float
+) -> float:
+  """Tính khoảng cách GPS giữa 2 điểm theo công thức Haversine (đơn vị: km)"""
+  R = 6371.0
+  dlat = math.radians(lat2 - lat1)
+  dlon = math.radians(lon2 - lon1)
+  a = (
+      math.sin(dlat / 2) ** 2
+      + math.cos(math.radians(lat1))
+      * math.cos(math.radians(lat2))
+      * math.sin(dlon / 2) ** 2
+  )
+  c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+  return R * c
 
 
 class MatchmakingEngine:
-    @staticmethod
-    def filter_candidates(user: PlayerProfileInput, candidates: List[PlayerProfileInput]) -> List[PlayerProfileInput]:
-        """Lọc cứng: Lịch rảnh trùng nhau & Trình độ nằm trong khoảng cho phép"""
-        filtered = []
-        user_slots = set(user.available_time_slots)
 
-        for c in candidates:
-            if c.user_id == user.user_id:
-                continue
+  MAX_DISTANCE_KM: float = 20.0  # Ngưỡng khoảng cách tối đa (km)
 
-            # 1. Lọc trùng khung giờ rảnh
-            cand_slots = set(c.available_time_slots)
-            has_common_time = True
-            if user_slots and cand_slots:
-                has_common_time = len(user_slots.intersection(cand_slots)) > 0
+  @staticmethod
+  def is_eligible(
+      user: PlayerProfileInput, candidate: PlayerProfileInput
+  ) -> bool:
+    """Bộ lọc cứng (Hard Filtering): Loại bỏ candidate không thỏa điều kiện cơ bản"""
+    # 1. Kiểm tra khoảng cách GPS
+    dist_km = calculate_haversine_distance(
+        user.location.latitude,
+        user.location.longitude,
+        candidate.location.latitude,
+        candidate.location.longitude,
+    )
+    if dist_km > MatchmakingEngine.MAX_DISTANCE_KM:
+      return False
 
-            # 2. Lọc chênh lệch trình độ theo preferred min-max
-            user_avg_skill = (
-                user.skill.smash
-                + user.skill.defense
-                + user.skill.net_play
-                + user.skill.stamina
-                + user.skill.footwork
-                + user.skill.serve
-            ) / 6.0
-            cand_avg_skill = (
-                c.skill.smash
-                + c.skill.defense
-                + c.skill.net_play
-                + c.skill.stamina
-                + c.skill.footwork
-                + c.skill.serve
-            ) / 6.0
+    # 2. Kiểm tra trùng thời gian rảnh
+    user_slots = set(user.available_time_slots)
+    candidate_slots = set(candidate.available_time_slots)
+    if not user_slots.intersection(candidate_slots):
+      return False
 
-            skill_match = (
-                user.skill.preferred_min <= cand_avg_skill <= user.skill.preferred_max
-            ) and (
-                c.skill.preferred_min <= user_avg_skill <= c.skill.preferred_max
-            )
+    # 3. Kiểm tra dải trình độ phù hợp (preferred_min <= cand_skill <= preferred_max)
+    cand_avg_skill = (
+        candidate.skill.smash
+        + candidate.skill.defense
+        + candidate.skill.net_play
+        + candidate.skill.stamina
+        + candidate.skill.footwork
+        + candidate.skill.serve
+    ) / 6.0
 
-            # 3. Lọc bán kính khoảng cách địa lý (Hai chiều)
-            dist_km = calculate_player_to_player_distance(user.location, c.location)
-            within_distance = True
-            if dist_km is not None:
-                user_max = user.max_distance_km if user.max_distance_km is not None else 10.0
-                cand_max = c.max_distance_km if c.max_distance_km is not None else 10.0
-                within_distance = (dist_km <= user_max) and (dist_km <= cand_max)
+    if not (
+        user.skill.preferred_min <= cand_avg_skill <= user.skill.preferred_max
+    ):
+      return False
 
-            if has_common_time and skill_match and within_distance:
-                filtered.append(c)
+    return True
 
-        return filtered
-    @staticmethod
-    def calculate_score(user: PlayerProfileInput, candidate: PlayerProfileInput) -> MatchedUserResult:
-        """Tính điểm tương thích đa tiêu chí"""
-        # 1. Điểm Tương thích Trình độ (Tối đa 30 điểm)
-        user_avg = (
-            user.skill.smash
-            + user.skill.defense
-            + user.skill.net_play
-            + user.skill.stamina
-            + user.skill.footwork
-            + user.skill.serve
-        ) / 6.0
-        cand_avg = (
-            candidate.skill.smash
-            + candidate.skill.defense
-            + candidate.skill.net_play
-            + candidate.skill.stamina
-            + candidate.skill.footwork
-            + candidate.skill.serve
-        ) / 6.0
-        skill_diff = abs(user_avg - cand_avg)
-        skill_score = max(0.0, 30.0 - (skill_diff * 6.0))
+  @staticmethod
+  def calculate_score(
+      user: PlayerProfileInput, candidate: PlayerProfileInput
+  ) -> MatchedUserResult:
+    """Tính toán điểm phù hợp chi tiết (Compatibility Scoring)"""
+    # 1. Skill Score (Max 30đ)
+    user_avg = (
+        user.skill.smash
+        + user.skill.defense
+        + user.skill.net_play
+        + user.skill.stamina
+        + user.skill.footwork
+        + user.skill.serve
+    ) / 6.0
 
-        # 2. Điểm Vị trí Địa lý (Haversine Distance - Tối đa 25 điểm)
-        dist_km = calculate_player_to_player_distance(user.location, candidate.location)
-        if dist_km is None:
-            dist_km = 999.0
-        distance_score = max(0.0, 25.0 - (dist_km * 1.0))
+    cand_avg = (
+        candidate.skill.smash
+        + candidate.skill.defense
+        + candidate.skill.net_play
+        + candidate.skill.stamina
+        + candidate.skill.footwork
+        + candidate.skill.serve
+    ) / 6.0
 
-        # 3. Điểm Thời gian rảnh (Tối đa 15 điểm)
-        user_slots = set(user.available_time_slots)
-        cand_slots = set(candidate.available_time_slots)
-        common_slots = user_slots.intersection(cand_slots)
-        time_score = min(15.0, len(common_slots) * 5.0) if (user_slots and cand_slots) else 10.0
+    skill_diff = abs(user_avg - cand_avg)
+    skill_score = max(0.0, 30.0 - (skill_diff * 10.0))
 
-        # 4. Điểm Độ uy tín Cộng đồng (Tối đa 15 điểm)
-        reliability_score = (candidate.reliability_score / 5.0) * 15.0
+    # 2. Distance Score (Max 25đ)
+    dist_km = calculate_haversine_distance(
+        user.location.latitude,
+        user.location.longitude,
+        candidate.location.latitude,
+        candidate.location.longitude,
+    )
+    distance_score = max(0.0, 25.0 - (dist_km * 1.0))
 
-        # 5. Điểm Phong cách chơi chung (Tối đa 15 điểm)
-        user_style = set(user.playing_style)
-        cand_style = set(candidate.playing_style)
-        common_style = user_style.intersection(cand_style)
-        if common_style and user_style:
-            style_score = (len(common_style) / len(user_style)) * 15.0
-        else:
-            style_score = 5.0
+    # 3. Time Score (Max 20đ)
+    user_slots = set(user.available_time_slots)
+    cand_slots = set(candidate.available_time_slots)
+    common_slots = len(user_slots.intersection(cand_slots))
+    time_score = min(20.0, common_slots * 10.0)
 
-        total_score = round(
-            skill_score + distance_score + time_score + reliability_score + style_score,
-            2
-        )
+    # 4. Style Score (Max 10đ)
+    user_styles = set(user.playing_style)
+    cand_styles = set(candidate.playing_style)
+    style_match = (
+        len(user_styles.intersection(cand_styles)) / len(user_styles)
+        if user_styles
+        else 0.5
+    )
+    style_score = style_match * 10.0
 
-        breakdown = BreakdownScores(
-            skill_score=round(skill_score, 2),
-            time_score=round(time_score, 2),
-            distance_score=round(distance_score, 2),
-            style_score=round(style_score, 2),
-            reliability_score=round(reliability_score, 2),
-        )
+    # 5. Reliability Score (Max 15đ)
+    reliability_score = (candidate.reliability_score / 5.0) * 15.0
 
-        return MatchedUserResult(
-            user_id=candidate.user_id,
-            match_score=total_score,
-            breakdown=breakdown,
-        )
+    # Tổng điểm Match Score (Max 100đ)
+    total_score = round(
+        skill_score
+        + distance_score
+        + time_score
+        + style_score
+        + reliability_score,
+        2,
+    )
 
-    @classmethod
-    def run_pipeline(
-        cls, user: PlayerProfileInput, candidates: List[PlayerProfileInput], limit: int
-    ) -> List[MatchedUserResult]:
-        valid_candidates = cls.filter_candidates(user, candidates)
-        scored_results = [cls.calculate_score(user, cand) for cand in valid_candidates]
-        ranked_results = sorted(scored_results, key=lambda x: x.match_score, reverse=True)
-        return ranked_results[:limit]
+    breakdown = BreakdownScores(
+        skill_score=round(skill_score, 2),
+        time_score=round(time_score, 2),
+        distance_score=round(distance_score, 2),
+        style_score=round(style_score, 2),
+        reliability_score=round(reliability_score, 2),
+    )
+
+    return MatchedUserResult(
+        user_id=candidate.user_id,
+        match_score=total_score,
+        breakdown=breakdown,
+    )
+
+  @classmethod
+  def run_pipeline(
+      cls,
+      current_user: PlayerProfileInput = None,
+      user: PlayerProfileInput = None,
+      candidates: List[PlayerProfileInput] = None,
+      limit: int = 10,
+      return_response_model: bool = False,
+  ):
+    """Quy trình Lọc ứng viên & Xếp hạng điểm (Pipeline)"""
+    target_user = current_user or user
+    matched_results: List[MatchedUserResult] = []
+
+    for candidate in candidates or []:
+      if candidate.user_id == target_user.user_id:
+        continue
+
+      if not cls.is_eligible(target_user, candidate):
+        continue
+
+      result = cls.calculate_score(target_user, candidate)
+      matched_results.append(result)
+
+    matched_results.sort(key=lambda x: x.match_score, reverse=True)
+    sliced_results = matched_results[:limit]
+
+    if return_response_model:
+      return MatchmakingResponse(
+          matched_users=sliced_results,
+          total_candidates_processed=len(candidates or []),
+      )
+
+    return sliced_results
