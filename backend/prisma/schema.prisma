@@ -63,11 +63,18 @@ model PlayerProfile {
   bio        String?
   gender     String?
 
+  // SMM-28 — Candidate Data & Geo Search: vị trí gần nhất của người chơi
+  latitude          Float?
+  longitude         Float?
+  locationUpdatedAt DateTime?
+
   // SMM-12 / SMM-13: Bổ sung bảng Skill nối với PlayerProfile
   skill Skill?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([latitude, longitude])
 }
 
 // Bảng Skill mới được yêu cầu cho màn hình Radar Kỹ năng
