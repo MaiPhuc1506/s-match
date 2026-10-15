@@ -146,6 +146,76 @@ async function main() {
     create: { courtId: court.id, dayOfWeek: 6, startTime: '08:00', endTime: '09:00', price: 200000 },
   });
 
+  // 6. Seed SMM-28 demo data (vị trí + ứng viên quanh Đà Nẵng để test Geo Search / Matchmaking)
+  await (prisma as any).playerProfile.update({
+    where: { userId: player.id },
+    data: { latitude: 16.047079, longitude: 108.20623, locationUpdatedAt: new Date() },
+  });
+
+  const demoCandidates = [
+    { email: 'player2@smatch.dev', name: 'Demo Player 2', lat: 16.0544, lon: 108.2022, skill: [4.0, 3.5, 4.0, 3.0, 3.5, 3.5], style: 'DOUBLES' },
+    { email: 'player3@smatch.dev', name: 'Demo Player 3', lat: 16.0678, lon: 108.2208, skill: [3.0, 4.0, 3.0, 3.5, 3.5, 3.0], style: 'SINGLES' },
+    { email: 'player4@smatch.dev', name: 'Demo Player 4 (xa)', lat: 15.8801, lon: 108.3380, skill: [4.0, 4.0, 4.0, 4.0, 4.0, 4.0], style: 'DOUBLES' },
+  ];
+
+  for (const c of demoCandidates) {
+    const user = await prisma.user.upsert({
+      where: { email: c.email },
+      update: { password: passwordHash },
+      create: {
+        email: c.email,
+        password: passwordHash,
+        fullName: c.name,
+        roleId: roleMap[RoleName.PLAYER],
+      },
+    });
+
+    const profile = await (prisma as any).playerProfile.upsert({
+      where: { userId: user.id },
+      update: { latitude: c.lat, longitude: c.lon, locationUpdatedAt: new Date() },
+      create: {
+        userId: user.id,
+        nickname: c.name,
+        skillLevel: 'INTERMEDIATE',
+        latitude: c.lat,
+        longitude: c.lon,
+        locationUpdatedAt: new Date(),
+      },
+    });
+
+    const [smash, defense, netPlay, stamina, footwork, serve] = c.skill;
+    await (prisma as any).skill.upsert({
+      where: { playerProfileId: profile.id },
+      update: {},
+      create: { playerProfileId: profile.id, smash, defense, netPlay, stamina, footwork, serve },
+    });
+
+    await (prisma as any).playingPreference.upsert({
+      where: { userId: user.id },
+      update: {},
+      create: {
+        userId: user.id,
+        preferredMode: c.style,
+        purpose: 'CASUAL',
+        minSkillLevel: 2,
+        maxSkillLevel: 5,
+        maxDistanceKm: 15,
+      },
+    });
+
+    // Cùng khung giờ rảnh với player demo (Thứ 2 18:00, Thứ 7 08:00) để qua bộ lọc thời gian
+    for (const slot of [
+      { dayOfWeek: 1, startTime: '18:00', endTime: '21:00' },
+      { dayOfWeek: 6, startTime: '08:00', endTime: '11:00' },
+    ]) {
+      await (prisma as any).availability.upsert({
+        where: { userId_dayOfWeek_startTime: { userId: user.id, dayOfWeek: slot.dayOfWeek, startTime: slot.startTime } },
+        update: {},
+        create: { userId: user.id, ...slot },
+      });
+    }
+  }
+
   console.log('Seed completed:', {
     admin: admin.email,
     owner: owner.email,
