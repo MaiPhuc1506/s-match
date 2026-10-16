@@ -1,16 +1,19 @@
 import { Module } from '@nestjs/common';
-import { HttpModule } from '@nestjs/axios';
+import axios from 'axios';
+import { ConfigModule } from '@nestjs/config';
+import { AuthModule } from './auth/auth.module';
+import { CANDIDATE_PROVIDER, UnavailableCandidateProvider } from './matchmaking/candidate-provider';
+import { FASTAPI_HTTP, FastApiClient } from './matchmaking/fastapi.client';
 import { MatchmakingService } from './matchmaking.service';
 import { MatchmakingController } from './matchmaking.controller';
 
 @Module({
   imports: [
-    HttpModule.register({
-      timeout: 5000,
-      maxRedirects: 5,
-    }),
+    ConfigModule, AuthModule,
   ],
   controllers: [MatchmakingController],
-  providers: [MatchmakingService],
+  providers: [MatchmakingService, FastApiClient,
+    { provide: FASTAPI_HTTP, useFactory: () => axios.create() },
+    { provide: CANDIDATE_PROVIDER, useClass: UnavailableCandidateProvider }],
 })
 export class MatchmakingModule {}

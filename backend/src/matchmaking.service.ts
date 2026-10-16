@@ -1,25 +1,30 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
-import { AxiosResponse } from 'axios';
+import { BadGatewayException, BadRequestException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { CANDIDATE_PROVIDER, CandidateProvider } from './matchmaking/candidate-provider';
+import { isCandidateData } from './matchmaking/candidate-data';
+import { FastApiClient } from './matchmaking/fastapi.client';
+import { FindPlayerDto } from './matchmaking/dto/find-player.dto';
+import { MatchmakingResponseDto } from './matchmaking/dto/matchmaking-response.dto';
 
 @Injectable()
 export class MatchmakingService {
-  constructor(private readonly httpService: HttpService) {}
+  constructor(
+    @Inject(CANDIDATE_PROVIDER) private readonly candidates: CandidateProvider,
+    private readonly fastApi: FastApiClient,
+  ) {}
 
-  async getRecommendedMatches(matchPayload: any) {
-    const pythonApiUrl = 'http://127.0.0.1:8000/api/v1/match';
-
-    try {
-      const response = await firstValueFrom(
-        this.httpService.post<any>(pythonApiUrl, matchPayload),
-      );
-      return response.data;
-    } catch (error) {
-      throw new HttpException(
-        'Không thể kết nối đến Matchmaking Service (Python)',
-        HttpStatus.SERVICE_UNAVAILABLE,
-      );
+  async getRecommendedMatches(userId: number, criteria: FindPlayerDto): Promise<MatchmakingResponseDto> {
+    if (criteria.minSkillLevel !== undefined && criteria.maxSkillLevel !== undefined &&
+        criteria.minSkillLevel > criteria.maxSkillLevel) {
+      throw new BadRequestException('minSkillLevel không được lớn hơn maxSkillLevel');
     }
+    let data: unknown;
+    try {
+      data = await this.candidates.getCandidates(userId, criteria);
+    } catch {
+      throw new ServiceUnavailableException('Dịch vụ dữ liệu ứng viên chưa sẵn sàng');
+    }
+    if (!isCandidateData(data, userId)) throw new BadGatewayException('Dữ liệu ứng viên không hợp lệ');
+    if (data.candidates.length === 0) return { matchedUsers: [], totalCandidatesProcessed: 0 };
+    return this.fastApi.recommend(data);
   }
 }
