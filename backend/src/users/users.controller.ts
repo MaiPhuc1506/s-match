@@ -1,29 +1,38 @@
-import { Controller, Get, NotFoundException, Param, ParseIntPipe } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Controller, ForbiddenException, Get, NotFoundException, Param, ParseIntPipe, Req, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import { Role } from '../auth/roles.enum';
 import { UsersService } from './users.service';
 
-// SMM-8 — User Database & Backend Connection.
-// No auth guard exists yet (that's SMM-6), so these endpoints are intentionally
-// unprotected and only meant to prove the User table + DB connection work end to end.
-// Once Auth (SMM-6) lands, replace/extend this with a guarded `GET /users/me`.
 @ApiTags('users')
+@ApiBearerAuth()
+@UseGuards(RolesGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
+  @Roles(Role.ADMIN)
   async findAll() {
-    const users = await this.usersService.findAll();
-    return users.map(({ password: _password, ...safe }) => safe);
+    return this.usersService.findAllForApi();
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    const record = await this.usersService.findById(id);
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: { user: { sub: number; role: string } },
+  ) {
+    if (!Number.isInteger(id) || id < 1 || id > 2147483647) {
+      throw new BadRequestException('User ID phải là số nguyên từ 1 đến 2147483647');
+    }
+    if (req.user.role !== Role.ADMIN && req.user.sub !== id) {
+      throw new ForbiddenException('Bạn không có quyền xem người dùng này');
+    }
+    const record = await this.usersService.findByIdForApi(id);
     if (!record) {
       throw new NotFoundException(`User ${id} not found`);
     }
-    const { password: _password, ...safe } = record;
-    return safe;
+    return record;
   }
 }

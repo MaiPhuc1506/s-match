@@ -36,7 +36,7 @@ export class AuthController {
   @UseGuards(RolesGuard)
   @ApiOperation({ summary: 'Đăng xuất tài khoản' })
   logout(@Req() req: any) {
-    return this.authService.logout(req.user.sub);
+    return this.authService.logout(req.user.sub, req.user.sid);
   }
 
   @Get('admin-only')

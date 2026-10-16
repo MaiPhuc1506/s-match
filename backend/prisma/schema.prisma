@@ -40,6 +40,7 @@ model User {
   phone             String?
   roleId            Int
   role              Role               @relation(fields: [roleId], references: [id])
+  refreshSessions   RefreshSession[]
   playerProfile     PlayerProfile?
   playingPreference PlayingPreference?
   availabilities    Availability[]
@@ -51,6 +52,21 @@ model User {
 
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
+}
+
+model RefreshSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           Int
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  refreshTokenHash String    @db.Char(64)
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  lastUsedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model PlayerProfile {
@@ -152,6 +168,22 @@ model Court {
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   bookings   Booking[]
+  timeSlots  TimeSlot[]
+}
+model TimeSlot {
+  id        Int      @id @default(autoincrement())
+  courtId   Int
+  court     Court    @relation(fields: [courtId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  price     Float
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courtId])
+  @@unique([courtId, dayOfWeek, startTime])
 }
 model OperatingHours {
   id         Int      @id @default(autoincrement())
