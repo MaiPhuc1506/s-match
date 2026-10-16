@@ -7,7 +7,9 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export enum MatchPrivacyDto {
@@ -31,8 +33,10 @@ export class CreateMatchDto {
   @IsOptional()
   privacy?: MatchPrivacyDto = MatchPrivacyDto.OPEN;
 
-  @ApiPropertyOptional({ example: 1, description: 'ID đơn đặt sân (nếu có)' })
+  @ApiPropertyOptional({ example: 1, minimum: 1, maximum: 2147483647, nullable: false, description: 'ID đơn đặt sân (nếu có)' })
   @IsInt()
+  @Min(1)
+  @Max(2147483647)
   @IsOptional()
   bookingId?: number;
 
@@ -49,10 +53,11 @@ export class CreateMatchDto {
   @IsOptional()
   location?: string;
 
-  @ApiPropertyOptional({ example: 4, default: 4 })
+  @ApiPropertyOptional({ example: 4, default: 4, minimum: 2, maximum: 2147483647, nullable: false })
   @IsInt()
   @Min(2, { message: 'Số lượng người chơi tối thiểu phải là 2' })
-  @IsOptional()
+  @Max(2147483647)
+  @ValidateIf((_object, value) => value !== undefined)
   maxPlayers?: number = 4;
 
   @ApiPropertyOptional({ example: 50000, default: 0 })

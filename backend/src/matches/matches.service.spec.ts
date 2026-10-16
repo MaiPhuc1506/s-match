@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { BookingStatus, MatchPrivacy, MatchState, ParticipantStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MatchesService } from './matches.service';
@@ -20,10 +20,12 @@ describe('MatchesService', () => {
 
   beforeEach(() => {
     prisma = {
+      $queryRaw: jest.fn(async () => []),
       booking: { findUnique: jest.fn() },
       match: { create: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
       matchParticipant: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
     };
+    prisma.$transaction = jest.fn(async (callback) => callback(prisma));
     service = new MatchesService(prisma as PrismaService);
   });
 
@@ -33,9 +35,9 @@ describe('MatchesService', () => {
     prisma.booking.findUnique.mockResolvedValue(booking);
     await expect(service.createFromBooking(6, 1, createDto)).rejects.toThrow(ForbiddenException);
     prisma.booking.findUnique.mockResolvedValue({ ...booking, status: BookingStatus.PENDING });
-    await expect(service.createFromBooking(5, 1, createDto)).rejects.toThrow(BadRequestException);
+    await expect(service.createFromBooking(5, 1, createDto)).rejects.toThrow(ConflictException);
     prisma.booking.findUnique.mockResolvedValue({ ...booking, match: { id: 9 } });
-    await expect(service.createFromBooking(5, 1, createDto)).rejects.toThrow(BadRequestException);
+    await expect(service.createFromBooking(5, 1, createDto)).rejects.toThrow(ConflictException);
     prisma.booking.findUnique.mockResolvedValue(booking);
     await expect(service.createFromBooking(5, 1, { ...createDto, minSkillLevel: 5, maxSkillLevel: 1 })).rejects.toThrow(BadRequestException);
   });

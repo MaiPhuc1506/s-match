@@ -52,8 +52,8 @@ export class MatchesController {
   @Get(':id')
   @ApiOperation({ summary: 'Xem chi tiết trận đấu và danh sách người tham gia' })
   @ApiResponse({ status: 200, description: 'Thông tin trận đấu.' })
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.matchesService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    return this.matchesService.findOne(id, { id: req.user.sub, role: req.user.role });
   }
 
   @Patch(':id')

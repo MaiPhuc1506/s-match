@@ -11,9 +11,10 @@ export class CreateOpenMatchDto {
   @IsEnum(MatchPurpose)
   purpose: MatchPurpose;
 
-  @ApiProperty({ example: 2, description: 'Số người cần mời thêm (không tính host)' })
+  @ApiProperty({ example: 2, minimum: 1, maximum: 2147483646, description: 'Số người cần mời thêm (không tính host)' })
   @IsInt()
   @Min(1)
+  @Max(2147483646)
   neededPlayers: number;
 
   @ApiProperty({ example: 2, description: 'Trình độ đối phương mong muốn (thấp nhất), thang 1-5' })
