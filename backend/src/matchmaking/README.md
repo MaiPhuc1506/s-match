@@ -5,7 +5,8 @@
 NestJS coordinates PLAYER authentication, backend candidate data, and FastAPI.
 The Flutter and CandidateProvider contracts below are **temporary**, pending
 confirmation with Phuc/Dung/Phat. No candidate search, PostGIS query, scoring,
-ranking, recommendation history or database writes are implemented here.
+ranking, recommendation history or database writes are implemented in the gateway.
+Candidate search is supplied by the SMM-28 CandidatesService.
 
 `POST /matchmaking/recommend` requires an access Bearer token and current role
 PLAYER. It returns HTTP 200 (including empty results).
@@ -42,17 +43,20 @@ metadata are exposed. Upstream order/scores are preserved, never recalculated.
 
 ## Candidate dependency (Dung)
 
-Implement `CandidateProvider.getCandidates(authenticatedUserId, criteria)` and
-bind it to `CANDIDATE_PROVIDER` in MatchmakingModule. It must return normalized
-`CandidateData`, honor the requested criteria, and supply backend-owned skill
-and reliability data. Current-user identity must match the authenticated user.
-The six skill dimensions, date/time availability mapping, source of location,
-missing-profile handling and API/service endpoint still need confirmation.
+`DatabaseCandidateProvider` is bound to `CANDIDATE_PROVIDER` in MatchmakingModule.
+It calls CandidatesService to search up to 100 nearby players, excluding the
+requesting player and candidates with no upcoming availability. The SMM-28
+bounding-box query remains capped at 500 rows before exact radius filtering.
 
-**Default production behavior is HTTP 503** until a real provider is bound.
-There is no fake production fallback. Never use PlayersService.getMyProfile()
-for this adapter without addressing its automatic profile creation side effect.
-Do not substitute FastAPI's sample dataset endpoint for backend candidate data.
+Search location, availability, distance, optional skill bounds and styles come
+from the validated request. Identity, six skill axes, candidate preferences and
+candidate availability come from backend data. A PlayerProfile must already
+exist; the adapter does not create or update profiles or save search locations.
+Candidates routes are registered through CandidatesModule in AppModule.
+
+`UnavailableCandidateProvider` remains available for failure-path tests but is
+not the production binding. An unavailable database still produces HTTP 503;
+there is no fake production fallback.
 
 ## FastAPI configuration (not written to .env by this change)
 
@@ -82,8 +86,7 @@ Gateway tests mock Prisma, candidate data and outbound HTTP. They exercise real
 controllers, ValidationPipe, RolesGuard, JWT verification and Gateway client.
 They do not prove live PostgreSQL, FastAPI or Flutter integration.
 
-Pending: Phuc confirms Flutter fields/response/status; Dung supplies provider and
-mapping; Phat confirms existing FastAPI schema, time semantics, default limit,
-scores and error behavior. Only then can Flutter -> NestJS -> FastAPI -> Flutter
-be verified end to end with explicit approval. Group 2 PostgreSQL/concurrency
-testing remains deferred and is not resumed by this ticket.
+The SMM-26/SMM-28 integration tests exercise the actual candidate search, adapter
+and FastApiClient with mocked database/HTTP boundaries, and boot AppModule to
+check dependency injection and route registration. Live FastAPI/Flutter behavior
+and PostgreSQL concurrency still require deployment-level verification.

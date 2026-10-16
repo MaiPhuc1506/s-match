@@ -10,6 +10,7 @@ import { AvailabilityPreferenceModule } from './availability-preference/availabi
 import { FacilitiesModule } from './facilities/facilities.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { MatchesModule } from './matches/matches.module';
+import { CandidatesModule } from './candidates/candidates.module';
 import { MatchmakingModule } from './matchmaking.module';
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { MatchmakingModule } from './matchmaking.module';
     BookingsModule,
     MatchesModule,
     MatchmakingModule,
+    CandidatesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

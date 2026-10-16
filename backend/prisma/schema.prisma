@@ -176,24 +176,7 @@ model Court {
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   bookings   Booking[]
-  timeSlots  TimeSlot[]
 }
-model TimeSlot {
-  id        Int      @id @default(autoincrement())
-  courtId   Int
-  court     Court    @relation(fields: [courtId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  dayOfWeek Int
-  startTime String
-  endTime   String
-  price     Float
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([courtId])
-  @@unique([courtId, dayOfWeek, startTime])
-}
-
 // SMM-20 — Slot & Pricing Backend (Sprint 4).
 // Khung giờ định kỳ hàng tuần của một sân, kèm giá cho khung giờ đó.
 model TimeSlot {
