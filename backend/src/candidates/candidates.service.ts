@@ -14,6 +14,15 @@ const MAX_ROWS_FROM_DB = 500;
 // Chưa có module Feedback (SMM-36) nên chưa có điểm uy tín thật — dùng mặc định như Matchmaking Service.
 const DEFAULT_RELIABILITY_SCORE = 5.0;
 
+export interface MatchmakingSearchCriteria {
+  location: { latitude: number; longitude: number };
+  availableTimeSlots: string[];
+  maxDistanceKm: number;
+  minSkillLevel?: number;
+  maxSkillLevel?: number;
+  playingStyles?: string[];
+}
+
 /** Khớp 1-1 với PlayerProfileInput trong matchmaking/app/schemas.py */
 export interface MatchmakingPlayerInput {
   user_id: string;
@@ -112,8 +121,8 @@ export class CandidatesService {
     };
   }
 
-  async buildMatchmakingRequest(userId: number, query: CandidateQueryDto) {
-    const me = await this.getMyLocationOrThrow(userId);
+  async buildMatchmakingRequest(userId: number, query: CandidateQueryDto, criteria?: MatchmakingSearchCriteria) {
+    const me = await this.getMyLocationOrThrow(userId, criteria?.location);
     const myPreference = await this.getPreference(userId);
     const radiusKm = query.radiusKm ?? myPreference?.maxDistanceKm ?? DEFAULT_RADIUS_KM;
     const limit = query.limit ?? DEFAULT_CANDIDATE_LIMIT;
@@ -128,6 +137,17 @@ export class CandidatesService {
     const preferenceByUser = new Map(preferences.map((p) => [p.userId, p]));
 
     const currentUser = await this.toPlayerInput(me.profile, myPreference);
+    if (criteria) {
+      currentUser.location = { ...criteria.location };
+      currentUser.available_time_slots = [...criteria.availableTimeSlots];
+      currentUser.max_distance_km = criteria.maxDistanceKm;
+      currentUser.skill.preferred_min = criteria.minSkillLevel ?? currentUser.skill.preferred_min;
+      currentUser.skill.preferred_max = criteria.maxSkillLevel ?? currentUser.skill.preferred_max;
+      if (currentUser.skill.preferred_min > currentUser.skill.preferred_max) {
+        throw new BadRequestException('Khoảng kỹ năng tìm kiếm không hợp lệ');
+      }
+      if (criteria.playingStyles !== undefined) currentUser.playing_style = [...criteria.playingStyles];
+    }
 
     const candidateInputs = await Promise.all(
       nearby.map(({ profile }) =>
@@ -151,20 +171,22 @@ export class CandidatesService {
     return this.prisma.playingPreference.findUnique({ where: { userId } });
   }
 
-  private async getMyLocationOrThrow(userId: number) {
+  private async getMyLocationOrThrow(userId: number, location?: { latitude: number; longitude: number }) {
     const profile = await this.prisma.playerProfile.findUnique({
       where: { userId },
       include: { user: { select: { id: true, fullName: true } }, skill: true },
     });
-    if (!profile || profile.latitude == null || profile.longitude == null) {
+    const latitude = location?.latitude ?? profile?.latitude;
+    const longitude = location?.longitude ?? profile?.longitude;
+    if (!profile || latitude == null || longitude == null) {
       throw new BadRequestException(
         'Bạn chưa cập nhật vị trí. Hãy gọi PUT /candidates/me/location trước.',
       );
     }
     return {
       profile: profile as ProfileWithRelations,
-      latitude: profile.latitude,
-      longitude: profile.longitude,
+      latitude,
+      longitude,
     };
   }
 
