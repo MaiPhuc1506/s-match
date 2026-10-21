@@ -1,6 +1,15 @@
 import { CandidateData, CandidateProfile } from '../../src/matchmaking/candidate-provider';
 import { FindPlayerDto } from '../../src/matchmaking/dto/find-player.dto';
 
+// Deliberately different profile/user IDs catch joins made against the wrong key.
+export function recommendationProfile(userId: number) {
+  return {
+    id: userId + 1000, userId,
+    nickname: null, avatarUrl: null, skillLevel: null,
+    user: { fullName: `Fixture player ${userId}` },
+  };
+}
+
 // Test-only normalized backend data. Never imported by production providers.
 export function candidateProfile(userId: string): CandidateProfile {
   return {

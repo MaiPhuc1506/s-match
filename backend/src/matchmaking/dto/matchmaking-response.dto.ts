@@ -1,12 +1,29 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-// Temporary camelCase Flutter contract; upstream remains unchanged (snake_case).
+export class RecommendationProfileDto {
+  @ApiProperty({ type: String, nullable: true })
+  fullName: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  nickname: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  avatarUrl: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  skillLevel: string | null;
+}
+
+// SMM-30 adds public profile fields; existing ranking fields stay unchanged.
 export class MatchedPlayerDto {
   @ApiProperty()
   userId: string;
 
   @ApiProperty()
   matchScore: number;
+
+  @ApiProperty({ type: RecommendationProfileDto })
+  profile: RecommendationProfileDto;
 }
 
 export class MatchmakingResponseDto {

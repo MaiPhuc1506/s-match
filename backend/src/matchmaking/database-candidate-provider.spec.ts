@@ -44,6 +44,12 @@ describe('SMM-26 gateway with SMM-28 candidate data', () => {
     };
     availability = { getUpcomingTimeSlots: jest.fn(async (id: number) =>
       id === 4 ? [] : ['2026-10-20T18:00:00.000Z']) };
+    prisma.playerProfile.findMany.mockResolvedValueOnce([
+      profile(2, 16.01, 108), profile(3, 16.2, 108), profile(4, 16.02, 108),
+    ]).mockResolvedValue([{
+      userId: 2, nickname: null, avatarUrl: null, skillLevel: null,
+      user: { fullName: 'Fixture player' },
+    }]);
     provider = new DatabaseCandidateProvider(new CandidatesService(
       prisma, availability as unknown as AvailabilityService,
     ));
@@ -51,12 +57,14 @@ describe('SMM-26 gateway with SMM-28 candidate data', () => {
       matched_users: [{ user_id: '2', match_score: 90 }], total_candidates_processed: 1,
     } }) };
     const config = new ConfigService({ MATCHMAKING_API_URL: 'http://matchmaking.test/api/v1/match' });
-    gateway = new MatchmakingService(provider, new FastApiClient(http as any, config));
+    gateway = new MatchmakingService(provider, new FastApiClient(http as any, config), prisma);
   });
 
   it('uses real candidate search and maps backend skills plus request criteria to FastAPI', async () => {
     await expect(gateway.getRecommendedMatches(1, criteria)).resolves.toEqual({
-      matchedUsers: [{ userId: '2', matchScore: 90 }], totalCandidatesProcessed: 1,
+      matchedUsers: [{ userId: '2', matchScore: 90, profile: {
+        fullName: 'Fixture player', nickname: null, avatarUrl: null, skillLevel: null,
+      } }], totalCandidatesProcessed: 1,
     });
     const payload = http.post.mock.calls[0][1];
     expect(payload.current_user).toMatchObject({
@@ -68,10 +76,14 @@ describe('SMM-26 gateway with SMM-28 candidate data', () => {
     // Candidate 3 is outside the radius; candidate 4 has no availability.
     expect(payload.candidates.map((candidate: any) => candidate.user_id)).toEqual(['2']);
     expect(prisma.playerProfile.findMany.mock.calls[0][0].where.userId).toEqual({ not: 1 });
+    expect(prisma.playerProfile.findMany).toHaveBeenCalledTimes(2);
+    expect(prisma.playerProfile.findMany.mock.calls[1][0].where).toEqual({
+      userId: { in: [2] }, user: { role: { name: 'PLAYER' } },
+    });
   });
 
   it('skips FastAPI when the database has no nearby candidates', async () => {
-    prisma.playerProfile.findMany.mockResolvedValue([]);
+    prisma.playerProfile.findMany.mockReset().mockResolvedValue([]);
     await expect(gateway.getRecommendedMatches(1, criteria)).resolves.toEqual({
       matchedUsers: [], totalCandidatesProcessed: 0,
     });
