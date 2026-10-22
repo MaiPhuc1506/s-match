@@ -4,7 +4,7 @@ import { AxiosInstance, isAxiosError } from 'axios';
 import { finalize, firstValueFrom, from, timeout, TimeoutError } from 'rxjs';
 import { CandidateData, CandidateProfile } from './candidate-provider';
 import { isCandidateData, isRecord } from './candidate-data';
-import { MatchmakingResponseDto } from './dto/matchmaking-response.dto';
+import { RankedResult } from './ranked-result';
 
 export const FASTAPI_HTTP = Symbol('FASTAPI_HTTP');
 
@@ -28,7 +28,7 @@ function toFastApiProfile(profile: CandidateProfile) {
 export class FastApiClient {
   constructor(@Inject(FASTAPI_HTTP) private readonly http: AxiosInstance, private readonly config: ConfigService) {}
 
-  async recommend(data: CandidateData): Promise<MatchmakingResponseDto> {
+  async recommend(data: CandidateData): Promise<RankedResult> {
     if (!isCandidateData(data)) {
       throw new BadGatewayException('Dữ liệu ứng viên không hợp lệ');
     }
@@ -66,7 +66,7 @@ export class FastApiClient {
     return this.mapResponse(body, data);
   }
 
-  private mapResponse(body: unknown, data: CandidateData): MatchmakingResponseDto {
+  private mapResponse(body: unknown, data: CandidateData): RankedResult {
     const invalid = () => new BadGatewayException('Phản hồi dịch vụ matchmaking không hợp lệ');
     if (!isRecord(body) || !Array.isArray(body.matched_users) ||
         !Number.isInteger(body.total_candidates_processed) ||

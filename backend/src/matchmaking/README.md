@@ -1,4 +1,4 @@
-# SMM-26 Matchmaking Gateway
+# SMM-26 Matchmaking Gateway / SMM-30 Recommendation Integration
 
 ## Scope and temporary contract
 
@@ -7,6 +7,7 @@ The Flutter and CandidateProvider contracts below are **temporary**, pending
 confirmation with Phuc/Dung/Phat. No candidate search, PostGIS query, scoring,
 ranking, recommendation history or database writes are implemented in the gateway.
 Candidate search is supplied by the SMM-28 CandidatesService.
+SMM-30 enriches ranked results with a read-only batch PlayerProfile query.
 
 `POST /matchmaking/recommend` requires an access Bearer token and current role
 PLAYER. It returns HTTP 200 (including empty results).
@@ -33,13 +34,43 @@ Response allowlist:
 
 ```json
 {
-  "matchedUsers": [{ "userId": "7", "matchScore": 85 }],
+  "matchedUsers": [{
+    "userId": "7",
+    "matchScore": 85,
+    "profile": {
+      "fullName": "Example player",
+      "nickname": null,
+      "avatarUrl": null,
+      "skillLevel": "INTERMEDIATE"
+    }
+  }],
   "totalCandidatesProcessed": 2
 }
 ```
 
 No email, phone, raw profile, coordinates, upstream breakdown or other internal
 metadata are exposed. Upstream order/scores are preserved, never recalculated.
+
+## SMM-30 profile enrichment
+
+After FastAPI validates and ranks candidates, the Gateway loads profiles with one
+Prisma `playerProfile.findMany` call using `userId IN (...)` and current role
+PLAYER. FastAPI user IDs are string representations of `User.id`, never
+`PlayerProfile.id`; values must fit a positive PostgreSQL Int. Database rows may
+arrive in any order: a map keyed by userId enriches the original ranking.
+
+Only fullName (from User), nickname, avatarUrl and skillLevel are selected for
+display. All four keys are present and nullable; missing values remain null.
+Deleted profiles and users no longer having role PLAYER are omitted. Results
+are not refilled/re-ranked, and totalCandidatesProcessed remains the FastAPI
+count, even if every ranked profile has disappeared. Empty candidates or an
+empty FastAPI ranking skip the enrichment query. Database lookup failures return
+a sanitized 503, not a successful empty result; no retries or writes occur.
+
+`RankedResult` is the internal ID/score contract; `MatchmakingResponseDto` is the
+enriched public response. Existing response keys, request DTO, PLAYER access and
+FastAPI behavior remain unchanged. Mobile must consume the added profile object;
+final Mobile contract discussion is pending. SMM-32 history is outside this task.
 
 ## Candidate dependency (Dung)
 

@@ -12,14 +12,14 @@ import { AUTH_JWT_CONFIG, AuthJwtConfig } from './auth/jwt.config';
 import { Role } from './auth/roles.enum';
 import { PrismaModule } from './prisma/prisma.module';
 import { PrismaService } from './prisma/prisma.service';
-import { candidateData, fastApiResponse, findPlayerRequest } from '../test/helpers/matchmaking.fixture';
+import { candidateData, fastApiResponse, findPlayerRequest, recommendationProfile } from '../test/helpers/matchmaking.fixture';
 
 describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider/HTTP)', () => {
   let app: INestApplication;
   let tokens: AuthTokensService;
   const provider = { getCandidates: jest.fn() };
   const http = { post: jest.fn() };
-  const prisma = { refreshSession: { findUnique: jest.fn() } };
+  const prisma = { refreshSession: { findUnique: jest.fn() }, playerProfile: { findMany: jest.fn() } };
   const sessions = new Map<string, any>();
   const config = { get: (key: string) => ({ MATCHMAKING_API_URL: 'http://matchmaking.test/api/v1/match', MATCHMAKING_TIMEOUT_MS: 30 })[key] };
   const jwtConfig: AuthJwtConfig = {
@@ -45,6 +45,7 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
     prisma.refreshSession.findUnique.mockImplementation(async ({ where }: any) => sessions.get(where.id) ?? null);
     provider.getCandidates.mockResolvedValue(candidateData());
     http.post.mockResolvedValue({ status: 200, data: fastApiResponse() });
+    prisma.playerProfile.findMany.mockResolvedValue([recommendationProfile(3), recommendationProfile(7)]);
   });
   async function pair(role = Role.PLAYER) {
     const sid = randomUUID(), expiresAt = new Date(Date.now() + 60000);
@@ -57,6 +58,7 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
   function noDependencies() {
     expect(provider.getCandidates).not.toHaveBeenCalled();
     expect(http.post).not.toHaveBeenCalled();
+    expect(prisma.playerProfile.findMany).not.toHaveBeenCalled();
   }
   function safeError(response: any, status: number) {
     expect(response.status).toBe(status);
@@ -69,9 +71,16 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
     expect(response.status).toBe(200);
     expect(provider.getCandidates).toHaveBeenCalledWith(8, expect.objectContaining(findPlayerRequest));
     expect(http.post.mock.calls[0][1].current_user.user_id).toBe('8');
-    expect(response.body).toEqual({ matchedUsers: [{ userId: '7', matchScore: 85 }, { userId: '3', matchScore: 80 }], totalCandidatesProcessed: 2 });
+    expect(response.body).toEqual({ matchedUsers: [
+      { userId: '7', matchScore: 85, profile: { fullName: 'Fixture player 7', nickname: null, avatarUrl: null, skillLevel: null } },
+      { userId: '3', matchScore: 80, profile: { fullName: 'Fixture player 3', nickname: null, avatarUrl: null, skillLevel: null } },
+    ], totalCandidatesProcessed: 2 });
     expect(provider.getCandidates).toHaveBeenCalledTimes(1);
     expect(http.post).toHaveBeenCalledTimes(1);
+    expect(prisma.playerProfile.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.playerProfile.findMany.mock.calls[0][0].where).toEqual({
+      userId: { in: [7, 3] }, user: { role: { name: 'PLAYER' } },
+    });
   });
   it('returns 401 without JWT before any dependency call', async () => {
     safeError(await request(app.getHttpServer()).post('/matchmaking/recommend').send(findPlayerRequest), 401);
@@ -140,12 +149,14 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ matchedUsers: [], totalCandidatesProcessed: 0 });
     expect(http.post).not.toHaveBeenCalled();
+    expect(prisma.playerProfile.findMany).not.toHaveBeenCalled();
   });
   it('returns empty success when FastAPI finds no compatible candidates', async () => {
     http.post.mockResolvedValueOnce({ status: 200, data: { matched_users: [], total_candidates_processed: 2 } });
     const response = await post();
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ matchedUsers: [], totalCandidatesProcessed: 2 });
+    expect(prisma.playerProfile.findMany).not.toHaveBeenCalled();
   });
   it.each([
     [{ isAxiosError: true, code: 'ETIMEDOUT', message: 'PRIVATE_DETAILS' }, 504],
@@ -168,8 +179,55 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
     const response = await post();
     expect(response.status).toBe(200);
     expect(Object.keys(response.body).sort()).toEqual(['matchedUsers', 'totalCandidatesProcessed']);
-    for (const entry of response.body.matchedUsers) expect(Object.keys(entry).sort()).toEqual(['matchScore', 'userId']);
+    for (const entry of response.body.matchedUsers) {
+      expect(Object.keys(entry).sort()).toEqual(['matchScore', 'profile', 'userId']);
+      expect(Object.keys(entry.profile).sort()).toEqual(['avatarUrl', 'fullName', 'nickname', 'skillLevel']);
+    }
     expect(JSON.stringify(response.body)).not.toContain('PRIVATE_DETAILS');
+  });
+  it('omits deleted profiles and non-PLAYER users without changing processed count', async () => {
+    prisma.playerProfile.findMany.mockImplementation(async ({ where }: any) => [
+      { ...recommendationProfile(7), role: Role.ADMIN },
+      { ...recommendationProfile(3), role: Role.PLAYER },
+    ].filter((profile) => where.userId.in.includes(profile.userId) && where.user.role.name === profile.role));
+    const response = await post();
+    expect(response.status).toBe(200);
+    expect(response.body.matchedUsers.map((row: any) => row.userId)).toEqual(['3']);
+    expect(response.body.totalCandidatesProcessed).toBe(2);
+    prisma.playerProfile.findMany.mockResolvedValueOnce([]);
+    const empty = await post();
+    expect(empty.status).toBe(200);
+    expect(empty.body).toEqual({ matchedUsers: [], totalCandidatesProcessed: 2 });
+  });
+  it('returns only the public allowlist even if the database mock supplies private fields', async () => {
+    prisma.playerProfile.findMany.mockResolvedValue([{
+      ...recommendationProfile(7), nickname: 'Seven', avatarUrl: 'https://example.test/avatar.png', skillLevel: 'BEGINNER',
+      latitude: 16, longitude: 108, metadata: 'PRIVATE_DETAILS',
+      user: { fullName: null, email: 'PRIVATE_DETAILS', phone: 'PRIVATE_DETAILS', password: 'PRIVATE_DETAILS', refreshSessions: [] },
+    }]);
+    const response = await post();
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ matchedUsers: [{ userId: '7', matchScore: 85, profile: {
+      fullName: null, nickname: 'Seven', avatarUrl: 'https://example.test/avatar.png', skillLevel: 'BEGINNER',
+    } }], totalCandidatesProcessed: 2 });
+    expect(prisma.playerProfile.findMany.mock.calls[0][0].select).toEqual({
+      userId: true, nickname: true, avatarUrl: true, skillLevel: true, user: { select: { fullName: true } },
+    });
+  });
+  it('returns sanitized 503 on profile failure, without retrying', async () => {
+    prisma.playerProfile.findMany.mockRejectedValueOnce(new Error('PRIVATE_DATABASE_DETAILS'));
+    safeError(await post(), 503);
+    expect(prisma.playerProfile.findMany).toHaveBeenCalledTimes(1);
+    expect(http.post).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    { matched_users: [{ user_id: '7', match_score: 85 }, { user_id: '7', match_score: 80 }] },
+    { matched_users: [{ user_id: '999', match_score: 85 }] },
+    { matched_users: [{ user_id: '8', match_score: 85 }] },
+  ])('preserves upstream identity validation before profile queries', async ({ matched_users }) => {
+    http.post.mockResolvedValueOnce({ status: 200, data: { matched_users, total_candidates_processed: 2 } });
+    safeError(await post(), 502);
+    expect(prisma.playerProfile.findMany).not.toHaveBeenCalled();
   });
 });
 
