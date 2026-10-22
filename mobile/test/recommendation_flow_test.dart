@@ -298,7 +298,16 @@ void main() {
               '/availability/1/upcoming-slots' => ['2026-10-23T18:00:00Z'],
               '/matchmaking/recommend' => {
                 'matchedUsers': [
-                  {'userId': '7', 'matchScore': 85.5},
+                  {
+                    'userId': '7',
+                    'matchScore': 85.5,
+                    'profile': {
+                      'fullName': 'Real Player',
+                      'nickname': 'Ranked Player',
+                      'skillLevel': 'Intermediate',
+                      'avatarUrl': 'https://example.test/avatar.png',
+                    },
+                  },
                 ],
                 'totalCandidatesProcessed': 1,
               },
@@ -306,7 +315,7 @@ void main() {
                 'candidates': [
                   {
                     'userId': 7,
-                    'fullName': 'Real Player',
+                    'fullName': 'Outdated Nearby Name',
                     'skillLevel': 'Intermediate',
                     'distanceKm': 2.3,
                   },
@@ -326,7 +335,10 @@ void main() {
       final players = await ApiRecommendationRepository(dio)
           .search(const RecommendationQuery(distanceKm: 10));
       expect(players.single.score, 85.5);
-      expect(players.single.name, 'Real Player');
+      expect(players.single.name, 'Ranked Player');
+      expect(players.single.level, 'Intermediate');
+      expect(players.single.avatarUrl, 'https://example.test/avatar.png');
+      expect(players.single.distanceKm, 2.3);
       expect(players.single.reasons, isEmpty);
       expect(players.single.hasReferenceRadar, isFalse);
       final payload =
@@ -338,6 +350,123 @@ void main() {
       expect(payload.containsKey('userId'), isFalse);
       expect(calls.any((r) => r.path.startsWith('/users/')), isFalse);
     });
+
+    test('nearby outage does not hide ranked profile metadata', () async {
+      dio.interceptors.insert(
+        0,
+        InterceptorsWrapper(
+          onRequest: (o, h) {
+            if (o.path == '/candidates/nearby') {
+              h.reject(
+                DioException(
+                  requestOptions: o,
+                  type: DioExceptionType.connectionError,
+                ),
+              );
+            } else {
+              h.next(o);
+            }
+          },
+        ),
+      );
+      final players = await ApiRecommendationRepository(dio)
+          .search(const RecommendationQuery());
+      expect(players.single.name, 'Ranked Player');
+      expect(players.single.avatarUrl, 'https://example.test/avatar.png');
+      expect(players.single.distanceKm, isNull);
+    });
+
+    test('preserves server ranking, zero score and missing display fields without nearby fallback', () async {
+      dio.interceptors.insert(
+        0,
+        InterceptorsWrapper(
+          onRequest: (o, h) {
+            if (o.path == '/matchmaking/recommend') {
+              h.resolve(
+                Response(
+                  requestOptions: o,
+                  statusCode: 200,
+                  data: {
+                    'matchedUsers': [
+                      {
+                        'userId': '9',
+                        'matchScore': 90,
+                        'profile': {'fullName': 'Full Name', 'nickname': '  '},
+                      },
+                      {'userId': '7', 'matchScore': 0, 'profile': null},
+                    ],
+                  },
+                ),
+              );
+            } else {
+              h.next(o);
+            }
+          },
+        ),
+      );
+      final players = await ApiRecommendationRepository(dio)
+          .search(const RecommendationQuery());
+      expect(players.map((p) => p.id), ['9', '7']);
+      expect(players.first.name, 'Full Name');
+      expect(players.last.score, 0);
+      expect(players.last.displayName, 'Player #7');
+      expect(players.last.avatarUrl, isNull);
+      expect(players.last.level, isNull);
+    });
+
+    test('empty results skip optional nearby lookup', () async {
+      dio.interceptors.insert(
+        0,
+        InterceptorsWrapper(
+          onRequest: (o, h) {
+            if (o.path == '/matchmaking/recommend') {
+              h.resolve(
+                Response(
+                  requestOptions: o,
+                  statusCode: 200,
+                  data: {'matchedUsers': []},
+                ),
+              );
+            } else {
+              h.next(o);
+            }
+          },
+        ),
+      );
+      expect(
+        await ApiRecommendationRepository(dio)
+            .search(const RecommendationQuery()),
+        isEmpty,
+      );
+      expect(calls.any((r) => r.path == '/candidates/nearby'), isFalse);
+    });
+
+    for (final status in [401, 403, 503, 504]) {
+      test('recommendation HTTP $status is an actionable failure', () async {
+        dio.interceptors.insert(
+          0,
+          InterceptorsWrapper(
+            onRequest: (o, h) {
+              if (o.path == '/matchmaking/recommend') {
+                h.reject(
+                  DioException(
+                    requestOptions: o,
+                    response: Response(requestOptions: o, statusCode: status),
+                    type: DioExceptionType.badResponse,
+                  ),
+                );
+              } else {
+                h.next(o);
+              }
+            },
+          ),
+        );
+        await expectLater(
+          ApiRecommendationRepository(dio).search(const RecommendationQuery()),
+          throwsA(isA<RecommendationFailure>()),
+        );
+      });
+    }
 
     test('missing location is actionable error and does not make recommendation request', () async {
       dio.interceptors.clear();

@@ -4,8 +4,8 @@
 
 NestJS coordinates PLAYER authentication, backend candidate data, and FastAPI.
 The Flutter and CandidateProvider contracts below are **temporary**, pending
-confirmation with Phuc/Dung/Phat. No candidate search, PostGIS query, scoring,
-ranking, recommendation history or database writes are implemented in the gateway.
+confirmation with Phuc/Dung/Phat. Scoring and ranking run in FastAPI.
+The gateway records successful searches through RecommendationHistoryService.
 Candidate search is supplied by the SMM-28 CandidatesService.
 SMM-30 enriches ranked results with a read-only batch PlayerProfile query.
 
@@ -65,12 +65,12 @@ Deleted profiles and users no longer having role PLAYER are omitted. Results
 are not refilled/re-ranked, and totalCandidatesProcessed remains the FastAPI
 count, even if every ranked profile has disappeared. Empty candidates or an
 empty FastAPI ranking skip the enrichment query. Database lookup failures return
-a sanitized 503, not a successful empty result; no retries or writes occur.
+a sanitized 503, not a successful empty result; failed searches do not record history.
 
 `RankedResult` is the internal ID/score contract; `MatchmakingResponseDto` is the
 enriched public response. Existing response keys, request DTO, PLAYER access and
-FastAPI behavior remain unchanged. Mobile must consume the added profile object;
-final Mobile contract discussion is pending. SMM-32 history is outside this task.
+FastAPI behavior remain unchanged. Mobile reads names, skill levels and avatars
+from this profile object; nearby results only supplement distance.
 
 ## Candidate dependency (Dung)
 
@@ -108,7 +108,7 @@ Dependency failure is never converted to successful empty results.
 
 Errors: 400 invalid input; 401 invalid authentication/session; 403 non-PLAYER;
 502 invalid backend candidate data, upstream HTTP failure or malformed response;
-503 unavailable candidate provider/configuration/upstream connection;
+503 unavailable candidate provider/configuration/upstream connection, profile lookup or history write;
 504 upstream timeout. Raw exception text, payloads, URLs and tokens are not logged.
 
 ## Verification and remaining integration
@@ -121,3 +121,51 @@ The SMM-26/SMM-28 integration tests exercise the actual candidate search, adapte
 and FastApiClient with mocked database/HTTP boundaries, and boot AppModule to
 check dependency injection and route registration. Live FastAPI/Flutter behavior
 and PostgreSQL concurrency still require deployment-level verification.
+
+
+## Automatic history and live verification
+
+Every successful search records one session before returning HTTP 200, including
+no-candidate, no-match and disappeared-profile results. History stores the
+authenticated requester, validated criteria, processed count, and only the final
+returned user IDs/scores in rank order. A nested Prisma create saves the session
+and results atomically. Failed upstream/profile requests do not create sessions.
+A history write failure returns a sanitized 503; there is no automatic retry.
+The response DTO stays unchanged. Separate successful searches create separate
+sessions; requests do not have an idempotency key.
+
+Before starting the backend, from `backend/`:
+
+```sh
+npm run db:generate
+npm run db:deploy
+```
+
+For a real PostgreSQL/FastAPI integration check, start a temporary service from
+`matchmaking/` (install `requirements.txt` in its virtualenv first):
+
+```sh
+.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 18080
+```
+
+Then from `backend/`, with the local database available:
+
+```sh
+RUN_RECOMMENDATION_LIVE=1 MATCHMAKING_API_URL=http://127.0.0.1:18080/api/v1/match npm test -- --runInBand --runTestsByPath src/recommendation-history/recommendation-integration.live.spec.ts
+```
+
+This opt-in test registers unique temporary accounts, checks the real scoring
+response against saved history, pagination, ownership, outcome stats, deletion,
+empty searches, upstream disconnection and revoked sessions. Teardown deletes
+only its own test accounts and associated data. It is skipped by default. Stop
+the temporary FastAPI process after testing. Flutter widget/repository tests run
+separately; this check does not drive a simulator.
+
+For live recommendations in Dev Hub, run from `mobile/`:
+
+```sh
+flutter run -t lib/main_dev.dart --dart-define=SPRINT7_LIVE_API=true
+```
+
+Dev Hub otherwise intentionally uses recommendation fixtures. Direct invitations
+to a recommended player remain a separate feature.

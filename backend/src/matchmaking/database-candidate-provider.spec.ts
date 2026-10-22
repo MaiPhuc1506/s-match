@@ -5,6 +5,7 @@ import { AUTH_JWT_CONFIG } from '../auth/jwt.config';
 import { AvailabilityService } from '../availability-preference/availability.service';
 import { CandidatesService } from '../candidates/candidates.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RecommendationHistoryService } from '../recommendation-history/recommendation-history.service';
 import { MatchmakingService } from '../matchmaking.service';
 import { CANDIDATE_PROVIDER } from './candidate-provider';
 import { DatabaseCandidateProvider } from './database-candidate-provider';
@@ -57,7 +58,7 @@ describe('SMM-26 gateway with SMM-28 candidate data', () => {
       matched_users: [{ user_id: '2', match_score: 90 }], total_candidates_processed: 1,
     } }) };
     const config = new ConfigService({ MATCHMAKING_API_URL: 'http://matchmaking.test/api/v1/match' });
-    gateway = new MatchmakingService(provider, new FastApiClient(http as any, config), prisma);
+    gateway = new MatchmakingService(provider, new FastApiClient(http as any, config), prisma, { recordSession: jest.fn() } as unknown as RecommendationHistoryService);
   });
 
   it('uses real candidate search and maps backend skills plus request criteria to FastAPI', async () => {
