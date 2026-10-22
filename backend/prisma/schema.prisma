@@ -50,6 +50,10 @@ model User {
   hostedMatches      Match[]            @relation("HostedMatches")
   matchParticipants  MatchParticipant[]
 
+  // SMM-32 — Recommendation History Backend
+  recommendationSessions RecommendationSession[]
+  recommendedInResults   RecommendationResult[]  @relation("RecommendedUser")
+
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 }
@@ -310,4 +314,53 @@ model MatchParticipant {
   @@unique([matchId, userId])
   @@index([userId])
   @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// SMM-32 — Recommendation History Backend (Sprint 7 — Match Recommendation)
+//
+// Mỗi lần người chơi tìm đối thủ (Find Player) tạo một RecommendationSession,
+// gồm snapshot tiêu chí tìm kiếm và danh sách Top-K kết quả đã gợi ý
+// (RecommendationResult). Dùng để xem lại lịch sử gợi ý và đo hiệu quả
+// Matchmaking (tỉ lệ mời / tỉ lệ chấp nhận, điểm tương thích trung bình).
+// Việc ghi lịch sử do service nội bộ thực hiện (RecommendationHistoryService.
+// recordSession), client không tự ghi để tránh giả mạo dữ liệu.
+// ---------------------------------------------------------------------------
+
+enum RecommendationOutcome {
+  SHOWN     // Đã hiển thị cho người tìm
+  INVITED   // Người tìm đã gửi lời mời / chọn người này
+  ACCEPTED  // Người được gợi ý đã chấp nhận -> ghép thành công
+  DISMISSED // Người tìm bỏ qua
+}
+
+model RecommendationSession {
+  id                       Int                    @id @default(autoincrement())
+  userId                   Int
+  user                     User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  criteria                 Json?                  // Snapshot tiêu chí tìm kiếm tại thời điểm gọi
+  totalCandidatesProcessed Int                    @default(0)
+  results                  RecommendationResult[]
+  createdAt                DateTime               @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model RecommendationResult {
+  id                Int                   @id @default(autoincrement())
+  sessionId         Int
+  session           RecommendationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  recommendedUserId Int
+  recommendedUser   User                  @relation("RecommendedUser", fields: [recommendedUserId], references: [id], onDelete: Cascade)
+  rank              Int                   // 1 = gợi ý tốt nhất
+  matchScore        Float
+  breakdown         Json?                 // Điểm thành phần (skill/time/distance/style/reliability), nếu có
+  outcome           RecommendationOutcome @default(SHOWN)
+  outcomeUpdatedAt  DateTime?
+  createdAt         DateTime              @default(now())
+
+  @@unique([sessionId, recommendedUserId])
+  @@index([sessionId])
+  @@index([recommendedUserId])
+  @@index([outcome])
 }
