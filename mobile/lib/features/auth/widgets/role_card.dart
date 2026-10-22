@@ -8,6 +8,9 @@ class RoleCard extends StatelessWidget {
   final IconData icon;
   final bool isSelected;
   final VoidCallback onTap;
+  final double width;
+  final double height;
+  final Widget? iconWidget;
 
   const RoleCard({
     super.key,
@@ -15,6 +18,9 @@ class RoleCard extends StatelessWidget {
     required this.icon,
     required this.isSelected,
     required this.onTap,
+    this.width = 107,
+    this.height = 116,
+    this.iconWidget,
   });
 
   @override
@@ -26,8 +32,8 @@ class RoleCard extends StatelessWidget {
         duration: const Duration(
           milliseconds: 200,
         ), // Smart Animate 200ms theo Figma
-        width: 107,
-        height: 116,
+        width: width,
+        height: height,
         padding: const EdgeInsets.only(top: 16, bottom: 12),
         decoration: BoxDecoration(
           // Khi chọn: nền #DDEFE7, chưa chọn: nền trắng
@@ -43,23 +49,22 @@ class RoleCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // Icon vai trò 32x32
-            Icon(
-              icon,
-              size: 32,
-              color: isSelected
-                  ? AppColors.primaryDark
-                  : AppColors.textSecondary,
-            ),
+            iconWidget ??
+                Icon(
+                  icon,
+                  size: 32,
+                  color: isSelected
+                      ? AppColors.primaryDark
+                      : AppColors.textSecondary,
+                ),
             const SizedBox(height: 10),
             // Tên vai trò (12/16, w500)
             Text(
               title,
               textAlign: TextAlign.center,
               style: AppTextStyles.linkMedium.copyWith(
-                color: isSelected
-                    ? AppColors.primaryDark
-                    : AppColors.textPrimary,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: AppColors.iconPrimary,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],

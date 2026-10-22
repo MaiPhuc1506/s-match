@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../auth/services/auth_service.dart';
 import '../models/match_model.dart';
 import '../state/match_ui_store.dart';
 import 'match_participant_list_screen.dart';
@@ -55,32 +56,87 @@ class MatchDetailOpenScreen extends StatelessWidget {
       return;
     }
     if (item.isHost && draft?.isPrivate == true) {
+      final currentUser = AuthService.instance.currentUser;
+      final currentEmail = currentUser?['email']?.toString().toLowerCase() ?? 'player@smatch.dev';
+      final currentName = currentUser?['fullName'] ?? 'Demo Player';
+
+      final candidates = [
+        {'name': 'Demo Player (Player 01)', 'email': 'player@smatch.dev'},
+        {'name': 'Demo Player 2 (Player 02)', 'email': 'player2@smatch.dev'},
+        {'name': 'Demo Player 3', 'email': 'player3@smatch.dev'},
+        {'name': 'Demo Player 4', 'email': 'player4@smatch.dev'},
+      ].where((c) => c['email']!.toLowerCase() != currentEmail).toList();
+
       await showModalBottomSheet<void>(
         context: context,
         backgroundColor: MatchColors.background,
-        builder: (context) => ListenableBuilder(
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (sheetCtx) => ListenableBuilder(
           listenable: _store,
-          builder: (context, _) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const ListTile(title: Text('Invite Players')),
-                for (final name in ['Trần Thị B', 'Lê Minh C', 'Phạm Hoàng'])
-                  ListTile(
-                    title: Text(name),
-                    trailing: TextButton(
-                      onPressed:
-                          _store.sentInvitations.contains('${item.id}:$name')
-                          ? null
-                          : () => _store.invite(item.id, name),
-                      child: Text(
-                        _store.sentInvitations.contains('${item.id}:$name')
-                            ? 'Invited'
-                            : 'Invite',
-                      ),
+          builder: (sheetCtx, _) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Text(
+                      'Mời người chơi tham gia trận',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                     ),
                   ),
-              ],
+                  const Divider(),
+                  for (final c in candidates) ...[
+                    ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: MatchColors.primaryGreen.withOpacity(0.12),
+                        child: Text(
+                          c['name']![0],
+                          style: const TextStyle(
+                            color: MatchColors.primaryGreen,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      title: Text(c['name']!),
+                      subtitle: Text(c['email']!),
+                      trailing: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _store.sentInvitations.contains('${item.id}:${c['email']}')
+                              ? Colors.grey.shade200
+                              : MatchColors.primaryGreen,
+                          foregroundColor: _store.sentInvitations.contains('${item.id}:${c['email']}')
+                              ? Colors.grey.shade700
+                              : Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: _store.sentInvitations.contains('${item.id}:${c['email']}')
+                            ? null
+                            : () {
+                                _store.sendInvitation(
+                                  match: item,
+                                  inviterName: currentName,
+                                  inviterEmail: currentEmail,
+                                  inviteeEmail: c['email']!,
+                                );
+                              },
+                        child: Text(
+                          _store.sentInvitations.contains('${item.id}:${c['email']}')
+                              ? 'Đã mời'
+                              : 'Mời ngay',
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),

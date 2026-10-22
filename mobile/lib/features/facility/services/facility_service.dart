@@ -45,6 +45,124 @@ class FacilityService {
     }
   }
 
+  /// Tạo cơ sở (cụm sân) thể thao mới
+  Future<Map<String, dynamic>?> createFacility({
+    required String name,
+    required String address,
+    String? contactPhone,
+    String? description,
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      final token = await _client.ensureOwnerToken();
+      if (token == null) {
+        debugPrint('[CREATE FACILITY] Không có token chủ sân hợp lệ.');
+        return null;
+      }
+      final res = await _client.dio.post(
+        '/facilities',
+        data: {
+          'name': name,
+          'address': address,
+          if (contactPhone != null && contactPhone.isNotEmpty)
+            'contactPhone': contactPhone,
+          if (description != null && description.isNotEmpty)
+            'description': description,
+          ...?latitude != null ? {'latitude': latitude} : null,
+          ...?longitude != null ? {'longitude': longitude} : null,
+        },
+      );
+      return res.data as Map<String, dynamic>?;
+    } on DioException catch (e) {
+      debugPrint(
+        '[CREATE FACILITY ERROR] ${e.response?.statusCode}: ${e.response?.data}',
+      );
+      return null;
+    } catch (e) {
+      debugPrint('[CREATE FACILITY ERROR] Lỗi: $e');
+      return null;
+    }
+  }
+
+  /// Cập nhật thông tin cơ sở
+  Future<bool> updateFacility({
+    required int facilityId,
+    required String name,
+    required String address,
+    String? contactPhone,
+    String? description,
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      final token = await _client.ensureOwnerToken();
+      if (token == null) return false;
+      final res = await _client.dio.patch(
+        '/facilities/$facilityId',
+        data: {
+          'name': name,
+          'address': address,
+          ...?contactPhone != null ? {'contactPhone': contactPhone} : null,
+          ...?description != null ? {'description': description} : null,
+          ...?latitude != null ? {'latitude': latitude} : null,
+          ...?longitude != null ? {'longitude': longitude} : null,
+        },
+      );
+      return res.statusCode == 200;
+    } on DioException catch (e) {
+      debugPrint(
+        '[UPDATE FACILITY ERROR] ${e.response?.statusCode}: ${e.response?.data}',
+      );
+      return false;
+    } catch (e) {
+      debugPrint('[UPDATE FACILITY ERROR] Lỗi: $e');
+      return false;
+    }
+  }
+
+  /// Xóa cơ sở (cascade xóa tất cả sân con)
+  Future<({bool success, String? message})> deleteFacility(int facilityId) async {
+    try {
+      final token = await _client.ensureOwnerToken();
+      if (token == null) {
+        return (
+          success: false,
+          message: 'Không tìm thấy phiên đăng nhập. Vui lòng đăng nhập lại.',
+        );
+      }
+      final res = await _client.dio.delete('/facilities/$facilityId');
+      if (res.statusCode == 200 || res.statusCode == 204) {
+        return (success: true, message: null);
+      }
+      return (
+        success: false,
+        message: 'Xóa thất bại với mã trạng thái ${res.statusCode}',
+      );
+    } on DioException catch (e) {
+      String? errorMsg;
+      final data = e.response?.data;
+      if (data is Map<String, dynamic>) {
+        final msg = data['message'];
+        if (msg is List) {
+          errorMsg = msg.join(', ');
+        } else if (msg is String) {
+          errorMsg = msg;
+        }
+      }
+      errorMsg ??= (e.response?.statusCode == 403
+          ? 'Bạn không có quyền xóa cơ sở này (cơ sở thuộc chủ sân khác).'
+          : e.response?.statusCode == 404
+              ? 'Không tìm thấy cơ sở cần xóa.'
+              : 'Lỗi máy chủ (${e.response?.statusCode ?? e.message})');
+      debugPrint('[DELETE FACILITY ERROR] $errorMsg');
+      return (success: false, message: errorMsg);
+    } catch (e) {
+      debugPrint('[DELETE FACILITY ERROR] Lỗi: $e');
+      return (success: false, message: 'Đã xảy ra lỗi: $e');
+    }
+  }
+
   /// 2. Thêm sân con mới vào Database (SMM-14)
   Future<bool> addCourt({
     required int facilityId,

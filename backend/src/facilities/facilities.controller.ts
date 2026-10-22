@@ -83,7 +83,7 @@ export class FacilitiesController {
     @Body() dto: UpdateFacilityDto,
   ) {
     const ownerId = Number(req.user.sub);
-    return this.facilitiesService.updateFacility(ownerId, id, dto);
+    return this.facilitiesService.updateFacility(ownerId, id, dto, req.user.role);
   }
 
   @Delete(':id')
@@ -96,7 +96,7 @@ export class FacilitiesController {
   @ApiResponse({ status: 404, description: 'Không tìm thấy cơ sở.' })
   deleteFacility(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
     const ownerId = Number(req.user.sub);
-    return this.facilitiesService.deleteFacility(ownerId, id);
+    return this.facilitiesService.deleteFacility(ownerId, id, req.user.role);
   }
 
   /* ── Court CRUD ────────────────────────────────── */
@@ -132,7 +132,7 @@ export class FacilitiesController {
     @Body() dto: UpdateCourtDto,
   ) {
     const ownerId = Number(req.user.sub);
-    return this.facilitiesService.updateCourt(ownerId, facilityId, courtId, dto);
+    return this.facilitiesService.updateCourt(ownerId, facilityId, courtId, dto, req.user.role);
   }
 
   @Delete(':id/courts/:courtId')
@@ -149,6 +149,6 @@ export class FacilitiesController {
     @Param('courtId', ParseIntPipe) courtId: number,
   ) {
     const ownerId = Number(req.user.sub);
-    return this.facilitiesService.deleteCourt(ownerId, facilityId, courtId);
+    return this.facilitiesService.deleteCourt(ownerId, facilityId, courtId, req.user.role);
   }
 }

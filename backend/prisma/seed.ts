@@ -129,22 +129,89 @@ async function main() {
     });
   }
 
-  const court = await (prisma as any).court.upsert({
-    where: { id: 1 },
-    update: {},
-    create: { id: 1, facilityId: facility.id, name: 'Sân 1', courtType: 'INDOOR' },
-  });
+  const demoCourts = [
+    {
+      id: 1,
+      name: 'Sân 1 (Indoor VIP)',
+      courtType: 'INDOOR',
+      slots: [
+        { dayOfWeek: 1, startTime: '06:00', endTime: '08:00', price: 160000 },
+        { dayOfWeek: 1, startTime: '08:00', endTime: '10:00', price: 180000 },
+        { dayOfWeek: 1, startTime: '18:00', endTime: '20:00', price: 240000 },
+        { dayOfWeek: 3, startTime: '18:00', endTime: '20:00', price: 240000 },
+        { dayOfWeek: 5, startTime: '18:00', endTime: '20:00', price: 240000 },
+        { dayOfWeek: 6, startTime: '08:00', endTime: '10:00', price: 200000 },
+        { dayOfWeek: 6, startTime: '16:00', endTime: '18:00', price: 220000 },
+        { dayOfWeek: 0, startTime: '08:00', endTime: '10:00', price: 220000 },
+        { dayOfWeek: 0, startTime: '18:00', endTime: '20:00', price: 260000 },
+      ],
+    },
+    {
+      id: 2,
+      name: 'Sân 2 (Indoor Chuẩn)',
+      courtType: 'INDOOR',
+      slots: [
+        { dayOfWeek: 1, startTime: '08:00', endTime: '10:00', price: 170000 },
+        { dayOfWeek: 1, startTime: '17:00', endTime: '19:00', price: 220000 },
+        { dayOfWeek: 2, startTime: '18:00', endTime: '20:00', price: 220000 },
+        { dayOfWeek: 4, startTime: '18:00', endTime: '20:00', price: 220000 },
+        { dayOfWeek: 6, startTime: '08:00', endTime: '10:00', price: 190000 },
+        { dayOfWeek: 6, startTime: '14:00', endTime: '16:00', price: 200000 },
+        { dayOfWeek: 0, startTime: '09:00', endTime: '11:00', price: 230000 },
+      ],
+    },
+    {
+      id: 3,
+      name: 'Sân 3 (Outdoor)',
+      courtType: 'OUTDOOR',
+      slots: [
+        { dayOfWeek: 1, startTime: '06:00', endTime: '08:00', price: 140000 },
+        { dayOfWeek: 1, startTime: '16:00', endTime: '18:00', price: 180000 },
+        { dayOfWeek: 3, startTime: '16:00', endTime: '18:00', price: 180000 },
+        { dayOfWeek: 5, startTime: '16:00', endTime: '18:00', price: 180000 },
+        { dayOfWeek: 6, startTime: '07:00', endTime: '09:00', price: 160000 },
+        { dayOfWeek: 6, startTime: '17:00', endTime: '19:00', price: 190000 },
+        { dayOfWeek: 0, startTime: '07:00', endTime: '09:00', price: 170000 },
+        { dayOfWeek: 0, startTime: '16:00', endTime: '18:00', price: 200000 },
+      ],
+    },
+    {
+      id: 4,
+      name: 'Sân 4 (Indoor Thi Đấu)',
+      courtType: 'INDOOR',
+      slots: [
+        { dayOfWeek: 1, startTime: '18:00', endTime: '20:00', price: 250000 },
+        { dayOfWeek: 2, startTime: '18:00', endTime: '20:00', price: 250000 },
+        { dayOfWeek: 4, startTime: '18:00', endTime: '20:00', price: 250000 },
+        { dayOfWeek: 6, startTime: '08:00', endTime: '10:00', price: 220000 },
+        { dayOfWeek: 6, startTime: '18:00', endTime: '20:00', price: 260000 },
+        { dayOfWeek: 0, startTime: '08:00', endTime: '10:00', price: 240000 },
+        { dayOfWeek: 0, startTime: '18:00', endTime: '21:00', price: 300000 },
+      ],
+    },
+  ];
 
-  await (prisma as any).timeSlot.upsert({
-    where: { courtId_dayOfWeek_startTime: { courtId: court.id, dayOfWeek: 1, startTime: '18:00' } },
-    update: {},
-    create: { courtId: court.id, dayOfWeek: 1, startTime: '18:00', endTime: '19:00', price: 240000 },
-  });
-  await (prisma as any).timeSlot.upsert({
-    where: { courtId_dayOfWeek_startTime: { courtId: court.id, dayOfWeek: 6, startTime: '08:00' } },
-    update: {},
-    create: { courtId: court.id, dayOfWeek: 6, startTime: '08:00', endTime: '09:00', price: 200000 },
-  });
+  for (const c of demoCourts) {
+    const court = await (prisma as any).court.upsert({
+      where: { id: c.id },
+      update: { name: c.name, courtType: c.courtType, facilityId: facility.id },
+      create: { id: c.id, facilityId: facility.id, name: c.name, courtType: c.courtType },
+    });
+
+    for (const slot of c.slots) {
+      await (prisma as any).timeSlot.upsert({
+        where: {
+          courtId_dayOfWeek_startTime: {
+            courtId: court.id,
+            dayOfWeek: slot.dayOfWeek,
+            startTime: slot.startTime,
+          },
+        },
+        update: { price: slot.price, endTime: slot.endTime },
+        create: { courtId: court.id, ...slot },
+      });
+    }
+  }
 
   // 6. Seed SMM-28 demo data (vị trí + ứng viên quanh Đà Nẵng để test Geo Search / Matchmaking)
   await (prisma as any).playerProfile.update({
@@ -216,12 +283,23 @@ async function main() {
     }
   }
 
+  try {
+    await prisma.$executeRawUnsafe(
+      `SELECT setval(pg_get_serial_sequence('"Court"', 'id'), coalesce(max(id), 1)) FROM "Court";`,
+    );
+    await prisma.$executeRawUnsafe(
+      `SELECT setval(pg_get_serial_sequence('"TimeSlot"', 'id'), coalesce(max(id), 1)) FROM "TimeSlot";`,
+    );
+  } catch (err) {
+    // Non-fatal if sequences don't exist yet
+  }
+
   console.log('Seed completed:', {
     admin: admin.email,
     owner: owner.email,
     player: player.email,
     facilityId: facility.id,
-    courtId: court.id,
+    courtsCount: demoCourts.length,
   });
 }
 

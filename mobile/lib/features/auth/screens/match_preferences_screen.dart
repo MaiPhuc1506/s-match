@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../widgets/sprint2_presentation.dart';
+
 class MatchPreferencesScreen extends StatefulWidget {
   const MatchPreferencesScreen({super.key});
 
@@ -13,10 +15,8 @@ class MatchPreferencesScreen extends StatefulWidget {
 class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
   static const Color _background = Color(0xFFF7F8F5);
   static const Color _primary = Color(0xFF05644F);
-  static const Color _textPrimary = Color(0xFF1C1C1C);
-  static const Color _textSecondary = Color(0xFF65706B);
-  static const Color _border = Color(0xFFD6DCD8);
-  static const Color _mint = Color(0xFFE8F4EF);
+  static const Color _textPrimary = Color(0xFF142824);
+  static const Color _textSecondary = Color(0xFF64716D);
 
   final Set<String> _selectedDays = {'Mon', 'Wed', 'Fri'};
 
@@ -41,258 +41,130 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark.copyWith(
-        statusBarColor: Colors.transparent,
-        systemNavigationBarColor: _background,
-        systemNavigationBarIconBrightness: Brightness.dark,
-      ),
-      child: Scaffold(
-        backgroundColor: _background,
-        body: SafeArea(
-          top: false,
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 393),
-              child: Column(
-                children: [
-                  _buildAppBar(),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
-                      child: Column(
-                        children: [
-                          _buildIntroduction(),
-                          const SizedBox(height: 10),
-                          _buildAvailability(),
-                          const SizedBox(height: 10),
-                          _buildPlayingMode(),
-                          const SizedBox(height: 10),
-                          _buildOpponentLevel(),
-                          const SizedBox(height: 10),
-                          _buildPlayStyle(),
-                          const SizedBox(height: 10),
-                          _buildSaveButton(),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
+    value: SystemUiOverlayStyle.dark,
+    child: Scaffold(
+      backgroundColor: _background,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 393),
+          child: Column(
+            children: [
+              const Sprint2BackHeader(title: 'Match Preferences'),
+              Expanded(
+                child: Sprint2FormBody(
+                  button: _buildSaveButton(),
+                  children: [
+                    _buildAvailability(),
+                    _buildPlayingMode(),
+                    _buildOpponentLevel(),
+                    _buildPlayStyle(),
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
 
-  Widget _buildAppBar() {
-    return SizedBox(
-      width: 393,
-      height: 96,
-      child: Column(
-        children: [
-          const SizedBox(height: 40),
-          SizedBox(
-            height: 56,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => Navigator.of(context).pop(),
-                    child: const SizedBox(
-                      width: 44,
-                      height: 44,
-                      child: Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        size: 22,
-                        color: _textPrimary,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      'Match Preferences',
-                      textAlign: TextAlign.center,
-                      style: _style(
-                        size: 22,
-                        weight: FontWeight.w700,
-                        lineHeight: 30,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 44),
-                ],
+  Widget _buildAvailability() => Container(
+    constraints: const BoxConstraints(minHeight: 254),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionHeader(
+          'assets/icons/sprint2_preferences_Sprint3IconCalendar.svg',
+          'Availability',
+          'Choose your usual days and time.',
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _buildDayChip('Mon'),
+            const SizedBox(width: 8),
+            _buildDayChip('Tue'),
+            const SizedBox(width: 8),
+            _buildDayChip('Wed'),
+            const SizedBox(width: 8),
+            _buildDayChip('Thu'),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _buildDayChip('Fri'),
+            const SizedBox(width: 8),
+            _buildDayChip('Sat'),
+            const SizedBox(width: 8),
+            _buildDayChip('Sun'),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildTimeSelector(
+                label: 'From',
+                value: _fromTime,
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _fromTime = value);
+                  }
+                },
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildTimeSelector(
+                label: 'To',
+                value: _toTime,
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _toTime = value);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
 
-  Widget _buildIntroduction() {
-    return Container(
-      width: 345,
-      height: 72,
-      decoration: BoxDecoration(
-        color: _mint,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        children: [
-          _IconBadge(size: 44, asset: 'assets/icons/preferences_racket.svg'),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Set your preferences',
-                  style: _style(
-                    size: 16,
-                    weight: FontWeight.w600,
-                    lineHeight: 22,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Help us find the best matches for you.',
-                  style: _style(
-                    size: 11,
-                    weight: FontWeight.w400,
-                    lineHeight: 15,
-                    color: _textSecondary,
-                  ),
-                ),
-              ],
+  Widget _sectionHeader(String asset, String title, String subtitle) => Row(
+    children: [
+      _IconBadge(size: 36, asset: asset),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: _style(size: 16, weight: FontWeight.w600, lineHeight: 22),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAvailability() {
-    return SizedBox(
-      width: 345,
-      height: 212,
-      child: Stack(
-        children: [
-          Positioned(
-            left: 12,
-            top: 8,
-            child: _IconBadge(
-              size: 36,
-              asset: 'assets/icons/preferences_racket.svg',
-            ),
-          ),
-          Positioned(
-            left: 56,
-            top: 8,
-            child: Text(
-              'Availability',
-              style: _style(size: 18, weight: FontWeight.w600, lineHeight: 24),
-            ),
-          ),
-          Positioned(
-            left: 56,
-            top: 32,
-            child: Text(
-              'Select the days and time you’re usually free to play.',
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
               style: _style(
-                size: 11,
+                size: 12,
                 weight: FontWeight.w400,
-                lineHeight: 15,
+                lineHeight: 16,
                 color: _textSecondary,
               ),
             ),
-          ),
-          Positioned(
-            left: 16,
-            top: 56,
-            child: SizedBox(
-              width: 313,
-              height: 68,
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      _buildDayChip('Mon'),
-                      const SizedBox(width: 7),
-                      _buildDayChip('Tue'),
-                      const SizedBox(width: 7),
-                      _buildDayChip('Wed'),
-                      const SizedBox(width: 7),
-                      _buildDayChip('Thu'),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _buildDayChip('Fri'),
-                      const SizedBox(width: 7),
-                      _buildDayChip('Sat'),
-                      const SizedBox(width: 7),
-                      _buildDayChip('Sun'),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 16,
-            top: 132,
-            child: SizedBox(
-              width: 313,
-              height: 68,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildTimeSelector(
-                      label: 'From',
-                      value: _fromTime,
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _fromTime = value);
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: _buildTimeSelector(
-                      label: 'To',
-                      value: _toTime,
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _toTime = value);
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const Positioned(
-            left: 16,
-            right: 16,
-            bottom: 0,
-            child: Divider(height: 1, thickness: 1, color: Color(0xFFD8E2DD)),
-          ),
-        ],
+          ],
+        ),
       ),
-    );
-  }
+    ],
+  );
 
   Widget _buildDayChip(String day) {
     final bool selected = _selectedDays.contains(day);
@@ -311,17 +183,16 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          height: 30,
+          height: 40,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected ? _primary : Colors.white,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: selected ? _primary : _border, width: 1),
+            color: selected ? _primary : const Color(0xFFF3F6F3),
+            borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
             day,
             style: _style(
-              size: 12,
+              size: 13,
               weight: FontWeight.w500,
               lineHeight: 18,
               color: selected ? Colors.white : _textPrimary,
@@ -354,20 +225,19 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
         Text(
           label,
           style: _style(
-            size: 11,
+            size: 12,
             weight: FontWeight.w500,
-            lineHeight: 15,
+            lineHeight: 16,
             color: const Color(0xFF5A6661),
           ),
         ),
-        const SizedBox(height: 5),
+        const SizedBox(height: 6),
         Container(
-          height: 47,
+          height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: _border, width: 1),
+            color: const Color(0xFFF3F6F3),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
@@ -394,7 +264,7 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
 
   Widget _buildPlayingMode() {
     return _buildPreferenceSection(
-      asset: 'assets/icons/preferences_racket.svg',
+      asset: 'assets/icons/sprint2_preferences_Vector.svg',
       title: 'Preferred Playing Mode',
       subtitle: 'What do you usually play?',
       options: const ['Singles', 'Doubles', 'Both'],
@@ -408,7 +278,7 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
 
   Widget _buildOpponentLevel() {
     return _buildPreferenceSection(
-      asset: 'assets/icons/preferences_shield.svg',
+      asset: 'assets/icons/sprint2_preferences_Frame1.svg',
       title: 'Preferred Opponent Level',
       subtitle: 'What skill level do you prefer?',
       options: const ['Beginner', 'Intermediate', 'Advanced'],
@@ -422,9 +292,9 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
 
   Widget _buildPlayStyle() {
     return _buildPreferenceSection(
-      asset: 'assets/icons/preferences_court.svg',
+      asset: 'assets/icons/sprint2_preferences_Frame.svg',
       title: 'Play Style',
-      subtitle: 'Your playing style',
+      subtitle: 'Choose the style that fits you.',
       options: const ['Offensive', 'Defensive', 'Balanced'],
       selected: _playStyle,
       onSelected: (value) {
@@ -443,63 +313,36 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
     required ValueChanged<String> onSelected,
     required bool showDivider,
   }) {
-    return SizedBox(
-      width: 345,
-      height: 92,
-      child: Stack(
+    return Container(
+      constraints: const BoxConstraints(minHeight: 112),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Positioned(
-            left: 12,
-            top: 8,
-            child: _IconBadge(size: 36, asset: asset),
-          ),
-          Positioned(
-            left: 56,
-            top: 8,
-            child: Text(
-              title,
-              style: _style(size: 16, weight: FontWeight.w600, lineHeight: 22),
-            ),
-          ),
-          Positioned(
-            left: 56,
-            top: 32,
-            child: Text(
-              subtitle,
-              style: _style(
-                size: 11,
-                weight: FontWeight.w400,
-                lineHeight: 15,
-                color: _textSecondary,
-              ),
-            ),
-          ),
-          Positioned(
-            left: 16,
-            right: 18,
-            top: 52,
+          _sectionHeader(asset, title, subtitle),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 40,
             child: Row(
               children: [
-                for (int index = 0; index < options.length; index++) ...[
+                for (var index = 0; index < options.length; index++) ...[
+                  if (index > 0) const SizedBox(width: 8),
                   Expanded(
                     child: _buildChoiceChip(
                       label: options[index],
                       selected: selected == options[index],
                       onTap: () => onSelected(options[index]),
+                      compact: title == 'Preferred Playing Mode',
                     ),
                   ),
-                  if (index != options.length - 1) const SizedBox(width: 8),
                 ],
               ],
             ),
           ),
-          if (showDivider)
-            const Positioned(
-              left: 16,
-              right: 16,
-              bottom: 0,
-              child: Divider(height: 1, thickness: 1, color: Color(0xFFD8E2DD)),
-            ),
         ],
       ),
     );
@@ -509,26 +352,26 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
     required String label,
     required bool selected,
     required VoidCallback onTap,
+    bool compact = false,
   }) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        height: 36,
+        height: compact ? 32.661 : 40,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? _primary : Colors.white,
+          color: selected ? _primary : const Color(0xFFF3F6F3),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: selected ? _primary : _border, width: 1),
         ),
         child: Text(
           label,
           maxLines: 1,
           style: _style(
-            size: 12,
+            size: compact ? 10.89 : 12,
             weight: FontWeight.w500,
-            lineHeight: 18,
+            lineHeight: compact ? 15.423 : 17,
             color: selected ? Colors.white : _textPrimary,
           ),
         ),
@@ -592,10 +435,14 @@ class _IconBadge extends StatelessWidget {
       height: size,
       alignment: Alignment.center,
       decoration: const BoxDecoration(
-        color: Color(0xFFDDF1E8),
+        color: Color(0xFFEAF3EF),
         shape: BoxShape.circle,
       ),
-      child: SvgPicture.asset(asset, width: size * 0.55, height: size * 0.55),
+      child: SvgPicture.asset(
+        asset,
+        width: asset.endsWith('_Vector.svg') ? 16 : 20,
+        height: asset.endsWith('_Vector.svg') ? 16 : 20,
+      ),
     );
   }
 }

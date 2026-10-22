@@ -7,19 +7,25 @@ class PrimaryButton extends StatelessWidget {
   final String text;
   final VoidCallback onPressed;
   final bool isLoading;
+  final bool showArrow;
+  final double height;
+  final Widget? arrow;
 
   const PrimaryButton({
     super.key,
     required this.text,
     required this.onPressed,
     this.isLoading = false,
+    this.showArrow = true,
+    this.height = 52,
+    this.arrow,
   });
 
   @override
   Widget build(BuildContext context) {
     // Chiều cao chuẩn 52px theo Figma
     return SizedBox(
-      height: 52,
+      height: height,
       width: double.infinity,
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
@@ -45,13 +51,15 @@ class PrimaryButton extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(text, style: AppTextStyles.buttonPrimary),
-                  const SizedBox(width: 8),
+                  if (showArrow) const SizedBox(width: 8),
                   // Mũi tên trắng chỉ sang phải
-                  const Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 20,
-                    color: AppColors.white,
-                  ),
+                  if (showArrow)
+                    arrow ??
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 20,
+                          color: AppColors.white,
+                        ),
                 ],
               ),
       ),

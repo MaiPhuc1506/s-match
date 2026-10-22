@@ -8,6 +8,7 @@ import 'match_invitations_screen.dart';
 import '../widgets/match_card.dart';
 import 'create_match_screen.dart';
 import 'match_detail_open_screen.dart';
+
 import 'package:mobile/features/navigation/player_bottom_navigation.dart';
 
 /// Screen 01: Match List (Figma Node 413:884)
@@ -82,7 +83,15 @@ class _MatchListScreenState extends State<MatchListScreen> {
       listenable: MatchUiStore.instance,
       builder: (context, _) => Scaffold(
         backgroundColor: MatchColors.background,
+        bottomNavigationBar: PlayerBottomNavigation(
+          currentTab: PlayerNavTab.match,
+          onNavigateHome: widget.onNavigateHome,
+          onNavigateMap: widget.onNavigateMap,
+          onNavigateFeedback: widget.onNavigateFeedback,
+          onNavigateProfile: widget.onNavigateProfile,
+        ),
         body: SafeArea(
+          bottom: false,
           child: Column(
             children: [
               // 1. App Header (Height: 55)
@@ -142,15 +151,6 @@ class _MatchListScreenState extends State<MatchListScreen> {
                     ],
                   ),
                 ),
-              ),
-
-              // 3. Bottom Navigation (Height: 84)
-              PlayerBottomNavigation(
-                currentTab: PlayerNavTab.match,
-                onNavigateHome: widget.onNavigateHome,
-                onNavigateMap: widget.onNavigateMap,
-                onNavigateFeedback: widget.onNavigateFeedback,
-                onNavigateProfile: widget.onNavigateProfile,
               ),
             ],
           ),
@@ -418,6 +418,4 @@ class _MatchListScreenState extends State<MatchListScreen> {
       ),
     );
   }
-
 }
-

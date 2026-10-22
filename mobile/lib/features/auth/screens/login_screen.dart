@@ -6,9 +6,12 @@ import '../widgets/auth_header.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/social_button.dart';
+import 'admin_welcome_screen.dart';
+import 'court_owner_welcome_screen.dart';
 import 'create_account_screen.dart';
 import 'forgot_password_screen.dart';
 import 'player_welcome_screen.dart';
+import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,6 +23,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -28,11 +32,73 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng nhập email'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng nhập mật khẩu'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final result = await AuthService.instance.login(
+      email: email,
+      password: password,
+    );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (!result.isSuccess) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.errorMessage ?? 'Đăng nhập thất bại'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Đăng nhập thành công -> Điều hướng theo vai trò
+    final role = result.user?['role']?.toString().toUpperCase() ?? 'PLAYER';
+    Widget targetScreen;
+    if (role == 'COURT_OWNER' || role == 'COURT OWNER') {
+      targetScreen = const CourtOwnerWelcomeScreen();
+    } else if (role == 'ADMIN') {
+      targetScreen = const AdminWelcomeScreen();
+    } else {
+      targetScreen = const PlayerWelcomeScreen();
+    }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => targetScreen),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: Column(
           children: [
             // 1. Header ảnh cây vợt + vòm cong
@@ -97,15 +163,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   // Nút chính "Log In"
                   PrimaryButton(
                     text: 'Log In',
-                    onPressed: () {
-                      // Điều hướng sang màn Player Welcome
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const PlayerWelcomeScreen(),
-                        ),
-                      );
-                    },
+                    isLoading: _isLoading,
+                    onPressed: _handleLogin,
                   ),
                   const SizedBox(height: 16),
 

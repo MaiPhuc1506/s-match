@@ -213,8 +213,95 @@ class MatchUiStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  final List<MatchInvitationItem> _invitations = [];
+  List<MatchInvitationItem> get invitations => List.unmodifiable(_invitations);
+
+  List<MatchInvitationItem> invitationsFor(String email) {
+    final lower = email.trim().toLowerCase();
+    return _invitations
+        .where((inv) => inv.inviteeEmail.trim().toLowerCase() == lower)
+        .toList();
+  }
+
+  void sendInvitation({
+    required MatchItem match,
+    required String inviterName,
+    required String inviterEmail,
+    required String inviteeEmail,
+  }) {
+    _invitations.removeWhere(
+      (i) => i.matchId == match.id && i.inviteeEmail == inviteeEmail,
+    );
+    _invitations.insert(
+      0,
+      MatchInvitationItem(
+        id: 'inv_${DateTime.now().millisecondsSinceEpoch}',
+        matchId: match.id,
+        matchTitle: match.title,
+        inviterName: inviterName,
+        inviterEmail: inviterEmail,
+        inviteeEmail: inviteeEmail,
+        time: match.time,
+        facility: match.facility,
+        match: match,
+      ),
+    );
+    sentInvitations.add('${match.id}:$inviteeEmail');
+    notifyListeners();
+  }
+
+  void acceptInvitation(MatchInvitationItem inv, String accepterName) {
+    _invitations.removeWhere((i) => i.id == inv.id);
+    joined.add(inv.matchId);
+    participantsFor(inv.match);
+    final currentList = _participants[inv.matchId]!;
+    if (!currentList.any((p) => p.name == accepterName)) {
+      currentList.add(
+        ParticipantItem(
+          id: 'p_${DateTime.now().millisecondsSinceEpoch}',
+          name: accepterName,
+          initials: accepterName.length >= 2
+              ? accepterName.substring(0, 2).toUpperCase()
+              : 'PL',
+          role: 'Player',
+        ),
+      );
+    }
+    notifyListeners();
+  }
+
+  void declineInvitation(MatchInvitationItem inv) {
+    _invitations.removeWhere((i) => i.id == inv.id);
+    notifyListeners();
+  }
+
   void invite(String matchId, String player) {
     sentInvitations.add('$matchId:$player');
     notifyListeners();
   }
 }
+
+class MatchInvitationItem {
+  final String id;
+  final String matchId;
+  final String matchTitle;
+  final String inviterName;
+  final String inviterEmail;
+  final String inviteeEmail;
+  final String time;
+  final String facility;
+  final MatchItem match;
+
+  const MatchInvitationItem({
+    required this.id,
+    required this.matchId,
+    required this.matchTitle,
+    required this.inviterName,
+    required this.inviterEmail,
+    required this.inviteeEmail,
+    required this.time,
+    required this.facility,
+    required this.match,
+  });
+}
+

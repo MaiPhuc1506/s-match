@@ -5,7 +5,9 @@ import 'package:mobile/core/theme/app_colors.dart';
 
 import '../services/facility_service.dart';
 import '../widgets/facility_card.dart';
+import 'add_edit_facility_screen.dart';
 import 'facility_detail_screen.dart';
+import '../../auth/widgets/logout_dialog.dart';
 
 class FacilityListScreen extends StatefulWidget {
   const FacilityListScreen({super.key});
@@ -55,6 +57,8 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
             courtCount: (facility['courts'] as List?)?.length ?? 0,
             operatingHours: hoursText,
             isOpen: hours is List && hours.isNotEmpty,
+            contactPhone: facility['contactPhone'] as String?,
+            description: facility['description'] as String?,
           );
         }).toList();
       }
@@ -65,85 +69,93 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          // Nội dung cuộn chính
-          SingleChildScrollView(
-            child: Column(
-              children: [
-                // 1. Header Gradient Xanh (393 x 220 px)
-                _buildHeader(),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // 1. Header Gradient Xanh (393 x 220 px)
+            _buildHeader(),
 
-                const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-                // 2. Danh sách Facility Cards (345 x 150 px)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    children: [
-                      if (_isLoading)
-                        const CircularProgressIndicator()
-                      else if (_loadFailed)
-                        TextButton(
-                          onPressed: _loadFacilities,
-                          child: const Text(
-                            'Không tải được cơ sở. Nhấn để thử lại.',
-                          ),
-                        )
-                      else if (_facilities.isEmpty)
-                        const Text('Bạn chưa có cơ sở nào.'),
-                      ..._facilities.map(
-                        (item) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: FacilityCard(
-                            facility: item,
-                            onTap: () async {
-                              await Navigator.of(context).push(
-                                PageRouteBuilder(
-                                  pageBuilder: (
+            // 2. Danh sách Facility Cards (345 x 150 px)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                children: [
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 32),
+                      child: CircularProgressIndicator(),
+                    )
+                  else if (_loadFailed)
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 32),
+                      child: TextButton(
+                        onPressed: _loadFacilities,
+                        child: const Text(
+                          'Không tải được cơ sở. Nhấn để thử lại.',
+                        ),
+                      ),
+                    )
+                  else if (_facilities.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 32),
+                      child: Text('Bạn chưa có cơ sở nào.'),
+                    ),
+                  ..._facilities.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: FacilityCard(
+                        facility: item,
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            PageRouteBuilder(
+                              pageBuilder: (
+                                context,
+                                animation,
+                                secondaryAnimation,
+                              ) => FacilityDetailScreen(facility: item),
+                              transitionDuration: const Duration(
+                                milliseconds: 250,
+                              ),
+                              transitionsBuilder:
+                                  (
                                     context,
                                     animation,
                                     secondaryAnimation,
-                                  ) => FacilityDetailScreen(facility: item),
-                                  transitionDuration: const Duration(
-                                    milliseconds: 250,
+                                    child,
+                                  ) => FadeTransition(
+                                    opacity: animation,
+                                    child: child,
                                   ),
-                                  transitionsBuilder:
-                                      (
-                                        context,
-                                        animation,
-                                        secondaryAnimation,
-                                        child,
-                                      ) => FadeTransition(
-                                        opacity: animation,
-                                        child: child,
-                                      ),
-                                ),
-                              );
-                              _loadFacilities();
-                            },
-                          ),
-                        ),
+                            ),
+                          );
+                          _loadFacilities();
+                        },
+                        onEdit: () async {
+                          final res = await Navigator.of(context).push<dynamic>(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  AddEditFacilityScreen(facility: item),
+                            ),
+                          );
+                          if (res == true || res == 'deleted') {
+                            _loadFacilities();
+                          }
+                        },
+                        onDelete: () => _confirmDeleteFacility(item),
                       ),
-                    ],
+                    ),
                   ),
-                ),
-
-                // Khoảng đệm dưới cho bottom navigation
-                const SizedBox(height: 100),
-              ],
+                ],
+              ),
             ),
-          ),
 
-          // 3. Bottom Navigation cố định dưới đáy (393 x 80 px)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _buildBottomNavigation(),
-          ),
-        ],
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
+      bottomNavigationBar: _buildBottomNavigation(),
     );
   }
 
@@ -200,8 +212,15 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
                 ),
                 child: IconButton(
                   icon: const Icon(Icons.add, color: AppColors.white, size: 22),
-                  onPressed: () {
-                    // Mở dialog hoặc điều hướng thêm cơ sở
+                  onPressed: () async {
+                    final res = await Navigator.of(context).push<dynamic>(
+                      MaterialPageRoute(
+                        builder: (_) => const AddEditFacilityScreen(),
+                      ),
+                    );
+                    if (res == true) {
+                      _loadFacilities();
+                    }
                   },
                 ),
               ),
@@ -269,23 +288,73 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
     );
   }
 
+  Future<void> _confirmDeleteFacility(FacilityCardItem item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xác nhận xóa cơ sở?'),
+        content: Text(
+          'Bạn có chắc chắn muốn xóa "${item.name}"? Toàn bộ sân con và khung giờ thuộc cơ sở này sẽ bị xóa vĩnh viễn.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Xóa', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final result = await FacilityService.instance.deleteFacility(item.id);
+      if (!mounted) return;
+      if (result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã xóa cơ sở thành công!'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+        _loadFacilities();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result.message ?? 'Không thể xóa cơ sở. Vui lòng thử lại sau.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildBottomNavigation() {
     return Container(
-      height: 80,
       decoration: const BoxDecoration(
         color: AppColors.white,
         border: Border(top: BorderSide(color: AppColors.divider, width: 1)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildNavItem(0, Icons.home_outlined, 'Home'),
-          _buildNavItem(1, Icons.domain, 'Facilities'),
-          _buildNavItem(2, Icons.calendar_today_outlined, 'Bookings'),
-          _buildNavItem(3, Icons.chat_bubble_outline, 'Messages'),
-          _buildNavItem(4, Icons.person_outline, 'Profile'),
-        ],
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 60,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(0, Icons.home_outlined, 'Home'),
+              _buildNavItem(1, Icons.domain, 'Facilities'),
+              _buildNavItem(2, Icons.calendar_today_outlined, 'Bookings'),
+              _buildNavItem(3, Icons.chat_bubble_outline, 'Messages'),
+              _buildNavItem(4, Icons.person_outline, 'Profile'),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -293,29 +362,38 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isActive = _currentNavIndex == index;
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () {
+        if (index == 4) {
+          showLogoutConfirmationDialog(context);
+          return;
+        }
         setState(() {
           _currentNavIndex = index;
         });
       },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 22,
-            color: isActive ? AppColors.primary : AppColors.textSecondary,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 11,
-              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 22,
               color: isActive ? AppColors.primary : AppColors.textSecondary,
             ),
-          ),
-        ],
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                color: isActive ? AppColors.primary : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

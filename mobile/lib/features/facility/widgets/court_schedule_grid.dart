@@ -7,11 +7,13 @@ enum SlotStatus { available, booked, locked, event }
 
 class CourtScheduleGrid extends StatefulWidget {
   final int courtCount;
+  final List<String>? courtNames;
   final Function(int courtIndex, int timeIndex)? onSlotSelected;
 
   const CourtScheduleGrid({
     super.key,
-    this.courtCount = 6,
+    this.courtCount = 4,
+    this.courtNames,
     this.onSlotSelected,
   });
 
@@ -35,7 +37,7 @@ class _CourtScheduleGridState extends State<CourtScheduleGrid> {
   int? selectedCourtIndex = 0;
   int? selectedTimeIndex = 1;
 
-  // Ma trận mẫu slot 6 sân x 9 mốc giờ
+  // Ma trận mẫu slot sân x 9 mốc giờ
   late List<List<SlotStatus>> matrix;
 
   @override
@@ -44,9 +46,24 @@ class _CourtScheduleGridState extends State<CourtScheduleGrid> {
     _initMatrix();
   }
 
+  @override
+  void didUpdateWidget(covariant CourtScheduleGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.courtCount != widget.courtCount) {
+      setState(() {
+        _initMatrix();
+        if (selectedCourtIndex != null &&
+            selectedCourtIndex! >= widget.courtCount) {
+          selectedCourtIndex = widget.courtCount > 0 ? 0 : null;
+        }
+      });
+    }
+  }
+
   void _initMatrix() {
+    final count = widget.courtCount > 0 ? widget.courtCount : 4;
     matrix = List.generate(
-      widget.courtCount,
+      count,
       (c) => List.generate(9, (t) {
         if ((c + t) % 5 == 0) return SlotStatus.booked;
         if ((c * 2 + t) % 7 == 0) return SlotStatus.locked;
@@ -76,7 +93,7 @@ class _CourtScheduleGridState extends State<CourtScheduleGrid> {
       children: [
         // Grid Container
         Container(
-          width: 345,
+          width: double.infinity,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: AppColors.white,
@@ -89,7 +106,7 @@ class _CourtScheduleGridState extends State<CourtScheduleGrid> {
               Row(
                 children: [
                   const SizedBox(
-                    width: 55,
+                    width: 58,
                   ), // Khoảng trống cho tên sân bên trái
                   Expanded(
                     child: Row(
@@ -116,16 +133,23 @@ class _CourtScheduleGridState extends State<CourtScheduleGrid> {
               ),
               const SizedBox(height: 6),
 
-              // 6 Hàng sân
+              // Danh sách hàng sân
               ...List.generate(widget.courtCount, (courtIdx) {
+                final courtLabel =
+                    (widget.courtNames != null &&
+                            courtIdx < widget.courtNames!.length)
+                        ? widget.courtNames![courtIdx]
+                        : 'Court ${courtIdx + 1}';
                 return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(
                     children: [
                       SizedBox(
-                        width: 55,
+                        width: 58,
                         child: Text(
-                          'Court ${courtIdx + 1}',
+                          courtLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -137,7 +161,10 @@ class _CourtScheduleGridState extends State<CourtScheduleGrid> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: List.generate(9, (timeIdx) {
-                            final status = matrix[courtIdx][timeIdx];
+                            final status = (courtIdx < matrix.length &&
+                                    timeIdx < matrix[courtIdx].length)
+                                ? matrix[courtIdx][timeIdx]
+                                : SlotStatus.available;
                             final isSelected =
                                 selectedCourtIndex == courtIdx &&
                                 selectedTimeIndex == timeIdx;

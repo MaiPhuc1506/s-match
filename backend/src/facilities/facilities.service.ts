@@ -125,11 +125,58 @@ export class FacilitiesService {
     }
 
     if (userRole !== Role.ADMIN && facility.ownerId !== ownerId) {
-      throw new ForbiddenException('Bạn không có quyền xóa cơ sở này');
+      throw new ForbiddenException('Bạn không có quyền xóa cơ sở này (cơ sở thuộc chủ sân khác)');
     }
 
-    await this.prisma.facility.delete({
-      where: { id: facilityId },
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Tìm tất cả các sân con của cơ sở
+      const courts = await tx.court.findMany({
+        where: { facilityId },
+        select: { id: true },
+      });
+      const courtIds = courts.map((c) => c.id);
+
+      if (courtIds.length > 0) {
+        // 2. Tìm tất cả các booking thuộc các sân này
+        const bookings = await tx.booking.findMany({
+          where: { courtId: { in: courtIds } },
+          select: { id: true },
+        });
+        const bookingIds = bookings.map((b) => b.id);
+
+        if (bookingIds.length > 0) {
+          // Gỡ liên kết Match -> Booking để không bị vi phạm khóa ngoại
+          await tx.match.updateMany({
+            where: { bookingId: { in: bookingIds } },
+            data: { bookingId: null },
+          });
+
+          // Xóa các booking
+          await tx.booking.deleteMany({
+            where: { id: { in: bookingIds } },
+          });
+        }
+
+        // 3. Xóa các TimeSlots của sân con
+        await tx.timeSlot.deleteMany({
+          where: { courtId: { in: courtIds } },
+        });
+
+        // 4. Xóa các sân con
+        await tx.court.deleteMany({
+          where: { id: { in: courtIds } },
+        });
+      }
+
+      // 5. Xóa giờ hoạt động của cơ sở
+      await tx.operatingHours.deleteMany({
+        where: { facilityId },
+      });
+
+      // 6. Xóa chính cơ sở
+      await tx.facility.delete({
+        where: { id: facilityId },
+      });
     });
 
     return { message: `Đã xóa cơ sở "${facility.name}" thành công` };
@@ -187,8 +234,36 @@ export class FacilitiesService {
       throw new NotFoundException(`Không tìm thấy sân với ID ${courtId} trong cơ sở này`);
     }
 
-    await this.prisma.court.delete({
-      where: { id: courtId },
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Tìm các booking của sân này
+      const bookings = await tx.booking.findMany({
+        where: { courtId },
+        select: { id: true },
+      });
+      const bookingIds = bookings.map((b) => b.id);
+
+      if (bookingIds.length > 0) {
+        // Gỡ liên kết Match -> Booking
+        await tx.match.updateMany({
+          where: { bookingId: { in: bookingIds } },
+          data: { bookingId: null },
+        });
+
+        // Xóa bookings
+        await tx.booking.deleteMany({
+          where: { id: { in: bookingIds } },
+        });
+      }
+
+      // 2. Xóa time slots của sân
+      await tx.timeSlot.deleteMany({
+        where: { courtId },
+      });
+
+      // 3. Xóa sân
+      await tx.court.delete({
+        where: { id: courtId },
+      });
     });
 
     return { message: `Đã xóa sân "${court.name}" thành công` };

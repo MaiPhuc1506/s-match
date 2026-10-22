@@ -145,7 +145,7 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
         builder: (context, constraints) {
           final screenWidth = constraints.maxWidth;
           final screenHeight = constraints.maxHeight;
-          const navHeight = 84.0;
+          final navHeight = PlayerBottomNavigation.heightFor(context);
           final mapHeight = screenHeight - navHeight;
 
           // Sheet design coordinates at 393 × 852:
