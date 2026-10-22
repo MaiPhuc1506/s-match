@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile/features/match/models/match_model.dart';
 import 'package:mobile/features/match/state/match_ui_store.dart';
 import 'package:mobile/features/match/screens/match_list_screen.dart';
@@ -8,6 +9,14 @@ import 'package:mobile/features/match/screens/match_detail_open_screen.dart';
 import 'package:mobile/features/match/screens/match_invitations_screen.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    // Bundled Jakarta fonts must settle before intrinsic text layout assertions.
+    for (final weight in [FontWeight.w400, FontWeight.w500, FontWeight.w600, FontWeight.w700]) {
+      GoogleFonts.plusJakartaSans(fontWeight: weight);
+    }
+    await GoogleFonts.pendingFonts();
+  });
   Future<void> start(WidgetTester tester, Widget screen) async {
     await tester.binding.setSurfaceSize(const Size(393, 852));
     addTearDown(() => tester.binding.setSurfaceSize(null));

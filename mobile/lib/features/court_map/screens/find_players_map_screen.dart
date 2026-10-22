@@ -10,6 +10,8 @@ import '../../navigation/player_bottom_navigation.dart';
 import '../exploration_data.dart';
 import '../widgets/exploration_widgets.dart';
 import 'find_courts_map_screen.dart';
+import '../../recommendation/models/recommended_player.dart';
+import '../../recommendation/screens/recommendation_list_screen.dart';
 
 final playerFavoritesProvider = StateProvider<Set<String>>((ref) => {});
 
@@ -272,7 +274,7 @@ class _FindPlayersMapScreenState extends ConsumerState<FindPlayersMapScreen>
   Widget build(BuildContext context) {
     final data = ref.watch(nearbyPlayersProvider);
     final top = math.max(52.0, MediaQuery.paddingOf(context).top);
-    final nav = 84.0 + math.max(0.0, MediaQuery.paddingOf(context).bottom - 22);
+    final nav = PlayerBottomNavigation.heightFor(context);
     return Scaffold(
       backgroundColor: exploreBackground,
       resizeToAvoidBottomInset: false,
@@ -481,11 +483,22 @@ class _FindPlayersMapScreenState extends ConsumerState<FindPlayersMapScreen>
                               style: FilledButton.styleFrom(
                                 backgroundColor: exploreGreen,
                               ),
-                              onPressed: () =>
-                                  PlayerBottomNavigation.showFeatureNotice(
-                                    context,
-                                    'Matchmaking',
-                                  ),
+                              onPressed: () async {
+                                final searchAgain = await Navigator.of(context)
+                                    .push<bool>(
+                                      explorationRoute<bool>(
+                                        RecommendationListScreen(
+                                          query: RecommendationQuery(
+                                            distanceKm: _distance,
+                                            level: _level,
+                                            style: _style,
+                                          ),
+                                        ),
+                                        '/recommendations',
+                                      ),
+                                    );
+                                if (searchAgain == true && mounted) _filters();
+                              },
                               child: Text(
                                 'Find Matching Players',
                                 style: exploreText(

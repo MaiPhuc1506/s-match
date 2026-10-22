@@ -8,8 +8,15 @@ import 'package:mobile/features/auth/screens/match_preferences_screen.dart';
 import 'package:mobile/features/booking/screens/booking_history_screen.dart';
 import 'package:mobile/features/navigation/player_bottom_navigation.dart';
 
+import '../widgets/logout_dialog.dart';
+import '../widgets/profile_skill_radar.dart';
+import '../widgets/sprint2_presentation.dart';
+import '../../../core/network/api_client.dart';
+import '../services/auth_service.dart';
+import '../services/player_profile_service.dart';
+
 /// Player Profile — Figma frame 195:178 (393 × 852).
-class PlayerProfileScreen extends StatelessWidget {
+class PlayerProfileScreen extends StatefulWidget {
   final VoidCallback? onNavigateHome;
   final VoidCallback? onNavigateMap;
   final VoidCallback? onNavigateMatch;
@@ -25,15 +32,62 @@ class PlayerProfileScreen extends StatelessWidget {
     this.onNavigateProfile,
   });
 
+  @override
+  State<PlayerProfileScreen> createState() => _PlayerProfileScreenState();
+}
+
+class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
+  OwnPlayerProfile? _profile;
+  int _profileRequestId = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (ApiClient.instance.token != null) _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final requestId = ++_profileRequestId;
+    try {
+      final profile = await PlayerProfileService.instance.getMyProfile();
+      if (mounted && requestId == _profileRequestId) {
+        setState(() => _profile = profile);
+      }
+    } on PlayerProfileException catch (error) {
+      if (!mounted || requestId != _profileRequestId) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message),
+          action: SnackBarAction(label: 'Thử lại', onPressed: _loadProfile),
+        ),
+      );
+    }
+  }
+
+  String get _fullName =>
+      _profile?.fullName ??
+      (ApiClient.instance.token == null
+          ? 'Phúc Mai'
+          : AuthService.instance.currentUser?['fullName'] as String? ??
+                'Player');
+  String get _bio =>
+      _profile?.bio ??
+      (ApiClient.instance.token == null
+          ? 'Badminton enthusiast. Always up for a friendly match and improving together! '
+          : '');
+
   static const _background = Color(0xFFF7F8F5);
   static const _primary = Color(0xFF05644F);
   static const _brandText = Color(0xFF054D3F);
-  static const _textPrimary = Color(0xFF1C1C1C);
-  static const _textSecondary = Color(0xFF6B6B6B);
+  static const _textPrimary = Color(0xFF142824);
+  static const _textSecondary = Color(0xFF64716D);
 
-  void _navigateDissolve(BuildContext context, Widget destination) {
-    Navigator.of(context).push(
-      PageRouteBuilder<void>(
+  Future<void> _navigateDissolve(
+    BuildContext context,
+    Widget destination,
+  ) async {
+    final result = await Navigator.of(context).push<Object?>(
+      PageRouteBuilder<Object?>(
         transitionDuration: const Duration(milliseconds: 250),
         reverseTransitionDuration: const Duration(milliseconds: 250),
         pageBuilder: (_, animation, secondaryAnimation) {
@@ -47,35 +101,82 @@ class PlayerProfileScreen extends StatelessWidget {
         },
       ),
     );
+    if (mounted && result is OwnPlayerProfile) {
+      _profileRequestId++;
+      setState(() => _profile = result);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark.copyWith(
+      value: SystemUiOverlayStyle.light.copyWith(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: Colors.white,
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
         backgroundColor: _background,
+        bottomNavigationBar: PlayerBottomNavigation(
+          currentTab: PlayerNavTab.profile,
+          onNavigateHome: widget.onNavigateHome,
+          onNavigateMap: widget.onNavigateMap,
+          onNavigateMatch: widget.onNavigateMatch,
+          onNavigateFeedback: widget.onNavigateFeedback,
+          onNavigateProfile: widget.onNavigateProfile,
+        ),
         body: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 393),
-            child: Column(
-              children: [
-                _buildAppBar(context),
-                Expanded(child: _buildProfileContent(context)),
-                PlayerBottomNavigation(
-                  currentTab: PlayerNavTab.profile,
-                  onNavigateHome: onNavigateHome,
-                  onNavigateMap: onNavigateMap,
-                  onNavigateMatch: onNavigateMatch,
-                  onNavigateFeedback: onNavigateFeedback,
-                  onNavigateProfile: onNavigateProfile,
-                ),
-              ],
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Stack(
+                children: [
+                  const Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 242,
+                    child: Sprint2CourtPhoto(),
+                  ),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 242,
+                    child: ColoredBox(color: Color(0x4D003D32)),
+                  ),
+                  Positioned(
+                    top: 210,
+                    left: 0,
+                    right: 0,
+                    height: 60,
+                    child: SvgPicture.asset(
+                      'assets/icons/sprint2_profile_HeroCurvedTransition.svg',
+                      fit: BoxFit.fill,
+                    ),
+                  ),
+                  Positioned(
+                    top: 118,
+                    right: 31,
+                    child: Opacity(
+                      opacity: .7,
+                      child: Image.asset(
+                        'assets/images/skill_level_shuttle.png',
+                        width: 88,
+                        height: 88,
+                      ),
+                    ),
+                  ),
+                  Column(
+                    children: [
+                      _buildAppBar(context),
+                      _buildProfileContent(context),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -100,20 +201,23 @@ class PlayerProfileScreen extends StatelessWidget {
                   Text(
                     'My Profile',
                     style: _textStyle(
-                      size: 22,
-                      lineHeight: 30,
-                      weight: FontWeight.w700,
+                      size: 24,
+                      lineHeight: 33,
+                      color: Colors.white,
+                      weight: FontWeight.w600,
                     ),
                   ),
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: () =>
-                        _navigateDissolve(context, const EditProfileScreen()),
+                    onTap: () => _navigateDissolve(
+                      context,
+                      EditProfileScreen(initialProfile: _profile),
+                    ),
                     child: SizedBox(
                       width: 24,
                       height: 24,
                       child: SvgPicture.asset(
-                        'assets/icons/profile_settings.svg',
+                        'assets/icons/sprint2_profile_Settings.svg',
                       ),
                     ),
                   ),
@@ -126,199 +230,180 @@ class PlayerProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildProfileContent(BuildContext context) {
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildProfileHeader(context),
-          const SizedBox(height: 12),
-          _buildQuickStats(context),
-          const SizedBox(height: 12),
-          _buildSkillOverview(context),
-          const SizedBox(height: 12),
-          _buildPlayingStyle(context),
-          const SizedBox(height: 12),
-        ],
-      ),
-    );
-  }
+  Widget _buildProfileContent(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 24),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildProfileHeader(context),
+        const SizedBox(height: 8),
+        _buildQuickStats(context),
+        const SizedBox(height: 8),
+        _buildSkillOverview(context),
+        const SizedBox(height: 8),
+        _buildPlayingStyle(context),
+        const SizedBox(height: 24),
+        _buildLogoutButton(context),
+        const SizedBox(height: 16),
+      ],
+    ),
+  );
 
-  Widget _buildProfileHeader(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _navigateDissolve(context, const EditProfileScreen()),
-      child: SizedBox(
-        width: 345,
-        height: 236,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned(
-              left: 0,
-              top: 0,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: SvgPicture.asset(
-                  'assets/icons/profile_hero_decoration.svg',
-                  width: 345,
-                  height: 124,
-                  fit: BoxFit.fill,
-                ),
-              ),
-            ),
-            Positioned(
-              left: 110.5,
-              top: -4,
+  Widget _buildProfileHeader(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: () =>
+        _navigateDissolve(context, EditProfileScreen(initialProfile: _profile)),
+    child: SizedBox(
+      height: 264 + (MediaQuery.sizeOf(context).width < 368 ? 17 : 0),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: 40,
+            left: 0,
+            right: 0,
+            child: Center(
               child: Image.asset(
-                'assets/images/profile_avatar.png',
-                width: 124,
-                height: 124,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
+                'assets/images/sprint2_profile_AvatarPhoto.png',
+                width: 104,
+                height: 104,
               ),
             ),
-            Positioned(
-              left: 205,
-              top: 72,
-              child: Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: _primary,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.black, width: 3),
+          ),
+          Positioned(
+            top: 118,
+            left:
+                (MediaQuery.sizeOf(context).width.clamp(0, 393).toDouble() -
+                        48) /
+                    2 +
+                32.5,
+            child: const Sprint2CameraBadge(),
+          ),
+          Positioned(
+            top: 148,
+            left: 0,
+            right: 0,
+            child: Column(
+              children: [
+                Text(
+                  _fullName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _textStyle(
+                    size: 22,
+                    lineHeight: 30,
+                    weight: FontWeight.w700,
+                  ),
                 ),
-                alignment: Alignment.center,
-                child: SvgPicture.asset(
-                  'assets/icons/profile_camera.svg',
-                  width: 18,
-                  height: 18,
-                ),
-              ),
-            ),
-            Positioned(
-              left: 0,
-              top: 108,
-              child: SizedBox(
-                width: 345,
-                height: 128,
-                child: Column(
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      'Phúc Mai',
-                      style: _textStyle(
-                        size: 28,
-                        lineHeight: 36,
-                        weight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    SizedBox(
-                      width: 345,
+                    Container(
                       height: 24,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDDEFE7),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Flexible(
-                            child: Container(
-                              height: 24,
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFDDEFE7),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SvgPicture.asset(
-                                    'assets/icons/profile_level_racket.svg',
-                                    width: 18,
-                                    height: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Flexible(
-                                    child: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Text(
-                                        'Intermediate',
-                                        style: _textStyle(
-                                          size: 14,
-                                          lineHeight: 20,
-                                          weight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                          SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: Center(
+                              child: SvgPicture.asset(
+                                'assets/icons/sprint2_profile_Vector.svg',
                               ),
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                '★ 4.6  (24 reviews)',
-                                style: _textStyle(
-                                  size: 13,
-                                  lineHeight: 18,
-                                  weight: FontWeight.w600,
-                                ),
-                              ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Intermediate',
+                            style: _textStyle(
+                              size: 12,
+                              lineHeight: 17,
+                              weight: FontWeight.w500,
+                              color: _primary,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '●  Da Nang, Vietnam',
-                      style: _textStyle(
-                        size: 13,
-                        lineHeight: 18,
-                        weight: FontWeight.w500,
-                        color: _brandText,
+                    const SizedBox(width: 10),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          const TextSpan(
+                            text: '★',
+                            style: TextStyle(color: Color(0xFFF5B72F)),
+                          ),
+                          const TextSpan(text: ' 4.6 (24)'),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    SizedBox(
-                      width: 321,
-                      height: 36,
-                      child: Text(
-                        'Badminton enthusiast. Always up for a friendly match\n'
-                        'and improving together!   More',
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.clip,
-                        style: _textStyle(
-                          size: 13,
-                          lineHeight: 18,
-                          weight: FontWeight.w400,
-                        ),
+                      style: _textStyle(
+                        size: 14,
+                        lineHeight: 19,
+                        weight: FontWeight.w500,
+                        color: _primary,
                       ),
                     ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 4),
+                Text(
+                  '●  Da Nang, Vietnam',
+                  style: _textStyle(
+                    size: 12,
+                    lineHeight: 17,
+                    weight: FontWeight.w400,
+                    color: _textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: _bio.isEmpty ? '' : '${_bio.trimRight()} ',
+                      ),
+                      if (_bio.isNotEmpty)
+                        const TextSpan(
+                          text: 'More',
+                          style: TextStyle(
+                            color: _primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                    ],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: _textStyle(
+                    size: 12,
+                    lineHeight: 17,
+                    weight: FontWeight.w400,
+                    color: _textSecondary,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 
   Widget _buildQuickStats(BuildContext context) {
     return Container(
       width: 345,
       height: 88,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 26, 16, 8),
       decoration: BoxDecoration(
-        color: const Color(0xB8FFFFFF),
-        borderRadius: BorderRadius.circular(14),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
         boxShadow: const [
           BoxShadow(
             color: Color(0x0C08291F),
@@ -327,22 +412,104 @@ class PlayerProfileScreen extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          const _StatItem(value: '24', label: 'Matches'),
-          _StatItem(
-            value: '18',
-            label: 'Completed',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const BookingHistoryScreen(),
-                ),
-              );
-            },
+          Positioned(
+            left:
+                (MediaQuery.sizeOf(context).width.clamp(0, 393).toDouble() -
+                    80) *
+                40 /
+                313,
+            top: -19,
+            child: SvgPicture.asset('assets/icons/sprint2_profile_Vector.svg'),
           ),
-          const _StatItem(value: '4.6', label: 'Rating'),
+          Positioned(
+            left:
+                (MediaQuery.sizeOf(context).width.clamp(0, 393).toDouble() -
+                    80) *
+                148 /
+                313,
+            top: -18,
+            child: Text(
+              '✓',
+              style: _textStyle(
+                size: 14,
+                lineHeight: 19,
+                weight: FontWeight.w600,
+                color: _primary,
+              ),
+            ),
+          ),
+          Positioned(
+            left:
+                (MediaQuery.sizeOf(context).width.clamp(0, 393).toDouble() -
+                    80) *
+                256 /
+                313,
+            top: -18,
+            child: Text(
+              '★',
+              style: _textStyle(
+                size: 14,
+                lineHeight: 19,
+                weight: FontWeight.w600,
+                color: const Color(0xFFF5B72F),
+              ),
+            ),
+          ),
+          Positioned(
+            left:
+                (MediaQuery.sizeOf(context).width.clamp(0, 393).toDouble() -
+                    80) *
+                100 /
+                313,
+            top: -6,
+            height: 48,
+            child: const VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: Color(0xFFE7ECE9),
+            ),
+          ),
+          Positioned(
+            left:
+                (MediaQuery.sizeOf(context).width.clamp(0, 393).toDouble() -
+                    80) *
+                212 /
+                313,
+            top: -6,
+            height: 48,
+            child: const VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: Color(0xFFE7ECE9),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: _StatItem(value: '24', label: 'Matches'),
+              ),
+              Expanded(
+                child: _StatItem(
+                  value: '18',
+                  label: 'Completed',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const BookingHistoryScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const Expanded(
+                child: _StatItem(value: '4.6', label: 'Rating'),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -354,12 +521,12 @@ class PlayerProfileScreen extends StatelessWidget {
       onTap: () => _navigateDissolve(context, const SkillAssessmentScreen()),
       child: SizedBox(
         width: 345,
-        height: 212,
+        height: 216 - (PlayerBottomNavigation.heightFor(context) - 84),
         child: Column(
           children: [
             SizedBox(
               width: 345,
-              height: 28,
+              height: 26,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -369,8 +536,8 @@ class PlayerProfileScreen extends StatelessWidget {
                       child: Text(
                         'Skill Overview',
                         style: _textStyle(
-                          size: 20,
-                          lineHeight: 28,
+                          size: 16,
+                          lineHeight: 22,
                           weight: FontWeight.w600,
                         ),
                       ),
@@ -382,8 +549,8 @@ class PlayerProfileScreen extends StatelessWidget {
                       child: Text(
                         'View details',
                         style: _textStyle(
-                          size: 13,
-                          lineHeight: 18,
+                          size: 12,
+                          lineHeight: 17,
                           weight: FontWeight.w500,
                           color: _primary,
                         ),
@@ -393,8 +560,13 @@ class PlayerProfileScreen extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 8),
-            const _SkillRadar(),
+            SizedBox(
+              height: 190 - (PlayerBottomNavigation.heightFor(context) - 84),
+              child: const FittedBox(
+                fit: BoxFit.contain,
+                child: ProfileSkillRadar(refined: true),
+              ),
+            ),
           ],
         ),
       ),
@@ -409,13 +581,13 @@ class PlayerProfileScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: Container(
           width: 345,
-          height: 72,
-          color: const Color(0xE6EAF4F0),
+          height: 80,
+          color: const Color(0xFFE8F3EF),
           child: Stack(
             children: [
               Positioned(
-                left: 0,
-                top: 2,
+                left: 12,
+                top: 10,
                 child: Image.asset(
                   'assets/images/profile_playing_style_racket.png',
                   width: 68.2,
@@ -426,7 +598,7 @@ class PlayerProfileScreen extends StatelessWidget {
               ),
               Positioned(
                 left: 68,
-                top: 8,
+                top: 10,
                 child: Text(
                   'Playing Style',
                   style: _textStyle(
@@ -438,7 +610,7 @@ class PlayerProfileScreen extends StatelessWidget {
               ),
               const Positioned(
                 left: 68,
-                top: 34,
+                top: 38,
                 child: Row(
                   children: [
                     _StyleChip(
@@ -455,8 +627,57 @@ class PlayerProfileScreen extends StatelessWidget {
                   ],
                 ),
               ),
+              Positioned(
+                right: 14,
+                top: 25,
+                child: Text(
+                  '›',
+                  style: _textStyle(
+                    size: 24,
+                    lineHeight: 33,
+                    weight: FontWeight.w400,
+                    color: _primary,
+                  ),
+                ),
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: OutlinedButton(
+        onPressed: () => showLogoutConfirmationDialog(context),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: Colors.white,
+          side: const BorderSide(color: Color(0xFFFDE8E8), width: 1.5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.logout_rounded,
+              color: Color(0xFFE53935),
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Đăng xuất',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFFE53935),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -479,11 +700,7 @@ class PlayerProfileScreen extends StatelessWidget {
 }
 
 class _StatItem extends StatelessWidget {
-  const _StatItem({
-    required this.value,
-    required this.label,
-    this.onTap,
-  });
+  const _StatItem({required this.value, required this.label, this.onTap});
 
   final String value;
   final String label;
@@ -501,24 +718,24 @@ class _StatItem extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               value,
-              style: PlayerProfileScreen._textStyle(
+              style: _PlayerProfileScreenState._textStyle(
                 size: 22,
                 lineHeight: 28,
                 weight: FontWeight.w700,
-                color: PlayerProfileScreen._brandText,
+                color: _PlayerProfileScreenState._brandText,
               ),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 1),
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
               label,
-              style: PlayerProfileScreen._textStyle(
-                size: 13,
-                lineHeight: 18,
+              style: _PlayerProfileScreenState._textStyle(
+                size: 12,
+                lineHeight: 17,
                 weight: FontWeight.w400,
-                color: PlayerProfileScreen._textSecondary,
+                color: _PlayerProfileScreenState._textSecondary,
               ),
             ),
           ),
@@ -537,102 +754,6 @@ class _StatItem extends StatelessWidget {
   }
 }
 
-class _SkillRadar extends StatelessWidget {
-  const _SkillRadar();
-
-  TextStyle get _labelStyle => PlayerProfileScreen._textStyle(
-    size: 10.67,
-    lineHeight: 14.222,
-    weight: FontWeight.w500,
-    color: const Color(0xFF4F5B56),
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 176,
-      height: 176,
-      child: Stack(
-        clipBehavior: Clip.hardEdge,
-        children: [
-          _svg(
-            'assets/icons/profile_radar_grid_outer.svg',
-            left: 33.82,
-            top: 26.67,
-            width: 92.38,
-            height: 106.67,
-          ),
-          _svg(
-            'assets/icons/profile_radar_grid_middle.svg',
-            left: 49.20,
-            top: 44.44,
-            width: 61.58,
-            height: 71.11,
-          ),
-          _svg(
-            'assets/icons/profile_radar_grid_inner.svg',
-            left: 64.60,
-            top: 62.22,
-            width: 30.79,
-            height: 35.56,
-          ),
-          _svg(
-            'assets/icons/profile_radar_data.svg',
-            left: 44.59,
-            top: 36.44,
-            width: 70.82,
-            height: 87.11,
-          ),
-          Positioned(
-            left: 64,
-            top: 0,
-            child: Text('Smash', style: _labelStyle),
-          ),
-          Positioned(
-            left: 120.89,
-            top: 35.56,
-            child: Text('Defense', style: _labelStyle),
-          ),
-          Positioned(
-            left: 119.11,
-            top: 115.56,
-            child: Text('Net Play', style: _labelStyle),
-          ),
-          Positioned(
-            left: 60.44,
-            top: 144,
-            child: Text('Stamina', style: _labelStyle),
-          ),
-          Positioned(
-            left: 0,
-            top: 115.56,
-            child: Text('Footwork', style: _labelStyle),
-          ),
-          Positioned(
-            left: 3.56,
-            top: 35.56,
-            child: Text('Serve', style: _labelStyle),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _svg(
-    String asset, {
-    required double left,
-    required double top,
-    required double width,
-    required double height,
-  }) {
-    return Positioned(
-      left: left,
-      top: top,
-      child: SvgPicture.asset(asset, width: width, height: height),
-    );
-  }
-}
-
 class _StyleChip extends StatelessWidget {
   const _StyleChip({
     required this.label,
@@ -647,8 +768,8 @@ class _StyleChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 80,
-      height: 36,
+      width: MediaQuery.sizeOf(context).width < 360 ? 80 : 94,
+      height: 32,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: background,
@@ -656,9 +777,9 @@ class _StyleChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: PlayerProfileScreen._textStyle(
-          size: 14,
-          lineHeight: 20,
+        style: _PlayerProfileScreenState._textStyle(
+          size: 12,
+          lineHeight: 17,
           weight: FontWeight.w500,
           color: foreground,
         ),
@@ -666,4 +787,3 @@ class _StyleChip extends StatelessWidget {
     );
   }
 }
-

@@ -7,6 +7,7 @@ import '../services/facility_service.dart';
 import '../widgets/court_schedule_grid.dart';
 import '../widgets/facility_card.dart';
 import 'add_edit_court_screen.dart';
+import 'add_edit_facility_screen.dart';
 import 'operating_hours_screen.dart';
 
 class FacilityDetailScreen extends StatefulWidget {
@@ -29,7 +30,7 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _courtCount = widget.facility.courtCount;
+    _courtCount = widget.facility.courtCount > 0 ? widget.facility.courtCount : 4;
     _operatingHoursText = widget.facility.operatingHours.isEmpty
         ? 'Chưa thiết lập'
         : widget.facility.operatingHours;
@@ -46,7 +47,7 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
         _courts = (data['courts'] as List)
             .map((court) => Map<String, dynamic>.from(court as Map))
             .toList();
-        _courtCount = _courts.length;
+        _courtCount = _courts.isNotEmpty ? _courts.length : 4;
       }
       if (data['operatingHours'] is List) {
         final hours = data['operatingHours'] as List;
@@ -103,106 +104,157 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
         ),
         centerTitle: true,
         actions: [
-          IconButton(
+          PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: AppColors.textPrimary),
-            onPressed: () {},
+            onSelected: (val) async {
+              if (val == 'edit') {
+                final nav = Navigator.of(context);
+                final res = await nav.push<dynamic>(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        AddEditFacilityScreen(facility: widget.facility),
+                  ),
+                );
+                if (!mounted) return;
+                if (res == true) {
+                  _loadFacilityData();
+                } else if (res == 'deleted') {
+                  nav.pop(true);
+                }
+              } else if (val == 'delete') {
+                _confirmDeleteFacility();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.edit_outlined,
+                      size: 18,
+                      color: AppColors.primary,
+                    ),
+                    SizedBox(width: 8),
+                    Text('Chỉnh sửa cơ sở'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.delete_outline,
+                      size: 18,
+                      color: Colors.red,
+                    ),
+                    SizedBox(width: 8),
+                    Text('Xóa cơ sở', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 12),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 12),
 
-                // 1. Facility Hero Card (345 x 108 px)
-                _buildHeroCard(),
+            // 1. Facility Hero Card (345 x 108 px)
+            _buildHeroCard(),
 
-                const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-                // 2. Ba Stat Cards (105 x 72 px, cách nhau 15 px)
-                _buildStatCards(),
+            // 2. Ba Stat Cards (105 x 72 px, cách nhau 15 px)
+            _buildStatCards(),
 
-                const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-                // 3. Tab Selector (Court Schedule vs Facility Info)
-                _buildTabs(),
+            // 3. Tab Selector (Court Schedule vs Facility Info)
+            _buildTabs(),
 
-                const SizedBox(height: 12),
+            const SizedBox(height: 12),
 
-                if (_selectedTabIndex == 0) ...[
-                  // 4. Date Selector
-                  _buildDateSelector(),
+            if (_selectedTabIndex == 0) ...[
+              // 4. Date Selector
+              _buildDateSelector(),
 
-                  const SizedBox(height: 14),
+              const SizedBox(height: 14),
 
-                  // 5. Court Schedule Grid
-                  CourtScheduleGrid(courtCount: _courtCount),
-                ] else ...[
-                  // Tab Facility Info
-                  _buildFacilityInfoTab(),
-                ],
+              // 5. Court Schedule Grid
+              CourtScheduleGrid(
+                courtCount: _courtCount,
+                courtNames: _courts.isNotEmpty
+                    ? _courts.map((c) {
+                        final name = (c['name'] as String? ?? '').trim();
+                        if (name.contains('(')) {
+                          return name.split('(')[0].trim();
+                        }
+                        return name;
+                      }).toList()
+                    : null,
+              ),
+            ] else ...[
+              // Tab Facility Info
+              _buildFacilityInfoTab(),
+            ],
 
-                const SizedBox(height: 20),
-                _buildCourtManagement(),
+            const SizedBox(height: 20),
+            _buildCourtManagement(),
 
-                const SizedBox(
-                  height: 100,
-                ), // Khoảng trống cho nút Add Court ở đáy
-              ],
-            ),
-          ),
-
-          // 6. Nút Add Court cố định dưới đáy (345 x 52 px)
-          Positioned(
-            left: 24,
-            right: 24,
-            bottom: 24,
-            child: SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  final result = await Navigator.of(context).push(
-                    PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) =>
-                          AddEditCourtScreen(facilityId: widget.facility.id),
-                      transitionDuration: const Duration(milliseconds: 250),
-                      transitionsBuilder: (
-                        context,
-                        animation,
-                        secondaryAnimation,
-                        child,
-                      ) => FadeTransition(opacity: animation, child: child),
-                    ),
-                  );
-                  if (result == true) {
-                    _loadFacilityData();
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(26),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+          child: SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                final result = await Navigator.of(context).push(
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        AddEditCourtScreen(facilityId: widget.facility.id),
+                    transitionDuration: const Duration(milliseconds: 250),
+                    transitionsBuilder: (
+                      context,
+                      animation,
+                      secondaryAnimation,
+                      child,
+                    ) => FadeTransition(opacity: animation, child: child),
                   ),
-                  elevation: 0,
+                );
+                if (result == true) {
+                  _loadFacilityData();
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(26),
                 ),
-                icon: const Icon(Icons.add, color: AppColors.white, size: 20),
-                label: Text(
-                  'Add Court',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.white,
-                  ),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.add, color: AppColors.white, size: 20),
+              label: Text(
+                'Add Court',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.white,
                 ),
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -753,4 +805,52 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
       ),
     );
   }
+
+  Future<void> _confirmDeleteFacility() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xác nhận xóa cơ sở?'),
+        content: Text(
+          'Bạn có chắc chắn muốn xóa "${widget.facility.name}"? Toàn bộ sân con và khung giờ thuộc cơ sở này sẽ bị xóa.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Xóa', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final result =
+          await FacilityService.instance.deleteFacility(widget.facility.id);
+      if (!mounted) return;
+      if (result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã xóa cơ sở thành công!'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+        Navigator.of(context).pop('deleted');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result.message ?? 'Không thể xóa cơ sở.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 }
+

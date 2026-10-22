@@ -11,6 +11,8 @@ class FacilityCardItem {
   final int courtCount;
   final String operatingHours;
   final bool isOpen;
+  final String? contactPhone;
+  final String? description;
 
   const FacilityCardItem({
     required this.id,
@@ -19,20 +21,29 @@ class FacilityCardItem {
     required this.courtCount,
     required this.operatingHours,
     this.isOpen = true,
+    this.contactPhone,
+    this.description,
   });
 }
 
 class FacilityCard extends StatelessWidget {
   final FacilityCardItem facility;
   final VoidCallback onTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
-  const FacilityCard({super.key, required this.facility, required this.onTap});
+  const FacilityCard({
+    super.key,
+    required this.facility,
+    required this.onTap,
+    this.onEdit,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 345,
-      height: 150,
+      width: double.infinity,
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(14),
@@ -48,88 +59,155 @@ class FacilityCard extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Hàng trên: Court Badge & Trạng thái Open/Closed
+                // Hàng trên: Court Badge & Trạng thái Open/Closed & Menu
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: AppColors.mintSurface,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.all(8),
-                          child: SvgPicture.asset(
-                            'assets/icons/court.svg',
-                            colorFilter: const ColorFilter.mode(
-                              AppColors.primary,
-                              BlendMode.srcIn,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.mintSurface,
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              facility.name,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                height: 20 / 15,
-                                color: AppColors.textDark,
+                            padding: const EdgeInsets.all(8),
+                            child: SvgPicture.asset(
+                              'assets/icons/court.svg',
+                              colorFilter: const ColorFilter.mode(
+                                AppColors.primary,
+                                BlendMode.srcIn,
                               ),
                             ),
-                            const SizedBox(height: 2),
-                            Row(
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(
-                                  Icons.location_on_outlined,
-                                  size: 13,
-                                  color: AppColors.textSecondary,
-                                ),
-                                const SizedBox(width: 3),
                                 Text(
-                                  facility.address,
+                                  facility.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w400,
-                                    color: AppColors.textSecondary,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    height: 20 / 15,
+                                    color: AppColors.textDark,
                                   ),
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.location_on_outlined,
+                                      size: 13,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Expanded(
+                                      child: Text(
+                                        facility.address,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w400,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Badge trạng thái & Nút thao tác
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: facility.isOpen
+                                ? const Color(0xFFDDEFE7)
+                                : const Color(0xFFFAF0F0),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            facility.isOpen ? 'Open' : 'Closed',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: facility.isOpen
+                                  ? AppColors.primary
+                                  : AppColors.linkAction,
+                            ),
+                          ),
+                        ),
+                        if (onEdit != null || onDelete != null)
+                          SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: PopupMenuButton<String>(
+                              padding: EdgeInsets.zero,
+                              tooltip: 'Thao tác cơ sở',
+                              icon: const Icon(
+                                Icons.more_vert,
+                                size: 20,
+                                color: AppColors.textSecondary,
+                              ),
+                              onSelected: (val) {
+                                if (val == 'edit') onEdit?.call();
+                                if (val == 'delete') onDelete?.call();
+                              },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.edit_outlined,
+                                      size: 18,
+                                      color: AppColors.primary,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text('Sửa thông tin'),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.delete_outline,
+                                      size: 18,
+                                      color: Colors.red,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Xóa cơ sở',
+                                      style: TextStyle(color: Colors.red),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
-                    ),
-                    // Badge trạng thái
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: facility.isOpen
-                            ? const Color(0xFFDDEFE7)
-                            : const Color(0xFFFAF0F0),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        facility.isOpen ? 'Open' : 'Closed',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: facility.isOpen
-                              ? AppColors.primary
-                              : AppColors.linkAction,
-                        ),
-                      ),
                     ),
                   ],
                 ),

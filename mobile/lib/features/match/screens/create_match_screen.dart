@@ -66,6 +66,8 @@ class _CreateMatchScreenState extends State<CreateMatchScreen> {
             // 2. Screen Content (Width: 393, Content Width: 345, Padding: 24, Gap: 12)
             Expanded(
               child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: _isOpenMatch ? 12 : 24,

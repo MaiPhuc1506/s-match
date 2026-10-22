@@ -8,6 +8,9 @@ class CustomTextField extends StatefulWidget {
   final String hintText;
   final IconData prefixIcon;
   final bool isPassword;
+  final double height;
+  final Widget? leading;
+  final Widget? visibilityIcon;
   final TextInputType keyboardType;
 
   const CustomTextField({
@@ -16,6 +19,9 @@ class CustomTextField extends StatefulWidget {
     required this.hintText,
     required this.prefixIcon,
     this.isPassword = false,
+    this.height = 52,
+    this.leading,
+    this.visibilityIcon,
     this.keyboardType = TextInputType.text,
   });
 
@@ -37,7 +43,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
   Widget build(BuildContext context) {
     // Chiều cao chuẩn 52px theo Figma
     return SizedBox(
-      height: 52,
+      height: widget.height,
       child: TextField(
         controller: widget.controller,
         obscureText: _obscureText,
@@ -45,32 +51,36 @@ class _CustomTextFieldState extends State<CustomTextField> {
         style: AppTextStyles.inputText,
         cursorColor: AppColors.primary,
         decoration: InputDecoration(
+          constraints: BoxConstraints(minHeight: widget.height),
           filled: true,
           fillColor: AppColors.white,
           hintText: widget.hintText,
           hintStyle: AppTextStyles.inputPlaceholder,
-          contentPadding: const EdgeInsets.symmetric(
+          contentPadding: EdgeInsets.symmetric(
             horizontal: 16,
-            vertical: 14,
+            vertical: widget.height == 56 ? 18 : 14,
           ),
 
           // Icon tiền tố (Email / Lock)
-          prefixIcon: Icon(
-            widget.prefixIcon,
-            color: AppColors.iconPrimary,
-            size: 20,
-          ),
+          prefixIconConstraints: widget.leading == null
+              ? null
+              : BoxConstraints.tightFor(width: 48, height: widget.height),
+          prefixIcon: widget.leading == null
+              ? Icon(widget.prefixIcon, color: AppColors.iconPrimary, size: 20)
+              : Center(child: widget.leading),
 
           // Nút con mắt bật/tắt mật khẩu (chỉ hiện khi là ô Password)
           suffixIcon: widget.isPassword
               ? IconButton(
-                  icon: Icon(
-                    _obscureText
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    color: AppColors.iconPrimary,
-                    size: 20,
-                  ),
+                  icon:
+                      widget.visibilityIcon ??
+                      Icon(
+                        _obscureText
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        color: AppColors.iconPrimary,
+                        size: 20,
+                      ),
                   onPressed: () {
                     setState(() {
                       _obscureText = !_obscureText;

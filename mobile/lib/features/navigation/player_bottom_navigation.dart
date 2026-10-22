@@ -10,13 +10,7 @@ import 'package:mobile/features/auth/screens/player_profile_screen.dart';
 
 /// Five primary tabs for Player navigation in S-Match:
 /// Home / Map / Match / Feedback / Profile
-enum PlayerNavTab {
-  home,
-  map,
-  match,
-  feedback,
-  profile,
-}
+enum PlayerNavTab { home, map, match, feedback, profile }
 
 /// Unified Player bottom navigation component matching S-Match visual specifications.
 ///
@@ -37,6 +31,7 @@ class PlayerBottomNavigation extends StatelessWidget {
   final VoidCallback? onNavigateMatch;
   final VoidCallback? onNavigateFeedback;
   final VoidCallback? onNavigateProfile;
+  final bool allowCurrentTabNavigation;
 
   const PlayerBottomNavigation({
     super.key,
@@ -47,10 +42,15 @@ class PlayerBottomNavigation extends StatelessWidget {
     this.onNavigateMatch,
     this.onNavigateFeedback,
     this.onNavigateProfile,
+    this.allowCurrentTabNavigation = false,
   });
 
   static const Color _selectedColor = Color(0xFF05644F);
   static const Color _inactiveColor = Color(0xFF7A8985);
+
+  /// Includes the device inset once; callers must not wrap the bar in SafeArea.
+  static double heightFor(BuildContext context) =>
+      84 + math.max(0, MediaQuery.viewPaddingOf(context).bottom - 22);
 
   static (String asset, String label) _tabData(PlayerNavTab tab) {
     switch (tab) {
@@ -82,10 +82,7 @@ class PlayerBottomNavigation extends StatelessWidget {
         pageBuilder: (context, animation, secondaryAnimation) => destination,
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOut,
-            ),
+            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
             child: child,
           );
         },
@@ -109,8 +106,8 @@ class PlayerBottomNavigation extends StatelessWidget {
   }
 
   void _handleTap(BuildContext context, PlayerNavTab tab) {
-    // Tapping the currently active tab must not push another copy of that screen.
-    if (tab == currentTab) {
+    // Nested flows may opt in to returning to their selected top-level tab.
+    if (tab == currentTab && !allowCurrentTabNavigation) {
       return;
     }
 
@@ -176,20 +173,18 @@ class PlayerBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     // In Figma reference (393 × 852), bottom padding is 22px (which includes the home indicator).
     // On devices with real safe-area bottom insets (e.g. 34px), use max(22.0, bottomInset)
     // so we respect the device safe area without adding 22 on top of the inset.
     final bottomPadding = math.max(22.0, bottomInset);
-    final totalHeight = 84.0 + (bottomPadding > 22.0 ? (bottomPadding - 22.0) : 0.0);
+    final totalHeight = heightFor(context);
 
     return Container(
       width: double.infinity,
       height: totalHeight,
       padding: EdgeInsets.fromLTRB(12, 8, 12, bottomPadding),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-      ),
+      decoration: const BoxDecoration(color: Colors.white),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: PlayerNavTab.values.map((tab) {
@@ -245,4 +240,3 @@ class PlayerBottomNavigation extends StatelessWidget {
     );
   }
 }
-

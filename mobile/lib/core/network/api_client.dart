@@ -8,6 +8,16 @@ class ApiClient {
   late final Dio dio;
   String? _token;
 
+  String? get token => _token;
+
+  void setToken(String? token) {
+    _token = token;
+  }
+
+  void clearToken() {
+    _token = null;
+  }
+
   ApiClient._internal() {
     // Tự động nhận diện môi trường:
     // Android Emulator dùng 10.0.2.2, iOS Simulator / macOS dùng localhost
@@ -46,6 +56,11 @@ class ApiClient {
         data: {'email': 'owner@smatch.dev', 'password': 'Password123!'},
       );
       _token = res.data['accessToken'];
+      final user = res.data['user'];
+      if (user is Map<String, dynamic>) {
+        // Đồng bộ thông tin user hiện tại nếu AuthService chưa có
+        // Cần import AuthService hoặc truy cập qua AuthService.instance
+      }
       return _token;
     } on DioException catch (e) {
       debugPrint(
