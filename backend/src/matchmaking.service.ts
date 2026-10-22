@@ -6,6 +6,7 @@ import { FindPlayerDto } from './matchmaking/dto/find-player.dto';
 import { MatchmakingResponseDto } from './matchmaking/dto/matchmaking-response.dto';
 import { RoleName } from '@prisma/client';
 import { PrismaService } from './prisma/prisma.service';
+import { RecommendationHistoryService } from './recommendation-history/recommendation-history.service';
 
 @Injectable()
 export class MatchmakingService {
@@ -13,6 +14,7 @@ export class MatchmakingService {
     @Inject(CANDIDATE_PROVIDER) private readonly candidates: CandidateProvider,
     private readonly fastApi: FastApiClient,
     private readonly prisma: PrismaService,
+    private readonly history: RecommendationHistoryService,
   ) {}
 
   async getRecommendedMatches(userId: number, criteria: FindPlayerDto): Promise<MatchmakingResponseDto> {
@@ -27,9 +29,9 @@ export class MatchmakingService {
       throw new ServiceUnavailableException('Dịch vụ dữ liệu ứng viên chưa sẵn sàng');
     }
     if (!isCandidateData(data, userId)) throw new BadGatewayException('Dữ liệu ứng viên không hợp lệ');
-    if (data.candidates.length === 0) return { matchedUsers: [], totalCandidatesProcessed: 0 };
+    if (data.candidates.length === 0) return this.saveSearch(userId, criteria, { matchedUsers: [], totalCandidatesProcessed: 0 });
     const ranked = await this.fastApi.recommend(data);
-    if (ranked.matchedUsers.length === 0) return { matchedUsers: [], totalCandidatesProcessed: ranked.totalCandidatesProcessed };
+    if (ranked.matchedUsers.length === 0) return this.saveSearch(userId, criteria, { matchedUsers: [], totalCandidatesProcessed: ranked.totalCandidatesProcessed });
 
     // FastAPI identities refer to User.id, not PlayerProfile.id.
     const userIds = ranked.matchedUsers.map(({ userId }) => {
@@ -48,7 +50,7 @@ export class MatchmakingService {
       throw new ServiceUnavailableException('Dịch vụ hồ sơ người chơi chưa sẵn sàng');
     });
     const byUserId = new Map(profiles.map((profile) => [String(profile.userId), profile]));
-    return {
+    return this.saveSearch(userId, criteria, {
       // Iterate ranking, never the database rows: IN queries do not preserve order.
       matchedUsers: ranked.matchedUsers.flatMap(({ userId, matchScore }) => {
         const profile = byUserId.get(userId);
@@ -64,6 +66,21 @@ export class MatchmakingService {
         }];
       }),
       totalCandidatesProcessed: ranked.totalCandidatesProcessed,
-    };
+    });
+  }
+
+  private async saveSearch(userId: number, criteria: FindPlayerDto, result: MatchmakingResponseDto) {
+    try {
+      await this.history.recordSession(userId, {
+        criteria: { ...criteria },
+        totalCandidatesProcessed: result.totalCandidatesProcessed,
+        results: result.matchedUsers.map(({ userId, matchScore }) => ({
+          recommendedUserId: Number(userId), matchScore,
+        })),
+      });
+    } catch {
+      throw new ServiceUnavailableException('Không thể lưu lịch sử gợi ý. Vui lòng thử lại.');
+    }
+    return result;
   }
 }

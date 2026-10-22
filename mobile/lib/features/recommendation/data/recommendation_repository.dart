@@ -23,6 +23,9 @@ class ApiRecommendationRepository extends RecommendationRepository {
   ApiRecommendationRepository(this.dio);
   final Dio dio;
 
+  static String? _displayText(dynamic value) =>
+      value is String && value.trim().isNotEmpty ? value.trim() : null;
+
   @override
   Future<List<RecommendedPlayer>> search(RecommendationQuery query) async {
     try {
@@ -78,8 +81,8 @@ class ApiRecommendationRepository extends RecommendationRepository {
         throw const FormatException('Invalid recommendation response');
       }
       if (matches.isEmpty) return [];
-      // This is the existing public candidate route. Never call /users/:id for
-      // other players: that route is explicitly restricted to self/admin.
+      // Nearby only supplements distance; display identity comes from the ranked
+      // response so its independent radius/limit cannot hide player profiles.
       final candidates = <String, Map<String, dynamic>>{};
       try {
         final nearby = await dio.get<Map<String, dynamic>>(
@@ -109,12 +112,19 @@ class ApiRecommendationRepository extends RecommendationRepository {
                 score > 100) {
               throw const FormatException('Invalid recommendation score');
             }
+            final rawPublicProfile = m['profile'];
+            final publicProfile = rawPublicProfile is Map
+                ? Map<String, dynamic>.from(rawPublicProfile)
+                : <String, dynamic>{};
             final c = candidates[id];
             return RecommendedPlayer(
               id: id,
               score: score.toDouble(),
-              name: c?['nickname'] as String? ?? c?['fullName'] as String?,
-              level: c?['skillLevel'] as String?,
+              name:
+                  _displayText(publicProfile['nickname']) ??
+                  _displayText(publicProfile['fullName']),
+              level: _displayText(publicProfile['skillLevel']),
+              avatarUrl: _displayText(publicProfile['avatarUrl']),
               distanceKm: (c?['distanceKm'] as num?)?.toDouble(),
             );
           })

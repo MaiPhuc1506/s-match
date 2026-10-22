@@ -4,18 +4,20 @@ import { FastApiClient } from './matchmaking/fastapi.client';
 import { UnavailableCandidateProvider } from './matchmaking/candidate-provider';
 import { candidateData, findPlayerRequest, recommendationProfile } from '../test/helpers/matchmaking.fixture';
 import { PrismaService } from './prisma/prisma.service';
+import { RecommendationHistoryService } from './recommendation-history/recommendation-history.service';
 
 describe('MatchmakingService (dependency mocks only)', () => {
   const provider = { getCandidates: jest.fn() };
   const client = { recommend: jest.fn() };
   const prisma = { playerProfile: { findMany: jest.fn() } };
+  const history = { recordSession: jest.fn() };
   let service: MatchmakingService;
   beforeEach(() => {
     jest.resetAllMocks();
     provider.getCandidates.mockResolvedValue(candidateData());
     client.recommend.mockResolvedValue({ matchedUsers: [{ userId: '7', matchScore: 85 }], totalCandidatesProcessed: 2 });
     prisma.playerProfile.findMany.mockResolvedValue([recommendationProfile(7)]);
-    service = new MatchmakingService(provider, client as unknown as FastApiClient, prisma as unknown as PrismaService);
+    service = new MatchmakingService(provider, client as unknown as FastApiClient, prisma as unknown as PrismaService, history as unknown as RecommendationHistoryService);
   });
 
   it('passes authenticated identity and criteria to provider, then calls FastAPI with backend data', async () => {
@@ -29,7 +31,7 @@ describe('MatchmakingService (dependency mocks only)', () => {
   it('production provider returns unavailable, never fake success', async () => {
     const unavailable = new UnavailableCandidateProvider();
     await expect(unavailable.getCandidates(8, findPlayerRequest)).rejects.toBeInstanceOf(ServiceUnavailableException);
-    service = new MatchmakingService(unavailable, client as unknown as FastApiClient, prisma as unknown as PrismaService);
+    service = new MatchmakingService(unavailable, client as unknown as FastApiClient, prisma as unknown as PrismaService, history as unknown as RecommendationHistoryService);
     await expect(service.getRecommendedMatches(8, findPlayerRequest)).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(client.recommend).not.toHaveBeenCalled();
   });
@@ -72,6 +74,7 @@ describe('MatchmakingService (dependency mocks only)', () => {
     const result = await service.getRecommendedMatches(8, findPlayerRequest);
     expect(result.matchedUsers.map((row) => row.userId)).toEqual(['3']);
     expect(result.totalCandidatesProcessed).toBe(2);
+    expect(history.recordSession).toHaveBeenCalledWith(8, { criteria: findPlayerRequest, totalCandidatesProcessed: 2, results: [{ recommendedUserId: 3, matchScore: 80 }] });
     expect(client.recommend).toHaveBeenCalledTimes(1);
   });
   it('returns an empty result when all ranked profiles disappeared', async () => {
@@ -84,6 +87,8 @@ describe('MatchmakingService (dependency mocks only)', () => {
     client.recommend.mockResolvedValueOnce({ matchedUsers: [], totalCandidatesProcessed: 2 });
     await service.getRecommendedMatches(8, findPlayerRequest);
     expect(prisma.playerProfile.findMany).not.toHaveBeenCalled();
+    expect(history.recordSession).toHaveBeenNthCalledWith(1, 8, { criteria: findPlayerRequest, totalCandidatesProcessed: 0, results: [] });
+    expect(history.recordSession).toHaveBeenNthCalledWith(2, 8, { criteria: findPlayerRequest, totalCandidatesProcessed: 2, results: [] });
   });
   it.each(['0', '-1', '7abc', '7.5', '2147483648', '9007199254740993', '07'])('rejects invalid Prisma Int identity %s before querying profiles', async (userId) => {
     client.recommend.mockResolvedValue({ matchedUsers: [{ userId, matchScore: 85 }], totalCandidatesProcessed: 2 });
@@ -132,5 +137,20 @@ describe('MatchmakingService (dependency mocks only)', () => {
     client.recommend.mockRejectedValueOnce(new BadGatewayException('Dịch vụ matchmaking phản hồi lỗi'));
     await expect(service.getRecommendedMatches(8, findPlayerRequest)).rejects.toBeInstanceOf(BadGatewayException);
     expect(client.recommend).toHaveBeenCalledTimes(1);
+    expect(history.recordSession).not.toHaveBeenCalled();
+  });
+
+  it('records authenticated owner, criteria and final ranking exactly once', async () => {
+    client.recommend.mockResolvedValue({ matchedUsers: [{ userId: '7', matchScore: 91 }, { userId: '3', matchScore: 0 }], totalCandidatesProcessed: 2 });
+    prisma.playerProfile.findMany.mockResolvedValue([recommendationProfile(3), recommendationProfile(7)]);
+    await service.getRecommendedMatches(8, findPlayerRequest);
+    expect(history.recordSession).toHaveBeenCalledTimes(1);
+    expect(history.recordSession).toHaveBeenCalledWith(8, { criteria: findPlayerRequest, totalCandidatesProcessed: 2, results: [{ recommendedUserId: 7, matchScore: 91 }, { recommendedUserId: 3, matchScore: 0 }] });
+  });
+
+  it('returns a sanitized 503 if history cannot be saved, without retrying', async () => {
+    history.recordSession.mockRejectedValue(new Error('PRIVATE_DATABASE_DETAILS'));
+    await expect(service.getRecommendedMatches(8, findPlayerRequest)).rejects.toMatchObject({ status: 503, message: 'Không thể lưu lịch sử gợi ý. Vui lòng thử lại.' });
+    expect(history.recordSession).toHaveBeenCalledTimes(1);
   });
 });

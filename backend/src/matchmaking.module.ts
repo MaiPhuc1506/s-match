@@ -1,3 +1,4 @@
+import { RecommendationHistoryModule } from './recommendation-history/recommendation-history.module';
 import { Module } from '@nestjs/common';
 import axios from 'axios';
 import { ConfigModule } from '@nestjs/config';
@@ -11,7 +12,7 @@ import { MatchmakingController } from './matchmaking.controller';
 
 @Module({
   imports: [
-    ConfigModule, AuthModule, CandidatesModule,
+    ConfigModule, AuthModule, CandidatesModule, RecommendationHistoryModule,
   ],
   controllers: [MatchmakingController],
   providers: [MatchmakingService, FastApiClient,

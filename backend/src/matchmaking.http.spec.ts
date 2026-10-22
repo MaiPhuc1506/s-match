@@ -19,7 +19,7 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
   let tokens: AuthTokensService;
   const provider = { getCandidates: jest.fn() };
   const http = { post: jest.fn() };
-  const prisma = { refreshSession: { findUnique: jest.fn() }, playerProfile: { findMany: jest.fn() } };
+  const prisma = { user: { findMany: jest.fn() }, recommendationSession: { create: jest.fn() }, refreshSession: { findUnique: jest.fn() }, playerProfile: { findMany: jest.fn() } };
   const sessions = new Map<string, any>();
   const config = { get: (key: string) => ({ MATCHMAKING_API_URL: 'http://matchmaking.test/api/v1/match', MATCHMAKING_TIMEOUT_MS: 30 })[key] };
   const jwtConfig: AuthJwtConfig = {
@@ -42,6 +42,8 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
   beforeEach(() => {
     jest.resetAllMocks();
     sessions.clear();
+    prisma.user.findMany.mockImplementation(async ({ where }: any) => where.id.in.map((id: number) => ({ id })));
+    prisma.recommendationSession.create.mockImplementation(async ({ data }: any) => ({ id: 1, ...data }));
     prisma.refreshSession.findUnique.mockImplementation(async ({ where }: any) => sessions.get(where.id) ?? null);
     provider.getCandidates.mockResolvedValue(candidateData());
     http.post.mockResolvedValue({ status: 200, data: fastApiResponse() });
@@ -56,6 +58,7 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
     return request(app.getHttpServer()).post('/matchmaking/recommend').auth((await pair(role)).accessToken, { type: 'bearer' }).send(body);
   }
   function noDependencies() {
+    expect(prisma.recommendationSession.create).not.toHaveBeenCalled();
     expect(provider.getCandidates).not.toHaveBeenCalled();
     expect(http.post).not.toHaveBeenCalled();
     expect(prisma.playerProfile.findMany).not.toHaveBeenCalled();
@@ -81,6 +84,21 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
     expect(prisma.playerProfile.findMany.mock.calls[0][0].where).toEqual({
       userId: { in: [7, 3] }, user: { role: { name: 'PLAYER' } },
     });
+  });
+  it('persists the authenticated search and ordered displayed results through the real history service', async () => {
+    const response = await post();
+    expect(response.status).toBe(200);
+    expect(prisma.recommendationSession.create).toHaveBeenCalledTimes(1);
+    expect(prisma.recommendationSession.create.mock.calls[0][0].data).toMatchObject({
+      userId: 8, criteria: findPlayerRequest,
+      results: { create: response.body.matchedUsers.map((row: any, index: number) => ({
+        recommendedUserId: Number(row.userId), matchScore: row.matchScore, rank: index + 1,
+      })) },
+    });
+  });
+  it('does not return successful recommendations when history storage is unavailable', async () => {
+    prisma.recommendationSession.create.mockRejectedValue(new Error('PRIVATE_DATABASE_DETAILS'));
+    safeError(await post(), 503);
   });
   it('returns 401 without JWT before any dependency call', async () => {
     safeError(await request(app.getHttpServer()).post('/matchmaking/recommend').send(findPlayerRequest), 401);
