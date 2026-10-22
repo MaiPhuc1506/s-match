@@ -1,5 +1,6 @@
 import math
-from typing import List, Optional
+from typing import List
+from app.config import settings
 from app.schemas import (
     PlayerProfileInput,
     MatchedUserResult,
@@ -11,7 +12,7 @@ from app.schemas import (
 def calculate_haversine_distance(
     lat1: float, lon1: float, lat2: float, lon2: float
 ) -> float:
-  """Tính khoảng cách GPS giữa 2 điểm theo công thức Haversine (đơn vị: km)"""
+  """Tính khoảng cách GPS giữa 2 điểm (km)"""
   R = 6371.0
   dlat = math.radians(lat2 - lat1)
   dlon = math.radians(lon2 - lon1)
@@ -27,30 +28,28 @@ def calculate_haversine_distance(
 
 class MatchmakingEngine:
 
-  MAX_DISTANCE_KM: float = 20.0  # Ngưỡng khoảng cách tối đa (km)
-
   @staticmethod
   def is_eligible(
       user: PlayerProfileInput, candidate: PlayerProfileInput
   ) -> bool:
-    """Bộ lọc cứng (Hard Filtering): Loại bỏ candidate không thỏa điều kiện cơ bản"""
-    # 1. Kiểm tra khoảng cách GPS
+    """Bộ lọc cứng (Hard Filtering)"""
+    # 1. Khoảng cách GPS <= MAX_DISTANCE_KM
     dist_km = calculate_haversine_distance(
         user.location.latitude,
         user.location.longitude,
         candidate.location.latitude,
         candidate.location.longitude,
     )
-    if dist_km > MatchmakingEngine.MAX_DISTANCE_KM:
+    if dist_km > settings.MAX_DISTANCE_KM:
       return False
 
-    # 2. Kiểm tra trùng thời gian rảnh
-    user_slots = set(user.available_time_slots)
-    candidate_slots = set(candidate.available_time_slots)
-    if not user_slots.intersection(candidate_slots):
+    # 2. Khung giờ rảnh
+    if not set(user.available_time_slots).intersection(
+        set(candidate.available_time_slots)
+    ):
       return False
 
-    # 3. Kiểm tra dải trình độ phù hợp (preferred_min <= cand_skill <= preferred_max)
+    # 3. Dải trình độ
     cand_avg_skill = (
         candidate.skill.smash
         + candidate.skill.defense
@@ -71,8 +70,8 @@ class MatchmakingEngine:
   def calculate_score(
       user: PlayerProfileInput, candidate: PlayerProfileInput
   ) -> MatchedUserResult:
-    """Tính toán điểm phù hợp chi tiết (Compatibility Scoring)"""
-    # 1. Skill Score (Max 30đ)
+    """Tính điểm tương thích chi tiết (Scoring) dựa trên cấu hình Settings"""
+    # 1. Skill Score
     user_avg = (
         user.skill.smash
         + user.skill.defense
@@ -81,7 +80,6 @@ class MatchmakingEngine:
         + user.skill.footwork
         + user.skill.serve
     ) / 6.0
-
     cand_avg = (
         candidate.skill.smash
         + candidate.skill.defense
@@ -92,24 +90,26 @@ class MatchmakingEngine:
     ) / 6.0
 
     skill_diff = abs(user_avg - cand_avg)
-    skill_score = max(0.0, 30.0 - (skill_diff * 10.0))
+    skill_score = max(0.0, settings.WEIGHT_SKILL - (skill_diff * 10.0))
 
-    # 2. Distance Score (Max 25đ)
+    # 2. Distance Score
     dist_km = calculate_haversine_distance(
         user.location.latitude,
         user.location.longitude,
         candidate.location.latitude,
         candidate.location.longitude,
     )
-    distance_score = max(0.0, 25.0 - (dist_km * 1.0))
+    distance_score = max(0.0, settings.WEIGHT_DISTANCE - (dist_km * 1.0))
 
-    # 3. Time Score (Max 20đ)
-    user_slots = set(user.available_time_slots)
-    cand_slots = set(candidate.available_time_slots)
-    common_slots = len(user_slots.intersection(cand_slots))
-    time_score = min(20.0, common_slots * 10.0)
+    # 3. Time Score
+    common_slots = len(
+        set(user.available_time_slots).intersection(
+            set(candidate.available_time_slots)
+        )
+    )
+    time_score = min(settings.WEIGHT_TIME, common_slots * 10.0)
 
-    # 4. Style Score (Max 10đ)
+    # 4. Style Score
     user_styles = set(user.playing_style)
     cand_styles = set(candidate.playing_style)
     style_match = (
@@ -117,12 +117,14 @@ class MatchmakingEngine:
         if user_styles
         else 0.5
     )
-    style_score = style_match * 10.0
+    style_score = style_match * settings.WEIGHT_STYLE
 
-    # 5. Reliability Score (Max 15đ)
-    reliability_score = (candidate.reliability_score / 5.0) * 15.0
+    # 5. Reliability Score
+    reliability_score = (
+        candidate.reliability_score / 5.0
+    ) * settings.WEIGHT_RELIABILITY
 
-    # Tổng điểm Match Score (Max 100đ)
+    # Tổng điểm Match Score (Max 100)
     total_score = round(
         skill_score
         + distance_score
@@ -155,10 +157,11 @@ class MatchmakingEngine:
       limit: int = 10,
       return_response_model: bool = False,
   ):
-    """Quy trình Lọc ứng viên & Xếp hạng điểm (Pipeline)"""
+    """Pipeline: Filter -> Score -> Rank -> Top-K"""
     target_user = current_user or user
     matched_results: List[MatchedUserResult] = []
 
+    # 1. Filter & Score
     for candidate in candidates or []:
       if candidate.user_id == target_user.user_id:
         continue
@@ -169,13 +172,16 @@ class MatchmakingEngine:
       result = cls.calculate_score(target_user, candidate)
       matched_results.append(result)
 
+    # 2. Ranking (Sắp xếp giảm dần theo match_score)
     matched_results.sort(key=lambda x: x.match_score, reverse=True)
-    sliced_results = matched_results[:limit]
+
+    # 3. Top-K Extraction
+    top_k_results = matched_results[:limit]
 
     if return_response_model:
       return MatchmakingResponse(
-          matched_users=sliced_results,
+          matched_users=top_k_results,
           total_candidates_processed=len(candidates or []),
       )
 
-    return sliced_results
+    return top_k_results
