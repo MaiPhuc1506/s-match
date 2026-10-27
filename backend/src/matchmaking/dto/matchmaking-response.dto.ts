@@ -14,7 +14,6 @@ export class RecommendationProfileDto {
   skillLevel: string | null;
 }
 
-// SMM-30 adds public profile fields; existing ranking fields stay unchanged.
 export class MatchedPlayerDto {
   @ApiProperty()
   userId: string;

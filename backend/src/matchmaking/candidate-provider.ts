@@ -3,7 +3,6 @@ import { FindPlayerDto } from './dto/find-player.dto';
 
 export const CANDIDATE_PROVIDER = Symbol('CANDIDATE_PROVIDER');
 
-// Internal adapter contract, pending confirmation with Dung. Never a client payload.
 export interface CandidateProfile {
   userId: string;
   skill: {
@@ -23,8 +22,6 @@ export interface CandidateData {
 }
 
 export interface CandidateProvider {
-  // Implementations supply normalized backend data, honoring search criteria.
-  // Stored skill/reliability and identity must not come from untrusted Flutter input.
   getCandidates(userId: number, criteria: FindPlayerDto): Promise<CandidateData>;
 }
 

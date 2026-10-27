@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { RoleName } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AvailabilityService } from '../availability-preference/availability.service';
+import { DEFAULT_RELIABILITY_SCORE, RatingsService } from '../ratings/ratings.service';
 import { CandidateQueryDto, UpdateLocationDto } from './dto/candidate.dto';
 import { boundingBox, haversineKm } from './geo.util';
 
@@ -9,10 +10,7 @@ const DEFAULT_RADIUS_KM = 10;
 const DEFAULT_CANDIDATE_LIMIT = 20;
 const DEFAULT_TOP_K = 5;
 const UPCOMING_DAYS = 7;
-// Giới hạn số dòng lấy từ DB sau bước lọc bounding-box, để tránh nạp quá nhiều vào bộ nhớ.
 const MAX_ROWS_FROM_DB = 500;
-// Chưa có module Feedback (SMM-36) nên chưa có điểm uy tín thật — dùng mặc định như Matchmaking Service.
-const DEFAULT_RELIABILITY_SCORE = 5.0;
 
 export interface MatchmakingSearchCriteria {
   location: { latitude: number; longitude: number };
@@ -23,7 +21,6 @@ export interface MatchmakingSearchCriteria {
   playingStyles?: string[];
 }
 
-/** Khớp 1-1 với PlayerProfileInput trong matchmaking/app/schemas.py */
 export interface MatchmakingPlayerInput {
   user_id: string;
   skill: {
@@ -73,6 +70,7 @@ export class CandidatesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly availabilityService: AvailabilityService,
+    private readonly ratingsService: RatingsService,
   ) {}
 
   async updateMyLocation(userId: number, dto: UpdateLocationDto) {
@@ -97,7 +95,6 @@ export class CandidatesService {
     };
   }
 
-  // Geo Search: người chơi PLAYER khác trong bán kính, gần nhất trước
   async findNearby(userId: number, query: CandidateQueryDto) {
     const me = await this.getMyLocationOrThrow(userId);
     const preference = await this.getPreference(userId);
@@ -136,7 +133,13 @@ export class CandidatesService {
       : [];
     const preferenceByUser = new Map(preferences.map((p) => [p.userId, p]));
 
-    const currentUser = await this.toPlayerInput(me.profile, myPreference);
+    const reliabilityByUser = await this.ratingsService.getReliabilityScores([userId, ...candidateIds]);
+
+    const currentUser = await this.toPlayerInput(
+      me.profile,
+      myPreference,
+      reliabilityByUser.get(userId) ?? DEFAULT_RELIABILITY_SCORE,
+    );
     if (criteria) {
       currentUser.location = { ...criteria.location };
       currentUser.available_time_slots = [...criteria.availableTimeSlots];
@@ -151,10 +154,13 @@ export class CandidatesService {
 
     const candidateInputs = await Promise.all(
       nearby.map(({ profile }) =>
-        this.toPlayerInput(profile, preferenceByUser.get(profile.userId) ?? null),
+        this.toPlayerInput(
+          profile,
+          preferenceByUser.get(profile.userId) ?? null,
+          reliabilityByUser.get(profile.userId) ?? DEFAULT_RELIABILITY_SCORE,
+        ),
       ),
     );
-    // Không có lịch rảnh thì chắc chắn bị bộ lọc cứng của Matchmaking Service loại → bỏ luôn cho nhẹ payload
     const candidates = candidateInputs.filter((c) => c.available_time_slots.length > 0);
 
     return {
@@ -225,6 +231,7 @@ export class CandidatesService {
   private async toPlayerInput(
     profile: ProfileWithRelations,
     preference: PreferenceLike,
+    reliabilityScore: number,
   ): Promise<MatchmakingPlayerInput> {
     const skill = profile.skill;
     const axes = {
@@ -252,14 +259,10 @@ export class CandidatesService {
       },
       max_distance_km: preference?.maxDistanceKm ?? DEFAULT_RADIUS_KM,
       playing_style: this.derivePlayingStyle(axes),
-      reliability_score: DEFAULT_RELIABILITY_SCORE,
+      reliability_score: reliabilityScore,
     };
   }
 
-  /**
-   * Suy ra phong cách chơi từ 6 chỉ số kỹ năng, dùng cùng từ vựng với dataset của
-   * Matchmaking Service: "Attack" | "Defense" | "Balanced". Chưa có dữ liệu kỹ năng → [].
-   */
   private derivePlayingStyle(axes: {
     smash: number;
     defense: number;

@@ -3,11 +3,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CandidatesService } from './candidates.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AvailabilityService } from '../availability-preference/availability.service';
+import { RatingsService } from '../ratings/ratings.service';
 
 describe('CandidatesService', () => {
   let service: CandidatesService;
   let prisma: any;
   let availabilityService: { getUpcomingTimeSlots: jest.Mock };
+  let ratingsService: { getReliabilityScores: jest.Mock };
 
   const baseProfile = (userId: number, lat: number, lon: number, skill: any = null) => ({
     userId,
@@ -34,12 +36,16 @@ describe('CandidatesService', () => {
       playingPreference: { findUnique: jest.fn(), findMany: jest.fn() },
     };
     availabilityService = { getUpcomingTimeSlots: jest.fn() };
+    ratingsService = {
+      getReliabilityScores: jest.fn(async (ids: number[]) => new Map(ids.map((id) => [id, 5]))),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CandidatesService,
         { provide: PrismaService, useValue: prisma },
         { provide: AvailabilityService, useValue: availabilityService },
+        { provide: RatingsService, useValue: ratingsService },
       ],
     }).compile();
 
