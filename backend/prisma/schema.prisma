@@ -49,6 +49,8 @@ model User {
   bookings          Booking[]
   hostedMatches      Match[]            @relation("HostedMatches")
   matchParticipants  MatchParticipant[]
+  sentFeedback       Feedback[]         @relation("FeedbackSender")
+  receivedFeedback   Feedback[]         @relation("FeedbackRecipient")
 
   // SMM-32 — Recommendation History Backend
   recommendationSessions RecommendationSession[]
@@ -288,6 +290,7 @@ model Match {
   feePerPlayer Float?             @default(0)
 
   participants MatchParticipant[]
+  feedbacks    Feedback[]
 
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
@@ -314,6 +317,23 @@ model MatchParticipant {
   @@unique([matchId, userId])
   @@index([userId])
   @@index([status])
+}
+
+// SMM-34 / SMM-36 shared raw feedback. Aggregation/history are separate concerns.
+model Feedback {
+  id              Int      @id @default(autoincrement())
+  matchId         Int
+  match           Match    @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  senderUserId    Int
+  sender          User     @relation("FeedbackSender", fields: [senderUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  recipientUserId Int
+  recipient       User     @relation("FeedbackRecipient", fields: [recipientUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rating          Int
+  comment         String?
+  createdAt       DateTime @default(now())
+
+  @@unique([matchId, senderUserId, recipientUserId])
+  @@index([recipientUserId, createdAt])
 }
 
 // ---------------------------------------------------------------------------
