@@ -41,231 +41,182 @@ class FacilityCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border, width: 1),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+      side: const BorderSide(color: AppColors.border),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 60,
+            child: Stack(
               children: [
-                // Hàng trên: Court Badge & Trạng thái Open/Closed & Menu
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: AppColors.mintSurface,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            padding: const EdgeInsets.all(8),
-                            child: SvgPicture.asset(
-                              'assets/icons/court.svg',
-                              colorFilter: const ColorFilter.mode(
-                                AppColors.primary,
-                                BlendMode.srcIn,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  facility.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    height: 20 / 15,
-                                    color: AppColors.textDark,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.location_on_outlined,
-                                      size: 13,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                    const SizedBox(width: 3),
-                                    Expanded(
-                                      child: Text(
-                                        facility.address,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.plusJakartaSans(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w400,
-                                          color: AppColors.textSecondary,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                Positioned.fill(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+                    child: Opacity(
+                      opacity: .22,
+                      child: SvgPicture.asset(
+                        'assets/icons/sprint4_court_pattern.svg',
+                        fit: BoxFit.fill,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    // Badge trạng thái & Nút thao tác
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: facility.isOpen
-                                ? const Color(0xFFDDEFE7)
-                                : const Color(0xFFFAF0F0),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            facility.isOpen ? 'Open' : 'Closed',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: facility.isOpen
-                                  ? AppColors.primary
-                                  : AppColors.linkAction,
-                            ),
-                          ),
-                        ),
-                        if (onEdit != null || onDelete != null)
-                          SizedBox(
-                            width: 32,
-                            height: 32,
-                            child: PopupMenuButton<String>(
-                              padding: EdgeInsets.zero,
-                              tooltip: 'Thao tác cơ sở',
-                              icon: const Icon(
-                                Icons.more_vert,
-                                size: 20,
-                                color: AppColors.textSecondary,
-                              ),
-                              onSelected: (val) {
-                                if (val == 'edit') onEdit?.call();
-                                if (val == 'delete') onDelete?.call();
-                              },
-                            itemBuilder: (context) => [
-                              const PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.edit_outlined,
-                                      size: 18,
-                                      color: AppColors.primary,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text('Sửa thông tin'),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.delete_outline,
-                                      size: 18,
-                                      color: Colors.red,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Xóa cơ sở',
-                                      style: TextStyle(color: Colors.red),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
-
-                const Divider(color: AppColors.divider, height: 16),
-
-                // Hàng dưới: Số sân & Giờ mở cửa
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.sports_tennis,
-                          size: 14,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          '${facility.courtCount} Courts',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textPrimary,
+                Positioned(
+                  right: 34,
+                  top: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: facility.isOpen
+                          ? const Color(0xFFDDF1E9)
+                          : const Color(0xFFFFE2E0),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      facility.isOpen ? 'Open' : 'Closed',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 10,
+                        color: facility.isOpen
+                            ? AppColors.primary
+                            : AppColors.linkAction,
+                      ),
+                    ),
+                  ),
+                ),
+                if (onEdit != null || onDelete != null)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: PopupMenuButton<String>(
+                      tooltip: 'Facility actions',
+                      icon: const Icon(
+                        Icons.more_vert,
+                        size: 18,
+                        color: AppColors.primary,
+                      ),
+                      onSelected: (v) {
+                        if (v == 'edit') onEdit?.call();
+                        if (v == 'delete') onDelete?.call();
+                      },
+                      itemBuilder: (_) => [
+                        if (onEdit != null)
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Text('Edit facility'),
                           ),
-                        ),
+                        if (onDelete != null)
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Text('Delete facility'),
+                          ),
                       ],
                     ),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.access_time_rounded,
-                          size: 14,
-                          color: AppColors.textSecondary,
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        facility.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          height: 19 / 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textDark,
                         ),
-                        const SizedBox(width: 5),
-                        Text(
-                          facility.operatingHours,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                     const Icon(
                       Icons.chevron_right,
                       size: 20,
-                      color: AppColors.textSecondary,
+                      color: AppColors.primary,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 14,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        facility.address,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10,
+                          height: 1.4,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 22),
+                        child: Text(
+                          '${facility.courtCount} Courts',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.access_time,
+                      size: 14,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        facility.isOpen
+                            ? 'Open until ${facility.operatingHours.split('-').last.trim()}'
+                            : 'Closed today',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ],
             ),
           ),
-        ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }

@@ -42,7 +42,13 @@ class SocialButton extends StatelessWidget {
             SizedBox(width: 24, height: 24, child: Center(child: icon)),
             const SizedBox(width: 10),
             // Nhãn chữ nút
-            Text(text, style: AppTextStyles.buttonSocial),
+            Flexible(
+              child: Text(
+                text,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.buttonSocial,
+              ),
+            ),
           ],
         ),
       ),

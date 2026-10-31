@@ -1,3 +1,6 @@
+import '../../../core/theme/app_motion.dart';
+import 'booking_history_screen.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -114,6 +117,19 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
 
   // 2. Pháo giấy chuyển động quanh dấu tick khi màn xác nhận xuất hiện.
   Widget _buildSuccessIllustration() {
+    if (AppMotion.reduced(context)) {
+      return SizedBox(
+        width: 180,
+        height: 110,
+        child: Center(
+          child: SvgPicture.asset(
+            BookingIcons.successBadge,
+            width: 90,
+            height: 90,
+          ),
+        ),
+      );
+    }
     return SizedBox(
       width: 180,
       height: 110,
@@ -376,6 +392,13 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
             onPressed: () {
               if (widget.onViewBookings != null) {
                 widget.onViewBookings!();
+              } else {
+                Navigator.of(context).pushReplacement(
+                  AppMotion.route(
+                    const BookingHistoryScreen(),
+                    name: '/booking-history',
+                  ),
+                );
               }
             },
             child: Text(

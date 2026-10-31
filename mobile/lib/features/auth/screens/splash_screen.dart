@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import '../../../core/theme/app_motion.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -62,7 +64,10 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (_assetsPrecached) return;
     _assetsPrecached = true;
-
+    if (AppMotion.reduced(context)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _navigateToLogin());
+      return;
+    }
     _prepareSplash();
   }
 
@@ -92,7 +97,7 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 600),
+        transitionDuration: AppMotion.duration(context, 600),
         pageBuilder: (context, animation, secondaryAnimation) =>
             const LoginScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {

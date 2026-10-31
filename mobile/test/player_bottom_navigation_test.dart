@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:mobile/features/navigation/player_bottom_navigation.dart';
+import 'package:mobile/features/feedback/screens/rating_history_screen.dart';
 import 'package:mobile/features/auth/screens/player_profile_screen.dart';
 import 'package:mobile/features/match/screens/match_list_screen.dart';
 import 'package:mobile/features/court_map/screens/find_courts_map_screen.dart';
@@ -15,54 +16,59 @@ void main() {
   }
 
   group('PlayerBottomNavigation widget specs', () {
-    testWidgets('renders all 5 tabs in exact order with correct assets and labels', (tester) async {
-      await setPhoneViewport(tester);
+    testWidgets(
+      'renders all 5 tabs in exact order with correct assets and labels',
+      (tester) async {
+        await setPhoneViewport(tester);
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            bottomNavigationBar: PlayerBottomNavigation(
-              currentTab: PlayerNavTab.map,
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              bottomNavigationBar: PlayerBottomNavigation(
+                currentTab: PlayerNavTab.map,
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      // Verify all five labels exist
-      expect(find.text('Home'), findsOneWidget);
-      expect(find.text('Map'), findsOneWidget);
-      expect(find.text('Match'), findsOneWidget);
-      expect(find.text('Feedback'), findsOneWidget);
-      expect(find.text('Profile'), findsOneWidget);
+        // Verify all five labels exist
+        expect(find.text('Home'), findsOneWidget);
+        expect(find.text('Map'), findsOneWidget);
+        expect(find.text('Match'), findsOneWidget);
+        expect(find.text('Feedback'), findsOneWidget);
+        expect(find.text('Profile'), findsOneWidget);
 
-      // Verify relative horizontal order: Home < Map < Match < Feedback < Profile
-      final homeLeft = tester.getRect(find.text('Home')).left;
-      final mapLeft = tester.getRect(find.text('Map')).left;
-      final matchLeft = tester.getRect(find.text('Match')).left;
-      final feedbackLeft = tester.getRect(find.text('Feedback')).left;
-      final profileLeft = tester.getRect(find.text('Profile')).left;
+        // Verify relative horizontal order: Home < Map < Match < Feedback < Profile
+        final homeLeft = tester.getRect(find.text('Home')).left;
+        final mapLeft = tester.getRect(find.text('Map')).left;
+        final matchLeft = tester.getRect(find.text('Match')).left;
+        final feedbackLeft = tester.getRect(find.text('Feedback')).left;
+        final profileLeft = tester.getRect(find.text('Profile')).left;
 
-      expect(homeLeft < mapLeft, isTrue);
-      expect(mapLeft < matchLeft, isTrue);
-      expect(matchLeft < feedbackLeft, isTrue);
-      expect(feedbackLeft < profileLeft, isTrue);
+        expect(homeLeft < mapLeft, isTrue);
+        expect(mapLeft < matchLeft, isTrue);
+        expect(matchLeft < feedbackLeft, isTrue);
+        expect(feedbackLeft < profileLeft, isTrue);
 
-      // Verify height is 84 on reference screen without safe-area inset
-      final navSize = tester.getSize(find.byType(PlayerBottomNavigation));
-      expect(navSize.height, equals(84.0));
-      expect(navSize.width, equals(393.0));
+        // Verify height is 84 on reference screen without safe-area inset
+        final navSize = tester.getSize(find.byType(PlayerBottomNavigation));
+        expect(navSize.height, equals(84.0));
+        expect(navSize.width, equals(393.0));
 
-      // Verify 5 SVG icons rendered with 22x22 dimension
-      final svgFinders = find.byType(SvgPicture);
-      expect(svgFinders, findsNWidgets(5));
-      for (final element in svgFinders.evaluate()) {
-        final svg = element.widget as SvgPicture;
-        expect(svg.width, equals(22.0));
-        expect(svg.height, equals(22.0));
-      }
-    });
+        // Verify 5 SVG icons rendered with 22x22 dimension
+        final svgFinders = find.byType(SvgPicture);
+        expect(svgFinders, findsNWidgets(5));
+        for (final element in svgFinders.evaluate()) {
+          final svg = element.widget as SvgPicture;
+          expect(svg.width, equals(22.0));
+          expect(svg.height, equals(22.0));
+        }
+      },
+    );
 
-    testWidgets('active tab has color #05644F and inactive tabs have #7A8985', (tester) async {
+    testWidgets('active tab has color #05644F and inactive tabs have #7A8985', (
+      tester,
+    ) async {
       await setPhoneViewport(tester);
 
       await tester.pumpWidget(
@@ -85,28 +91,33 @@ void main() {
       expect(homeText.style?.color, equals(const Color(0xFF7A8985)));
     });
 
-    testWidgets('tapping currently active tab does nothing (no duplicate push or callback)', (tester) async {
-      await setPhoneViewport(tester);
-      bool tabChanged = false;
+    testWidgets(
+      'tapping currently active tab does nothing (no duplicate push or callback)',
+      (tester) async {
+        await setPhoneViewport(tester);
+        bool tabChanged = false;
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            bottomNavigationBar: PlayerBottomNavigation(
-              currentTab: PlayerNavTab.match,
-              onTapTab: (_) => tabChanged = true,
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              bottomNavigationBar: PlayerBottomNavigation(
+                currentTab: PlayerNavTab.match,
+                onTapTab: (_) => tabChanged = true,
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.tap(find.text('Match'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Match'));
+        await tester.pumpAndSettle();
 
-      expect(tabChanged, isFalse);
-    });
+        expect(tabChanged, isFalse);
+      },
+    );
 
-    testWidgets('tapping Home and Feedback shows user-friendly development notice', (tester) async {
+    testWidgets('Home reuses Profile and Feedback opens Sprint 8 history', (
+      tester,
+    ) async {
       await setPhoneViewport(tester);
 
       await tester.pumpWidget(
@@ -122,16 +133,18 @@ void main() {
 
       // Tap Home
       await tester.tap(find.text('Home'));
-      await tester.pump();
-      expect(find.textContaining('Trang chủ'), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(find.byType(PlayerProfileScreen), findsOneWidget);
 
       // Tap Feedback
       await tester.tap(find.text('Feedback'));
-      await tester.pump();
-      expect(find.textContaining('Phản hồi'), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(find.byType(RatingHistoryScreen), findsOneWidget);
     });
 
-    testWidgets('renders cleanly without overflow on narrow width 320', (tester) async {
+    testWidgets('renders cleanly without overflow on narrow width 320', (
+      tester,
+    ) async {
       await tester.binding.setSurfaceSize(const Size(320, 640));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -155,66 +168,71 @@ void main() {
   });
 
   group('Player screens navigation bar integration', () {
-    testWidgets('PlayerProfileScreen contains PlayerBottomNavigation with Profile active', (tester) async {
-      await setPhoneViewport(tester);
+    testWidgets(
+      'PlayerProfileScreen contains PlayerBottomNavigation with Profile active',
+      (tester) async {
+        await setPhoneViewport(tester);
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: PlayerProfileScreen(),
-        ),
-      );
+        await tester.pumpWidget(const MaterialApp(home: PlayerProfileScreen()));
 
-      expect(find.byType(PlayerBottomNavigation), findsOneWidget);
-      final nav = tester.widget<PlayerBottomNavigation>(find.byType(PlayerBottomNavigation));
-      expect(nav.currentTab, equals(PlayerNavTab.profile));
-    });
+        expect(find.byType(PlayerBottomNavigation), findsOneWidget);
+        final nav = tester.widget<PlayerBottomNavigation>(
+          find.byType(PlayerBottomNavigation),
+        );
+        expect(nav.currentTab, equals(PlayerNavTab.profile));
+      },
+    );
 
-    testWidgets('MatchListScreen contains PlayerBottomNavigation with Match active', (tester) async {
-      await setPhoneViewport(tester);
+    testWidgets(
+      'MatchListScreen contains PlayerBottomNavigation with Match active',
+      (tester) async {
+        await setPhoneViewport(tester);
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: MatchListScreen(),
-        ),
-      );
+        await tester.pumpWidget(const MaterialApp(home: MatchListScreen()));
 
-      expect(find.byType(PlayerBottomNavigation), findsOneWidget);
-      final nav = tester.widget<PlayerBottomNavigation>(find.byType(PlayerBottomNavigation));
-      expect(nav.currentTab, equals(PlayerNavTab.match));
-    });
+        expect(find.byType(PlayerBottomNavigation), findsOneWidget);
+        final nav = tester.widget<PlayerBottomNavigation>(
+          find.byType(PlayerBottomNavigation),
+        );
+        expect(nav.currentTab, equals(PlayerNavTab.match));
+      },
+    );
 
-    testWidgets('FindCourtsMapScreen contains PlayerBottomNavigation with Map active', (tester) async {
-      await setPhoneViewport(tester);
+    testWidgets(
+      'FindCourtsMapScreen contains PlayerBottomNavigation with Map active',
+      (tester) async {
+        await setPhoneViewport(tester);
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: FindCourtsMapScreen(),
-        ),
-      );
+        await tester.pumpWidget(const MaterialApp(home: FindCourtsMapScreen()));
 
-      expect(find.byType(PlayerBottomNavigation), findsOneWidget);
-      final nav = tester.widget<PlayerBottomNavigation>(find.byType(PlayerBottomNavigation));
-      expect(nav.currentTab, equals(PlayerNavTab.map));
-    });
+        expect(find.byType(PlayerBottomNavigation), findsOneWidget);
+        final nav = tester.widget<PlayerBottomNavigation>(
+          find.byType(PlayerBottomNavigation),
+        );
+        expect(nav.currentTab, equals(PlayerNavTab.map));
+      },
+    );
 
-    testWidgets('BookingHistoryScreen contains PlayerBottomNavigation with all 5 tabs', (tester) async {
-      await setPhoneViewport(tester);
+    testWidgets(
+      'BookingHistoryScreen contains PlayerBottomNavigation with all 5 tabs',
+      (tester) async {
+        await setPhoneViewport(tester);
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: BookingHistoryScreen(),
-        ),
-      );
+        await tester.pumpWidget(
+          const MaterialApp(home: BookingHistoryScreen()),
+        );
 
-      expect(find.byType(PlayerBottomNavigation), findsOneWidget);
-      final nav = tester.widget<PlayerBottomNavigation>(find.byType(PlayerBottomNavigation));
-      expect(nav.currentTab, isNull);
-      expect(find.text('Home'), findsOneWidget);
-      expect(find.text('Map'), findsOneWidget);
-      expect(find.text('Match'), findsOneWidget);
-      expect(find.text('Feedback'), findsOneWidget);
-      expect(find.text('Profile'), findsOneWidget);
-    });
+        expect(find.byType(PlayerBottomNavigation), findsOneWidget);
+        final nav = tester.widget<PlayerBottomNavigation>(
+          find.byType(PlayerBottomNavigation),
+        );
+        expect(nav.currentTab, isNull);
+        expect(find.text('Home'), findsOneWidget);
+        expect(find.text('Map'), findsOneWidget);
+        expect(find.text('Match'), findsOneWidget);
+        expect(find.text('Feedback'), findsOneWidget);
+        expect(find.text('Profile'), findsOneWidget);
+      },
+    );
   });
 }
-

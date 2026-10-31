@@ -1,3 +1,6 @@
+import '../../../core/theme/app_motion.dart';
+import 'booking_success_screen.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -6,6 +9,7 @@ import '../booking_theme.dart';
 class BookingSummaryScreen extends StatelessWidget {
   final String facilityName;
   final String courtName;
+  final String address;
   final String dateText;
   final String timeRange;
   final String durationText;
@@ -17,6 +21,7 @@ class BookingSummaryScreen extends StatelessWidget {
     super.key,
     this.facilityName = 'Sunrise Badminton Club',
     this.courtName = 'Sân 3 · Indoor Badminton Court',
+    this.address = 'Đà Nẵng, Vietnam',
     this.dateText = 'Sun, 20 Sep 2026',
     this.timeRange = '19:00 – 19:30',
     this.durationText = '30 minutes',
@@ -29,9 +34,17 @@ class BookingSummaryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: BookingColors.background,
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 14),
+          child: _buildConfirmButton(context),
+        ),
+      ),
       body: SafeArea(
+        bottom: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -45,7 +58,6 @@ class BookingSummaryScreen extends StatelessWidget {
               const SizedBox(height: 16),
               _buildTermsNotice(),
               const SizedBox(height: 24),
-              _buildConfirmButton(context),
               const SizedBox(height: 24),
             ],
           ),
@@ -55,36 +67,31 @@ class BookingSummaryScreen extends StatelessWidget {
   }
 
   // 1. Header: Back & Title
-  Widget _buildHeader(BuildContext context) {
-    return Row(
+  Widget _buildHeader(BuildContext context) => SizedBox(
+    height: 28,
+    child: Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
       children: [
-        InkWell(
-          onTap: () => Navigator.maybePop(context),
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: BookingColors.cardBg,
-              shape: BoxShape.circle,
-              border: Border.all(color: BookingColors.border),
-            ),
-            child: SvgPicture.asset(BookingIcons.back, width: 18, height: 18),
-          ),
-        ),
-        const SizedBox(width: 14),
         Text(
           'Booking Summary',
           style: BookingTypography.inter(
             fontSize: 18,
             fontWeight: FontWeight.w700,
-            color: BookingColors.textDark,
+          ),
+        ),
+        Positioned(
+          left: -8,
+          top: -8,
+          child: IconButton(
+            tooltip: 'Back',
+            onPressed: () => Navigator.maybePop(context),
+            icon: SvgPicture.asset(BookingIcons.back, width: 18, height: 18),
           ),
         ),
       ],
-    );
-  }
+    ),
+  );
 
   // 2. Court Summary Card
   Widget _buildCourtCard() {
@@ -115,7 +122,7 @@ class BookingSummaryScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  facilityName,
+                  courtName.split(' · ').first,
                   style: BookingTypography.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -126,7 +133,7 @@ class BookingSummaryScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  courtName,
+                  facilityName,
                   style: BookingTypography.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
@@ -137,11 +144,13 @@ class BookingSummaryScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  priceText,
+                  address,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: BookingTypography.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: BookingColors.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    color: BookingColors.textSecondary,
                   ),
                 ),
               ],
@@ -168,9 +177,8 @@ class BookingSummaryScreen extends StatelessWidget {
         const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
-            color: BookingColors.cardBg,
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: BookingColors.border),
           ),
           child: Column(
             children: [
@@ -222,11 +230,11 @@ class BookingSummaryScreen extends StatelessWidget {
     required String value,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
           SvgPicture.asset(icon, width: 20, height: 20),
-          const SizedBox(width: 12),
+          const SizedBox(width: 18),
           Text(
             label,
             style: BookingTypography.inter(
@@ -235,13 +243,16 @@ class BookingSummaryScreen extends StatelessWidget {
               color: BookingColors.textSecondary,
             ),
           ),
-          const Spacer(),
-          Text(
-            value,
-            style: BookingTypography.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: BookingColors.textDark,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: BookingTypography.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: BookingColors.textDark,
+              ),
             ),
           ),
         ],
@@ -264,11 +275,10 @@ class BookingSummaryScreen extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: BookingColors.cardBg,
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: BookingColors.border),
           ),
           child: Column(
             children: [
@@ -376,7 +386,7 @@ class BookingSummaryScreen extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'By tapping Confirm Booking, you agree to the facility rules and cancellation policy. Free cancellation up to 2 hours before play time.',
+              'By confirming this booking, you agree to our Terms of Service and facility’s booking policy.',
               style: BookingTypography.inter(
                 fontSize: 11,
                 fontWeight: FontWeight.w400,
@@ -407,6 +417,18 @@ class BookingSummaryScreen extends StatelessWidget {
         onPressed: () {
           if (onConfirm != null) {
             onConfirm!();
+          } else {
+            Navigator.of(context).push(
+              AppMotion.route(
+                BookingSuccessScreen(
+                  facilityName: facilityName,
+                  courtName: courtName,
+                  dateTimeText: '$dateText · $timeRange',
+                  totalPrice: priceText,
+                ),
+                name: '/booking-success-preview',
+              ),
+            );
           }
         },
         child: Text(

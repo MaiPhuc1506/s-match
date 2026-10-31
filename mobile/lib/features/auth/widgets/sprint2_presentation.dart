@@ -29,9 +29,14 @@ class Sprint2BackHeader extends StatelessWidget {
   final String title;
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 96,
+    height: math.max(96, MediaQuery.paddingOf(context).top + 44),
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 40, 20, 0),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        math.max(40, MediaQuery.paddingOf(context).top),
+        20,
+        0,
+      ),
       child: Row(
         children: [
           SizedBox(

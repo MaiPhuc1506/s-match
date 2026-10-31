@@ -1,7 +1,11 @@
+import '../../../core/theme/app_motion.dart';
+import 'booking_detail_screen.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../booking_theme.dart';
+
 import 'package:mobile/features/navigation/player_bottom_navigation.dart';
 
 enum BookingStatus { upcoming, completed, cancelled }
@@ -205,6 +209,18 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       onTap: () {
         if (widget.onSelectBooking != null) {
           widget.onSelectBooking!(booking);
+        } else {
+          Navigator.of(context).push(
+            AppMotion.route(
+              BookingDetailScreen(
+                bookingId: booking.id,
+                facilityName: booking.facilityName,
+                courtName: booking.courtName,
+                priceText: booking.priceText,
+              ),
+              name: '/booking-detail-preview',
+            ),
+          );
         }
       },
       borderRadius: BorderRadius.circular(12),
@@ -266,7 +282,11 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                 Expanded(
                   child: Row(
                     children: [
-                      SvgPicture.asset(BookingIcons.clock, width: 14, height: 14),
+                      SvgPicture.asset(
+                        BookingIcons.clock,
+                        width: 14,
+                        height: 14,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -354,6 +374,4 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       ),
     );
   }
-
 }
-

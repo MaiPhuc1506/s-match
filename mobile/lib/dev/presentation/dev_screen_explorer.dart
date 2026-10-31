@@ -1,4 +1,11 @@
+import '../../features/feedback/screens/match_completed_screen.dart';
+import '../../features/feedback/screens/feedback_form_screen.dart';
+import '../../features/feedback/screens/rating_history_screen.dart';
+import '../../features/feedback/screens/community_rating_screen.dart';
+import '../../features/feedback/data/feedback_repository.dart';
+
 import 'package:flutter/material.dart';
+
 import '../../core/theme/app_colors.dart';
 
 // Screens imports - Auth
@@ -74,11 +81,50 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
   String _selectedCategory = 'Tất cả';
 
   late final List<_DevScreenItem> _allScreens = [
+    _DevScreenItem(title: 'Verify Code', category: 'Auth',
+      description: 'Recovery preview · demo code 2846', builder: (_) => const VerifyCodeScreen()),
+    _DevScreenItem(title: 'Create New Password', category: 'Auth',
+      description: 'Recovery preview · no real password change', builder: (_) => const CreateNewPasswordScreen()),
+
+    _DevScreenItem(
+      title: 'Match Completed — Celebration Clean',
+      category: 'Feedback',
+      description: 'Sprint 8 · sample completed match; no server writes',
+      builder: (_) => const MatchCompletedScreen(),
+    ),
+    _DevScreenItem(
+      title: 'Feedback Form',
+      category: 'Feedback',
+      description: 'Sprint 8 · stars, tags, review and validation (preview)',
+      builder: (_) => FeedbackFormScreen(repository: FeedbackRepository()),
+    ),
+    _DevScreenItem(
+      title: 'Rating History',
+      category: 'Feedback',
+      description: 'Sprint 8 · received and given ratings (preview)',
+      builder: (_) => const RatingHistoryScreen(),
+    ),
+    _DevScreenItem(
+      title: 'Empty Rating History',
+      category: 'Feedback',
+      description: 'Sprint 8 · empty state',
+      builder: (_) => RatingHistoryScreen(
+        repository: FeedbackRepository(withSamples: false),
+      ),
+    ),
+    _DevScreenItem(
+      title: 'Community Rating',
+      category: 'Feedback',
+      description: 'Sprint 8 · rating breakdown (preview)',
+      builder: (_) => const CommunityRatingScreen(),
+    ),
+
     // --- 1. AUTHENTICATION & ONBOARDING ---
     _DevScreenItem(
       title: 'Splash Screen',
       category: 'Auth',
-      description: 'Màn hình khởi động logo S-Match và kiểm tra trạng thái đăng nhập',
+      description:
+          'Màn hình khởi động logo S-Match và kiểm tra trạng thái đăng nhập',
       builder: (ctx) => const SplashScreen(),
     ),
     _DevScreenItem(
@@ -122,7 +168,8 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
     _DevScreenItem(
       title: 'Player Profile Screen',
       category: 'Profile',
-      description: 'Hồ sơ người chơi, thông tin chỉ số kỹ năng và nút đăng xuất',
+      description:
+          'Hồ sơ người chơi, thông tin chỉ số kỹ năng và nút đăng xuất',
       builder: (ctx) => const PlayerProfileScreen(),
     ),
     _DevScreenItem(
@@ -175,9 +222,8 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
       title: 'Recommended Player Detail Screen',
       category: 'Recommendation',
       description: 'Sprint 7 · Player · Hồ sơ, Compatibility và Skill Radar (UI preview)',
-      builder: (ctx) => RecommendedPlayerDetailScreen(
-        player: referenceRecommendations.first,
-      ),
+      builder: (ctx) =>
+          RecommendedPlayerDetailScreen(player: referenceRecommendations.first),
     ),
     _DevScreenItem(
       title: 'No Recommendations Screen',
@@ -196,7 +242,8 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
     _DevScreenItem(
       title: 'Facility Detail Screen (Preview)',
       category: 'Facility',
-      description: 'Chi tiết cụm sân, danh sách sân đơn/đôi và lịch ma trận slot',
+      description:
+          'Chi tiết cụm sân, danh sách sân đơn/đôi và lịch ma trận slot',
       builder: (ctx) => const FacilityDetailScreen(
         facility: FacilityCardItem(
           id: 1,
@@ -281,10 +328,9 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
     _DevScreenItem(
       title: 'Match Detail Open Screen',
       category: 'Match',
-      description: 'Chi tiết trận đấu mở: Danh sách người tham gia & nút tham gia',
-      builder: (ctx) => MatchDetailOpenScreen(
-        match: kVerifiedMatches[0],
-      ),
+      description:
+          'Chi tiết trận đấu mở: Danh sách người tham gia & nút tham gia',
+      builder: (ctx) => MatchDetailOpenScreen(match: kVerifiedMatches[0]),
     ),
     _DevScreenItem(
       title: 'Match Invitations Screen',
@@ -302,9 +348,7 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
       title: 'Match Participant List Screen',
       category: 'Match',
       description: 'Danh sách chi tiết các vận động viên tham gia trận đấu',
-      builder: (ctx) => MatchParticipantListScreen(
-        match: kVerifiedMatches[0],
-      ),
+      builder: (ctx) => MatchParticipantListScreen(match: kVerifiedMatches[0]),
     ),
   ];
 
@@ -320,9 +364,12 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
     return _allScreens.where((screen) {
       final matchesCat =
           _selectedCategory == 'Tất cả' || screen.category == _selectedCategory;
-      final matchesQuery = _searchQuery.isEmpty ||
+      final matchesQuery =
+          _searchQuery.isEmpty ||
           screen.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          screen.description.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          screen.description.toLowerCase().contains(
+            _searchQuery.toLowerCase(),
+          ) ||
           screen.category.toLowerCase().contains(_searchQuery.toLowerCase());
       return matchesCat && matchesQuery;
     }).toList();
@@ -331,9 +378,7 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
   void _navigateToScreen(_DevScreenItem item) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (ctx) => item.builder(ctx),
-      ),
+      MaterialPageRoute(builder: (ctx) => item.builder(ctx)),
     );
   }
 
@@ -355,7 +400,10 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
         backgroundColor: Colors.white,
         elevation: 0.5,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primaryDark),
+          icon: const Icon(
+            Icons.arrow_back_rounded,
+            color: AppColors.primaryDark,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
@@ -363,7 +411,10 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
             child: Padding(
               padding: const EdgeInsets.only(right: 16),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
@@ -391,7 +442,10 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
               onChanged: (val) => setState(() => _searchQuery = val),
               decoration: InputDecoration(
                 hintText: 'Tìm kiếm màn hình (VD: Match, Booking, Map...)',
-                prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: Colors.grey,
+                ),
                 filled: true,
                 fillColor: const Color(0xFFF2F4F3),
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
@@ -429,7 +483,9 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
                   labelStyle: TextStyle(
                     color: isSelected ? Colors.white : AppColors.textPrimary,
                     fontSize: 12,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                   ),
                   onSelected: (selected) {
                     if (selected) {
@@ -449,11 +505,18 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade400),
+                        Icon(
+                          Icons.search_off_rounded,
+                          size: 48,
+                          color: Colors.grey.shade400,
+                        ),
                         const SizedBox(height: 12),
                         Text(
                           'Không tìm thấy màn hình nào phù hợp',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 14,
+                          ),
                         ),
                       ],
                     ),
@@ -493,7 +556,8 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
                                 const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
@@ -514,7 +578,8 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
                                             ),
                                             decoration: BoxDecoration(
                                               color: Colors.grey.shade100,
-                                              borderRadius: BorderRadius.circular(6),
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
                                             ),
                                             child: Text(
                                               screen.category,

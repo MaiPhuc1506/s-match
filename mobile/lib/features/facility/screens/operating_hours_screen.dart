@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mobile/core/theme/app_colors.dart';
@@ -269,6 +270,20 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
                 onPressed: _isLoading
                     ? null
                     : () async {
+                        if (_schedules.any(
+                          (s) =>
+                              s.isOpen &&
+                              s.openTime.compareTo(s.closeTime) >= 0,
+                        )) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Closing time must be after opening time.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
                         final openDays = _schedules
                             .where((s) => s.isOpen)
                             .map(
@@ -350,122 +365,130 @@ class _OperatingHoursScreenState extends State<OperatingHoursScreen> {
     );
   }
 
-  Widget _buildDayRow(DaySchedule schedule) {
-    return Container(
-      width: double.infinity,
-      height: 58,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border, width: 1),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Tên thứ & Toggle Switch
-          Row(
-            children: [
-              SizedBox(
-                height: 30,
-                child: Transform.scale(
-                  scale: 0.8,
-                  child: Switch(
-                    value: schedule.isOpen,
-                    activeThumbColor: AppColors.primary,
-                    activeTrackColor: AppColors.mintLight,
-                    onChanged: (val) {
-                      setState(() {
-                        schedule.isOpen = val;
-                      });
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              SizedBox(
-                width: 75,
-                child: Text(
-                  schedule.dayName,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: schedule.isOpen
-                        ? AppColors.textDark
-                        : AppColors.textSecondary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          // Giờ hoạt động (Start - End) hoặc chữ "Closed"
-          if (schedule.isOpen)
-            Row(
-              children: [
-                _buildTimeBox(
-                  schedule.openTime,
-                  () => _pickTime(context, schedule, true),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 6),
-                  child: Text(
-                    '-',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-                _buildTimeBox(
-                  schedule.closeTime,
-                  () => _pickTime(context, schedule, false),
-                ),
-              ],
-            )
-          else
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFAF0F0),
-                borderRadius: BorderRadius.circular(8),
-              ),
+  Widget _buildDayRow(DaySchedule schedule) => Container(
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFEBF0ED)),
+    ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final identity = Row(
+          children: [
+            SizedBox(
+              width: 68,
               child: Text(
-                'Closed',
+                schedule.dayName,
                 style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.linkAction,
+                  fontSize: 11,
+                  color: AppColors.textDark,
                 ),
               ),
             ),
-        ],
-      ),
-    );
-  }
+            SizedBox(
+              width: 38,
+              height: 38,
+              child: FittedBox(
+                child: CupertinoSwitch(
+                  value: schedule.isOpen,
+                  activeTrackColor: AppColors.primary,
+                  onChanged: (v) => setState(() => schedule.isOpen = v),
+                ),
+              ),
+            ),
+          ],
+        );
+        final times = schedule.isOpen
+            ? Row(
+                children: [
+                  Expanded(
+                    child: _buildTimeBox(
+                      schedule.openTime,
+                      () => _pickTime(context, schedule, true),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6),
+                    child: Text(
+                      '-',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildTimeBox(
+                      schedule.closeTime,
+                      () => _pickTime(context, schedule, false),
+                    ),
+                  ),
+                ],
+              )
+            : Container(
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0F0ED),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'Closed',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              );
+        return constraints.maxWidth < 300
+            ? Column(children: [identity, const SizedBox(height: 8), times])
+            : Row(
+                children: [
+                  identity,
+                  const SizedBox(width: 8),
+                  Expanded(child: times),
+                ],
+              );
+      },
+    ),
+  );
 
-  Widget _buildTimeBox(String time, VoidCallback onTap) {
-    return GestureDetector(
+  Widget _buildTimeBox(String time, VoidCallback onTap) => Material(
+    color: const Color(0xFFFAFBF9),
+    borderRadius: BorderRadius.circular(10),
+    child: InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
       child: Container(
         height: 38,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 9),
         decoration: BoxDecoration(
-          color: AppColors.mintBackground,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border, width: 0.8),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
         ),
-        alignment: Alignment.center,
-        child: Text(
-          time,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: AppColors.primaryDark,
-          ),
+        child: Row(
+          children: [
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  time,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    color: AppColors.textDark,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.keyboard_arrow_down,
+              size: 13,
+              color: AppColors.primary,
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
 }
