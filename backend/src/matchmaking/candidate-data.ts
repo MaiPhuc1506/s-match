@@ -8,7 +8,6 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 const inRange = (value: unknown, min: number, max: number): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 
-// Boundary validation only: no filtering, searching or scoring.
 export function isCandidateProfile(value: unknown): value is CandidateProfile {
   if (!isRecord(value) || typeof value.userId !== 'string' || !value.userId.trim() ||
       !isRecord(value.skill) || !isRecord(value.location)) return false;

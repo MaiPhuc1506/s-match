@@ -24,7 +24,6 @@ describe('geo.util', () => {
       const radius = 10;
       const box = boundingBox(lat, lon, radius);
 
-      // Điểm cách đúng ~10km về phía Bắc và Đông phải nằm trong box
       const north = lat + radius / 111.32;
       const east = lon + radius / (111.32 * Math.cos((lat * Math.PI) / 180));
       expect(north).toBeLessThanOrEqual(box.maxLat + 1e-9);

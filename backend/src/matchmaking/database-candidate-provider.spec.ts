@@ -4,6 +4,7 @@ import { AppModule } from '../app.module';
 import { AUTH_JWT_CONFIG } from '../auth/jwt.config';
 import { AvailabilityService } from '../availability-preference/availability.service';
 import { CandidatesService } from '../candidates/candidates.service';
+import { RatingsService } from '../ratings/ratings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecommendationHistoryService } from '../recommendation-history/recommendation-history.service';
 import { MatchmakingService } from '../matchmaking.service';
@@ -32,7 +33,6 @@ describe('SMM-26 gateway with SMM-28 candidate data', () => {
   beforeEach(() => {
     prisma = {
       playerProfile: {
-        // Search coordinates work even when no last-known location has been saved.
         findUnique: jest.fn().mockResolvedValue(profile(1, null, null)),
         findMany: jest.fn().mockResolvedValue([
           profile(2, 16.01, 108), profile(3, 16.2, 108), profile(4, 16.02, 108),
@@ -53,6 +53,7 @@ describe('SMM-26 gateway with SMM-28 candidate data', () => {
     }]);
     provider = new DatabaseCandidateProvider(new CandidatesService(
       prisma, availability as unknown as AvailabilityService,
+      { getReliabilityScores: async (ids: number[]) => new Map(ids.map((id) => [id, 5])) } as unknown as RatingsService,
     ));
     http = { post: jest.fn().mockResolvedValue({ status: 200, data: {
       matched_users: [{ user_id: '2', match_score: 90 }], total_candidates_processed: 1,
@@ -74,7 +75,6 @@ describe('SMM-26 gateway with SMM-28 candidate data', () => {
       skill: { smash: 4, net_play: 4, preferred_min: 2, preferred_max: 5 },
       playing_style: ['Attack'],
     });
-    // Candidate 3 is outside the radius; candidate 4 has no availability.
     expect(payload.candidates.map((candidate: any) => candidate.user_id)).toEqual(['2']);
     expect(prisma.playerProfile.findMany.mock.calls[0][0].where.userId).toEqual({ not: 1 });
     expect(prisma.playerProfile.findMany).toHaveBeenCalledTimes(2);

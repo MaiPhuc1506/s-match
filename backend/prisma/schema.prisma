@@ -56,6 +56,11 @@ model User {
   recommendationSessions RecommendationSession[]
   recommendedInResults   RecommendationResult[]  @relation("RecommendedUser")
 
+  // SMM-36 — Community Rating Backend
+  ratingsGiven           PlayerRating[]          @relation("RatingsGiven")
+  ratingsReceived        PlayerRating[]          @relation("RatingsReceived")
+  ratingHistory          RatingHistory[]
+
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 }
@@ -290,6 +295,7 @@ model Match {
   feePerPlayer Float?             @default(0)
 
   participants MatchParticipant[]
+  ratings      PlayerRating[]
   feedbacks    Feedback[]
 
   createdAt    DateTime           @default(now())
@@ -383,4 +389,55 @@ model RecommendationResult {
   @@index([sessionId])
   @@index([recommendedUserId])
   @@index([outcome])
+}
+
+// ---------------------------------------------------------------------------
+// SMM-36 — Community Rating Backend (Sprint 8 — Feedback & Rating)
+//
+// Sau khi một trận đấu kết thúc, người tham gia (ACCEPTED) có thể đánh giá
+// những người chơi còn lại cùng trận. Mỗi cặp (trận, người đánh giá, người
+// được đánh giá) chỉ có một đánh giá. Điểm trung bình dùng làm điểm uy tín
+// (reliability_score) cho Matchmaking (xem RatingsService.getReliabilityScores).
+// ---------------------------------------------------------------------------
+
+model PlayerRating {
+  id            Int      @id @default(autoincrement())
+  matchId       Int
+  match         Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  raterId       Int
+  rater         User     @relation("RatingsGiven", fields: [raterId], references: [id], onDelete: Cascade)
+  ratedUserId   Int
+  ratedUser     User     @relation("RatingsReceived", fields: [ratedUserId], references: [id], onDelete: Cascade)
+
+  score         Int      // Điểm tổng thể 1-5
+  punctuality   Int?     // Đúng giờ 1-5 (tuỳ chọn)
+  sportsmanship Int?     // Tinh thần thi đấu / thái độ 1-5 (tuỳ chọn)
+  comment       String?  // Nhận xét ngắn, tối đa 500 ký tự
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([matchId, raterId, ratedUserId])
+  @@index([ratedUserId, createdAt])
+  @@index([raterId, createdAt])
+  history       RatingHistory[]
+
+  @@index([matchId])
+}
+
+// Lịch sử Community Rating của người chơi: mỗi lần nhận / sửa một đánh giá sẽ ghi
+// một bản chụp (snapshot) điểm trung bình, số đánh giá và điểm uy tín tại thời điểm đó.
+model RatingHistory {
+  id              Int           @id @default(autoincrement())
+  userId          Int
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ratingId        Int?          // Đánh giá gây ra thay đổi (null nếu đánh giá đã bị xoá)
+  rating          PlayerRating? @relation(fields: [ratingId], references: [id], onDelete: SetNull)
+  communityRating Float         // Điểm trung bình cộng đồng (1-5), 2 chữ số thập phân
+  ratingCount     Int
+  reliabilityScore Float        // Điểm uy tín đã làm mượt (0-5) dùng cho Matchmaking
+  createdAt       DateTime      @default(now())
+
+  @@index([userId, createdAt])
+  @@index([ratingId])
 }

@@ -5,7 +5,6 @@ function toRadians(deg: number): number {
   return (deg * Math.PI) / 180;
 }
 
-/** Khoảng cách Haversine (km) — cùng công thức với matchmaking/app/services/distance.py */
 export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const dLat = toRadians(lat2 - lat1);
   const dLon = toRadians(lon2 - lon1);
@@ -15,10 +14,6 @@ export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: numb
   return EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/**
- * Hình chữ nhật bao quanh vòng tròn bán kính `radiusKm` — dùng để lọc thô bằng
- * index (latitude, longitude) trong DB trước khi tính Haversine chính xác.
- */
 export function boundingBox(lat: number, lon: number, radiusKm: number) {
   const latDelta = radiusKm / KM_PER_DEGREE_LAT;
   const cosLat = Math.max(Math.cos(toRadians(lat)), 0.01);

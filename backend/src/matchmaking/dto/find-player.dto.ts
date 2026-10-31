@@ -19,7 +19,6 @@ export class FindPlayerLocationDto {
   longitude: number;
 }
 
-// Temporary Flutter contract: confirm field names/time-slot semantics with Phuc and Dung.
 export class FindPlayerDto {
   @ApiProperty({ type: [String], example: ['2026-10-20T18:00:00Z'] })
   @IsArray()

@@ -13,6 +13,7 @@ import { MatchesModule } from './matches/matches.module';
 import { CandidatesModule } from './candidates/candidates.module';
 import { MatchmakingModule } from './matchmaking.module';
 import { RecommendationHistoryModule } from './recommendation-history/recommendation-history.module';
+import { RatingsModule } from './ratings/ratings.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -27,6 +28,7 @@ import { RecommendationHistoryModule } from './recommendation-history/recommenda
     MatchmakingModule,
     CandidatesModule,
     RecommendationHistoryModule,
+    RatingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

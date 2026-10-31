@@ -314,8 +314,11 @@ describe('Authentication sessions (Prisma mock)', () => {
 });
 
 describe('JWT configuration', () => {
+  // Isolate validation from process.env loaded by other suites.
+  const configFrom = (values: Record<string, string | undefined>) =>
+    ({ get: (key: string) => values[key] }) as ConfigService;
   it.each(['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET'])('fails clearly when %s is missing', (missing) => {
-    const cfg = new ConfigService({
+    const cfg = configFrom({
       JWT_ACCESS_SECRET: missing === 'JWT_ACCESS_SECRET' ? undefined : randomBytes(32).toString('hex'),
       JWT_REFRESH_SECRET: missing === 'JWT_REFRESH_SECRET' ? undefined : randomBytes(32).toString('hex'),
     });
@@ -325,7 +328,7 @@ describe('JWT configuration', () => {
   it('rejects equal secrets without including their value in the error', () => {
     const secret = randomBytes(32).toString('hex');
     try {
-      createAuthJwtConfig(new ConfigService({ JWT_ACCESS_SECRET: secret, JWT_REFRESH_SECRET: secret }));
+      createAuthJwtConfig(configFrom({ JWT_ACCESS_SECRET: secret, JWT_REFRESH_SECRET: secret }));
       throw new Error('Expected rejection');
     } catch (error) {
       expect((error as Error).message).not.toContain(secret);
