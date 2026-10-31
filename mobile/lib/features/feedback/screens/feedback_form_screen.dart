@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../data/feedback_repository.dart';
+import '../data/rating_api.dart';
 import '../widgets/feedback_widgets.dart';
 import 'rating_history_screen.dart';
 
@@ -12,9 +13,11 @@ class FeedbackFormScreen extends StatefulWidget {
     super.key,
     this.repository,
     this.matchId = 'preview_saturday',
+    this.match,
   });
   final FeedbackRepository? repository;
   final String matchId;
+  final FeedbackMatch? match;
   @override
   State<FeedbackFormScreen> createState() => _FeedbackFormScreenState();
 }
@@ -22,9 +25,14 @@ class FeedbackFormScreen extends StatefulWidget {
 class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
   FeedbackRepository get repo =>
       widget.repository ?? FeedbackRepository.instance;
-  final _stars = [0, 0, 0];
-  final _tags = List.generate(3, (_) => <String>{});
-  final _reviews = List.generate(3, (_) => TextEditingController());
+  List<FeedbackPlayer> get players =>
+      widget.match?.players ?? feedbackTeammates;
+  late final _stars = List.filled(players.length, 0);
+  late final _tags = List.generate(players.length, (_) => <String>{});
+  late final _reviews = List.generate(
+    players.length,
+    (_) => TextEditingController(),
+  );
   bool _sending = false;
   String? _error;
   @override
@@ -38,7 +46,10 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
   Future<void> _submit() async {
     if (_sending) return;
     if (_stars.contains(0)) {
-      setState(() => _error = 'Please rate all 3 teammates before submitting.');
+      setState(
+        () => _error =
+            'Please rate all ${players.length} teammates before submitting.',
+      );
       return;
     }
     FocusManager.instance.primaryFocus?.unfocus();
@@ -50,9 +61,9 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
       await repo.submit(
         widget.matchId,
         List.generate(
-          3,
+          players.length,
           (i) => TeammateFeedback(
-            player: feedbackTeammates[i],
+            player: players[i],
             stars: _stars[i],
             tags: _tags[i],
             review: _reviews[i].text,
@@ -62,7 +73,10 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         AppMotion.route(
-          FeedbackSubmittedScreen(repository: repo),
+          FeedbackSubmittedScreen(
+            repository: repo,
+            names: players.map((p) => p.name).join(', '),
+          ),
           name: '/feedback-submitted',
         ),
       );
@@ -70,9 +84,11 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
       if (mounted) {
         setState(() {
           _sending = false;
-          _error = error is StateError
+          _error = error is RatingFailure
               ? error.message
-              : 'Unable to send feedback. Please try again.';
+              : error is StateError
+              ? error.message
+              : 'Some ratings may have saved. Retry to send only the remaining teammates.';
         });
       }
     }
@@ -81,7 +97,9 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
   @override
   Widget build(BuildContext context) => FeedbackScaffold(
     title: 'Rate your teammates',
-    subtitle: 'Saturday Rally · 3 teammates · UI preview',
+    subtitle: widget.match == null
+        ? 'Saturday Rally · 3 teammates · UI preview'
+        : '${widget.match!.title} · ${players.length} teammates',
     navigation: false,
     footer: Column(
       mainAxisSize: MainAxisSize.min,
@@ -129,7 +147,7 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
             'A little feedback makes the next rally better.',
             style: feedbackText(14, color: AppColors.textSecondary),
           ),
-          for (var i = 0; i < 3; i++) ...[
+          for (var i = 0; i < players.length; i++) ...[
             const SizedBox(height: 16),
             FeedbackCard(
               key: ValueKey('feedback-card-$i'),
@@ -137,7 +155,7 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   FeedbackIdentity(
-                    player: feedbackTeammates[i],
+                    player: players[i],
                     subtitle: 'Your doubles community',
                   ),
                   const SizedBox(height: 8),
@@ -150,7 +168,10 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      for (final tag in ['Great teamwork', 'Fair play'])
+                      for (final tag
+                          in repo.live
+                              ? <String>[]
+                              : ['Great teamwork', 'Fair play'])
                         FeedbackTag(
                           tag,
                           selected: _tags[i].contains(tag),
@@ -203,18 +224,23 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
 }
 
 class FeedbackSubmittedScreen extends StatelessWidget {
-  const FeedbackSubmittedScreen({super.key, this.repository});
+  const FeedbackSubmittedScreen({
+    super.key,
+    this.repository,
+    this.names = 'Minh, An and Huy',
+  });
+  final String names;
   final FeedbackRepository? repository;
   @override
   Widget build(BuildContext context) => FeedbackScaffold(
     title: 'Feedback sent',
-    subtitle: 'Thanks for supporting your teammates · UI preview',
+    subtitle: repository?.live == true
+        ? 'Thanks for supporting your teammates'
+        : 'Thanks for supporting your teammates · UI preview',
     child: ListView(
       padding: const EdgeInsets.fromLTRB(20, 64, 20, 24),
       children: [
-        Center(
-          child: FeedbackSuccessBadge(size: 96),
-        ),
+        Center(child: FeedbackSuccessBadge(size: 96)),
         const SizedBox(height: 20),
         Text(
           'Good teammates\nmake great matches.',
@@ -227,7 +253,7 @@ class FeedbackSubmittedScreen extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         Text(
-          'Your feedback for Minh, An and Huy has been submitted. Keep the good rallies going.',
+          'Your feedback for $names has been submitted. Keep the good rallies going.',
           textAlign: TextAlign.center,
           style: feedbackText(14, color: AppColors.textSecondary),
         ),

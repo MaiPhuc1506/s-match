@@ -83,6 +83,9 @@ export class RatingsService {
     if (match.status === MatchState.CANCELLED) {
       throw new BadRequestException('Trận đấu đã bị huỷ, không thể đánh giá');
     }
+    if (match.status !== MatchState.COMPLETED) {
+      throw new BadRequestException('Host phải hoàn thành trận đấu trước khi đánh giá');
+    }
     const now = Date.now();
     const endedAt = match.endTime.getTime();
     if (endedAt > now) {

@@ -138,12 +138,22 @@ class FeedbackIdentity extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     children: [
       ClipOval(
-        child: Image.asset(
-          player.avatar,
-          width: 44,
-          height: 44,
-          fit: BoxFit.cover,
-        ),
+        child: player.avatar.isEmpty
+            ? Container(
+                width: 44,
+                height: 44,
+                color: const Color(0xFFDDF1E9),
+                child: const Icon(
+                  Icons.person_outline,
+                  color: AppColors.primary,
+                ),
+              )
+            : Image.asset(
+                player.avatar,
+                width: 44,
+                height: 44,
+                fit: BoxFit.cover,
+              ),
       ),
       const SizedBox(width: 12),
       Expanded(
@@ -319,11 +329,34 @@ class FeedbackSuccessBadge extends StatelessWidget {
   const FeedbackSuccessBadge({super.key, this.size = 100});
   final double size;
   @override
-  Widget build(BuildContext context) => SizedBox.square(dimension: size,
-    child: FittedBox(child: SizedBox.square(dimension: 100, child: Stack(children: [
-      Positioned(left:4.166667,top:4.166667,child:SvgPicture.asset(
-        'assets/sprint8/success_circle.svg',width:91.6667,height:91.6667)),
-      Positioned(left:27.166666,top:31.333332,child:SvgPicture.asset(
-        'assets/sprint8/success_tick.svg',width:47.75,height:35.25)),
-    ]))));
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: size,
+    child: FittedBox(
+      child: SizedBox.square(
+        dimension: 100,
+        child: Stack(
+          children: [
+            Positioned(
+              left: 4.166667,
+              top: 4.166667,
+              child: SvgPicture.asset(
+                'assets/sprint8/success_circle.svg',
+                width: 91.6667,
+                height: 91.6667,
+              ),
+            ),
+            Positioned(
+              left: 27.166666,
+              top: 31.333332,
+              child: SvgPicture.asset(
+                'assets/sprint8/success_tick.svg',
+                width: 47.75,
+                height: 35.25,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

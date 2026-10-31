@@ -38,6 +38,19 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
+          // Mutations tied to a screen/account must not adopt a newer account's
+          // token while waiting in Dio's request interceptor queue.
+          final expected = options.extra['expectedAuthToken'];
+          if (expected != null && expected != _token) {
+            handler.reject(
+              DioException(
+                requestOptions: options,
+                type: DioExceptionType.cancel,
+                message: 'Authentication session changed.',
+              ),
+            );
+            return;
+          }
           if (_token != null) {
             options.headers['Authorization'] = 'Bearer $_token';
           }
