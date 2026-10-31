@@ -13,6 +13,8 @@ import { BookingStatus, MatchPrivacy, MatchState, ParticipantRole, ParticipantSt
 import { CreateOpenMatchDto, QueryOpenMatchDto } from './dto/open-match.dto';
 import { Role } from '../auth/roles.enum';
 import { types } from 'node:util';
+import { SubmitFeedbackDto } from './dto/submit-feedback.dto';
+import { FeedbackResponseDto } from './dto/feedback-response.dto';
 import {
   MATCH_INVITATION_SELECT, MATCH_MANAGER_SELECT, MATCH_MEMBER_SELECT,
   MATCH_PUBLIC_SELECT, MATCH_PARTICIPANT_MUTATION_SELECT, toMatchResponse,
@@ -26,6 +28,109 @@ export interface MatchActor {
 @Injectable()
 export class MatchesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // All mutations of an existing Match/its roster take the same parent lock.
+  // Completion therefore cannot commit between a state check and a roster write.
+  private async withMatchLock<T>(matchId: number, action: (db: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    try {
+      return await this.prisma.$transaction(async (db) => {
+        await db.$queryRaw`SELECT id FROM "Match" WHERE id = ${matchId} FOR UPDATE`;
+        return action(db);
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+    } catch (error) {
+      this.rethrowMatchWriteError(error);
+    }
+  }
+
+  private requireNotCompleted(status: MatchState) {
+    if (status === MatchState.COMPLETED) {
+      throw new ConflictException('Không thể thay đổi trận đấu đã hoàn thành');
+    }
+  }
+
+  async completeMatch(matchId: number, userId: number) {
+    if (!Number.isInteger(matchId) || matchId < 1 || matchId > 2147483647) {
+      throw new BadRequestException('Match ID phải là số nguyên từ 1 đến 2147483647');
+    }
+    return this.withMatchLock(matchId, async (db) => {
+      const match = await db.match.findUnique({
+        where: { id: matchId }, select: { hostId: true, status: true, endTime: true },
+      });
+      if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
+      if (match.hostId !== userId) throw new ForbiddenException('Chỉ Host mới có quyền hoàn thành trận đấu');
+      const now = new Date();
+      const allowed: MatchState[] = [MatchState.OPEN, MatchState.FULL, MatchState.IN_PROGRESS];
+      if (!allowed.includes(match.status) || match.endTime > now) {
+        throw new ConflictException('Trận đấu chưa đủ điều kiện hoàn thành');
+      }
+      const written = await db.match.updateMany({
+        where: { id: matchId, hostId: userId, status: { in: allowed }, endTime: { lte: now } },
+        data: { status: MatchState.COMPLETED },
+      });
+      if (written.count !== 1) throw new ConflictException('Trạng thái trận đấu đã thay đổi');
+      const completed = await db.match.findUnique({ where: { id: matchId }, select: MATCH_MANAGER_SELECT });
+      if (!completed) throw new NotFoundException('Không tìm thấy trận đấu');
+      return toMatchResponse(completed);
+    });
+  }
+
+  async submitFeedback(matchId: number, senderUserId: number, dto: SubmitFeedbackDto): Promise<FeedbackResponseDto> {
+    this.validatePlayerCount(matchId, 1, 2147483647, 'Match ID');
+    this.validatePlayerCount(dto.recipientUserId, 1, 2147483647, 'recipientUserId');
+    this.validatePlayerCount(dto.rating, 1, 5, 'rating');
+    if (dto.comment !== undefined && (typeof dto.comment !== 'string' || Array.from(dto.comment).length > 500)) {
+      throw new BadRequestException('Comment phải là chuỗi tối đa 500 ký tự');
+    }
+    if (senderUserId === dto.recipientUserId) throw new BadRequestException('Không thể tự đánh giá');
+
+    return this.withMatchLock(matchId, async (db) => {
+      const match = await db.match.findUnique({
+        where: { id: matchId },
+        select: {
+          status: true, endTime: true,
+          participants: {
+            where: { userId: { in: [senderUserId, dto.recipientUserId] }, status: ParticipantStatus.ACCEPTED },
+            select: { userId: true },
+          },
+        },
+      });
+      if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
+      if (!match.participants.some((participant) => participant.userId === senderUserId)) {
+        throw new ForbiddenException('Chỉ participant ACCEPTED của trận được gửi feedback');
+      }
+      if (match.status !== MatchState.COMPLETED || match.endTime > new Date()) {
+        throw new ConflictException('Trận đấu chưa đủ điều kiện nhận feedback');
+      }
+      if (!match.participants.some((participant) => participant.userId === dto.recipientUserId)) {
+        throw new BadRequestException('Người nhận không hợp lệ trong trận');
+      }
+      try {
+        const feedback = await db.feedback.create({
+          data: { matchId, senderUserId, recipientUserId: dto.recipientUserId, rating: dto.rating, comment: dto.comment ?? null },
+          select: { id: true, matchId: true, senderUserId: true, recipientUserId: true, rating: true, comment: true, createdAt: true },
+        });
+        return {
+          id: feedback.id, matchId: feedback.matchId, senderUserId: feedback.senderUserId,
+          recipientUserId: feedback.recipientUserId, rating: feedback.rating,
+          comment: feedback.comment, createdAt: feedback.createdAt,
+        };
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+          const target = error.meta?.target;
+          const keys = ['matchId', 'senderUserId', 'recipientUserId'];
+          const duplicate = Array.isArray(target)
+            ? target.length === keys.length && keys.every((key) => target.includes(key))
+            : target === 'Feedback_matchId_senderUserId_recipientUserId_key';
+          if (error.code === 'P2002' && duplicate && (!error.meta?.modelName || error.meta.modelName === 'Feedback')) {
+            throw new ConflictException('Bạn đã gửi feedback cho người chơi này trong trận');
+          }
+          if (error.code === 'P2034') throw new ConflictException('Dữ liệu feedback đang có xung đột');
+        }
+        // Do not let the generic Match error mapper misclassify Feedback constraints.
+        throw new InternalServerErrorException('Không thể lưu feedback');
+      }
+    });
+  }
 
   private validateMatchTimes(startValue: string | Date, endValue: string | Date) {
     const parse = (value: string | Date) => types.isDate(value)
@@ -188,25 +293,28 @@ export class MatchesService {
   }
 
   async leave(userId: number, matchId: number) {
-    const match = await this.getMatchForParticipation(matchId);
-    if (match.hostId === userId) {
-      throw new BadRequestException('Host không thể rời trận đấu của mình');
-    }
-    const participant = match.participants.find((entry) => entry.userId === userId);
-    if (!participant || (
-      participant.status !== ParticipantStatus.REQUESTED &&
-      participant.status !== ParticipantStatus.INVITED &&
-      participant.status !== ParticipantStatus.ACCEPTED
-    )) {
-      throw new NotFoundException('Bạn không có lời mời hoặc yêu cầu tham gia đang hoạt động');
-    }
-    await this.prisma.matchParticipant.update({
-      where: { id: participant.id },
-      data: { status: ParticipantStatus.CANCELLED },
+    return this.withMatchLock(matchId, async (db) => {
+      const match = await this.getMatchForParticipation(matchId, db);
+      if (match.hostId === userId) {
+        throw new BadRequestException('Host không thể rời trận đấu của mình');
+      }
+      this.requireNotCompleted(match.status);
+      const participant = match.participants.find((entry) => entry.userId === userId);
+      if (!participant || (
+        participant.status !== ParticipantStatus.REQUESTED &&
+        participant.status !== ParticipantStatus.INVITED &&
+        participant.status !== ParticipantStatus.ACCEPTED
+      )) {
+        throw new NotFoundException('Bạn không có lời mời hoặc yêu cầu tham gia đang hoạt động');
+      }
+      await db.matchParticipant.update({
+        where: { id: participant.id },
+        data: { status: ParticipantStatus.CANCELLED },
+      });
+      await this.checkAndUpdateMatchFullState(matchId, db);
+      // Membership has been removed; do not return PRIVATE detail after leaving.
+      return { id: matchId, left: true };
     });
-    await this.checkAndUpdateMatchFullState(matchId);
-    // Membership has been removed; do not return PRIVATE detail after leaving.
-    return { id: matchId, left: true };
   }
 
   // 1. Tạo Match mới (Người tạo tự động thành HOST và status ACCEPTED)
@@ -309,11 +417,11 @@ export class MatchesService {
     return toMatchResponse(match);
   }
 
-  private async getMatchForParticipation(id: number) {
-    const match = await this.prisma.match.findUnique({
+  private async getMatchForParticipation(id: number, db: Prisma.TransactionClient = this.prisma) {
+    const match = await db.match.findUnique({
       where: { id },
       select: {
-        id: true, hostId: true,
+        id: true, hostId: true, status: true,
         participants: { select: { id: true, userId: true, status: true } },
       },
     });
@@ -326,24 +434,19 @@ export class MatchesService {
     if (dto.maxPlayers !== undefined) this.validatePlayerCount(dto.maxPlayers, 2, 2147483647, 'maxPlayers');
     // Validate an explicit null as well: detaching a Booking is not allowed.
     if (dto.bookingId !== undefined) this.assertBookingId(dto.bookingId);
-    try {
-      if (dto.bookingId !== undefined) {
-        return await this.prisma.$transaction((tx) => this.updateMatchForHost(tx, matchId, userId, dto));
-      }
-      return await this.updateMatchForHost(this.prisma, matchId, userId, dto);
-    } catch (error) {
-      this.rethrowMatchWriteError(error);
-    }
+    return this.withMatchLock(matchId, (db) => this.updateMatchForHost(db, matchId, userId, dto));
   }
 
   private async updateMatchForHost(db: Prisma.TransactionClient, matchId: number, userId: number, dto: UpdateMatchDto) {
     const match = await db.match.findUnique({
-      where: { id: matchId }, select: { id: true, hostId: true, bookingId: true, startTime: true, endTime: true },
+      where: { id: matchId }, select: { id: true, hostId: true, status: true, bookingId: true, startTime: true, endTime: true },
     });
     if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
     if (match.hostId !== userId) {
       throw new ForbiddenException('Chỉ có Host mới có quyền chỉnh sửa trận đấu');
     }
+
+    this.requireNotCompleted(match.status);
 
     // Validate only when a time field is supplied; legacy times do not block title-only PATCH.
     if (dto.startTime !== undefined || dto.endTime !== undefined) {
@@ -377,209 +480,229 @@ export class MatchesService {
       return toMatchResponse(unchanged);
     }
     const updated = await db.match.update({
-      where: { id: matchId, hostId: match.hostId }, data, select: MATCH_MANAGER_SELECT,
+      where: { id: matchId, hostId: match.hostId, status: { not: MatchState.COMPLETED } }, data, select: MATCH_MANAGER_SELECT,
     });
     return toMatchResponse(updated);
   }
 
   // 5. Hủy Match (Chỉ Host)
   async cancelMatch(matchId: number, userId: number) {
-    const match = await this.prisma.match.findUnique({ where: { id: matchId } });
-    if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
-    if (match.hostId !== userId) {
-      throw new ForbiddenException('Chỉ có Host mới có quyền hủy trận đấu');
-    }
+    return this.withMatchLock(matchId, async (db) => {
+      const match = await db.match.findUnique({ where: { id: matchId } });
+      if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
+      if (match.hostId !== userId) {
+        throw new ForbiddenException('Chỉ có Host mới có quyền hủy trận đấu');
+      }
+      this.requireNotCompleted(match.status);
 
-    const cancelled = await this.prisma.match.update({
-      where: { id: matchId },
-      data: { status: MatchState.CANCELLED },
-      select: MATCH_MANAGER_SELECT,
+      const cancelled = await db.match.update({
+        where: { id: matchId, status: { not: MatchState.COMPLETED } },
+        data: { status: MatchState.CANCELLED },
+        select: MATCH_MANAGER_SELECT,
+      });
+      return toMatchResponse(cancelled);
     });
-    return toMatchResponse(cancelled);
   }
 
   // 6. Host mời thành viên vào trận
   async inviteUser(matchId: number, hostUserId: number, targetUserId: number) {
-    const match = await this.prisma.match.findUnique({
-      where: { id: matchId },
-      include: { participants: true },
-    });
-    if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
-    if (match.hostId !== hostUserId) {
-      throw new ForbiddenException('Chỉ có Host mới có quyền gửi lời mời');
-    }
-
-    const existing = match.participants.find((p: any) => p.userId === targetUserId);
-    if (existing) {
-      if (existing.status === ParticipantStatus.ACCEPTED) {
-        throw new BadRequestException('Người chơi này đã tham gia trận');
+    return this.withMatchLock(matchId, async (db) => {
+      const match = await db.match.findUnique({
+        where: { id: matchId },
+        include: { participants: true },
+      });
+      if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
+      if (match.hostId !== hostUserId) {
+        throw new ForbiddenException('Chỉ có Host mới có quyền gửi lời mời');
       }
-      return this.prisma.matchParticipant.update({
-        where: { id: existing.id },
-        data: { status: ParticipantStatus.INVITED },
+      this.requireNotCompleted(match.status);
+
+      const existing = match.participants.find((p: any) => p.userId === targetUserId);
+      if (existing) {
+        if (existing.status === ParticipantStatus.ACCEPTED) {
+          throw new BadRequestException('Người chơi này đã tham gia trận');
+        }
+        return db.matchParticipant.update({
+          where: { id: existing.id },
+          data: { status: ParticipantStatus.INVITED },
+          select: MATCH_PARTICIPANT_MUTATION_SELECT,
+        });
+      }
+
+      return db.matchParticipant.create({
+        data: {
+          matchId,
+          userId: targetUserId,
+          role: ParticipantRole.MEMBER,
+          status: ParticipantStatus.INVITED,
+        },
         select: MATCH_PARTICIPANT_MUTATION_SELECT,
       });
-    }
-
-    return this.prisma.matchParticipant.create({
-      data: {
-        matchId,
-        userId: targetUserId,
-        role: ParticipantRole.MEMBER,
-        status: ParticipantStatus.INVITED,
-      },
-      select: MATCH_PARTICIPANT_MUTATION_SELECT,
     });
   }
 
   // 7. Người chơi xin vào Open Match
   async requestToJoin(matchId: number, userId: number) {
-    const match = await this.prisma.match.findUnique({
-      where: { id: matchId },
-      include: {
-        participants: { where: { status: ParticipantStatus.ACCEPTED } },
-      },
-    });
+    return this.withMatchLock(matchId, async (db) => {
+      const match = await db.match.findUnique({
+        where: { id: matchId },
+        include: {
+          participants: { where: { status: ParticipantStatus.ACCEPTED } },
+        },
+      });
 
-    if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
-    if (match.status !== MatchState.OPEN) {
-      throw new BadRequestException('Trận đấu này hiện không mở để tham gia');
-    }
-    if (match.privacy === MatchPrivacy.PRIVATE) {
-      throw new BadRequestException('Đây là trận đấu kín (Private), cần có lời mời từ Host');
-    }
-    if (match.participants.length >= match.maxPlayers) {
-      throw new BadRequestException('Trận đấu đã đủ số lượng người chơi');
-    }
-
-    const existing = await this.prisma.matchParticipant.findUnique({
-      where: { matchId_userId: { matchId, userId } },
-    });
-
-    if (existing) {
-      if (existing.status === ParticipantStatus.ACCEPTED) {
-        throw new BadRequestException('Bạn đã là thành viên của trận này');
+      if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
+      this.requireNotCompleted(match.status);
+      if (match.status !== MatchState.OPEN) {
+        throw new BadRequestException('Trận đấu này hiện không mở để tham gia');
       }
-      return this.prisma.matchParticipant.update({
-        where: { id: existing.id },
-        data: { status: ParticipantStatus.REQUESTED },
+      if (match.privacy === MatchPrivacy.PRIVATE) {
+        throw new BadRequestException('Đây là trận đấu kín (Private), cần có lời mời từ Host');
+      }
+      if (match.participants.length >= match.maxPlayers) {
+        throw new BadRequestException('Trận đấu đã đủ số lượng người chơi');
+      }
+
+      const existing = await db.matchParticipant.findUnique({
+        where: { matchId_userId: { matchId, userId } },
+      });
+
+      if (existing) {
+        if (existing.status === ParticipantStatus.ACCEPTED) {
+          throw new BadRequestException('Bạn đã là thành viên của trận này');
+        }
+        return db.matchParticipant.update({
+          where: { id: existing.id },
+          data: { status: ParticipantStatus.REQUESTED },
+          select: MATCH_PARTICIPANT_MUTATION_SELECT,
+        });
+      }
+
+      return db.matchParticipant.create({
+        data: {
+          matchId,
+          userId,
+          role: ParticipantRole.MEMBER,
+          status: ParticipantStatus.REQUESTED,
+        },
         select: MATCH_PARTICIPANT_MUTATION_SELECT,
       });
-    }
-
-    return this.prisma.matchParticipant.create({
-      data: {
-        matchId,
-        userId,
-        role: ParticipantRole.MEMBER,
-        status: ParticipantStatus.REQUESTED,
-      },
-      select: MATCH_PARTICIPANT_MUTATION_SELECT,
     });
   }
 
   // 8. Chấp nhận lời mời (Accept Invitation)
   async acceptInvitation(matchId: number, userId: number) {
-    const participant = await this.prisma.matchParticipant.findUnique({
-      where: { matchId_userId: { matchId, userId } },
-      include: { match: { include: { participants: { where: { status: ParticipantStatus.ACCEPTED } } } } },
+    return this.withMatchLock(matchId, async (db) => {
+      const participant = await db.matchParticipant.findUnique({
+        where: { matchId_userId: { matchId, userId } },
+        include: { match: { include: { participants: { where: { status: ParticipantStatus.ACCEPTED } } } } },
+      });
+
+      if (!participant || participant.status !== ParticipantStatus.INVITED) {
+        throw new BadRequestException('Không tìm thấy lời mời hợp lệ');
+      }
+
+      this.requireOpenForAcceptance(participant.match.status);
+      if (participant.match.participants.length >= participant.match.maxPlayers) {
+        throw new BadRequestException('Trận đấu đã đầy người chơi');
+      }
+
+      const updated = await db.matchParticipant.update({
+        where: { id: participant.id },
+        data: { status: ParticipantStatus.ACCEPTED },
+        select: MATCH_PARTICIPANT_MUTATION_SELECT,
+      });
+
+      await this.checkAndUpdateMatchFullState(matchId, db);
+      return updated;
     });
-
-    if (!participant || participant.status !== ParticipantStatus.INVITED) {
-      throw new BadRequestException('Không tìm thấy lời mời hợp lệ');
-    }
-
-    this.requireOpenForAcceptance(participant.match.status);
-    if (participant.match.participants.length >= participant.match.maxPlayers) {
-      throw new BadRequestException('Trận đấu đã đầy người chơi');
-    }
-
-    const updated = await this.prisma.matchParticipant.update({
-      where: { id: participant.id },
-      data: { status: ParticipantStatus.ACCEPTED },
-      select: MATCH_PARTICIPANT_MUTATION_SELECT,
-    });
-
-    await this.checkAndUpdateMatchFullState(matchId);
-    return updated;
   }
 
   // 9. Từ chối lời mời (Reject Invitation)
   async rejectInvitation(matchId: number, userId: number) {
-    const participant = await this.prisma.matchParticipant.findUnique({
-      where: { matchId_userId: { matchId, userId } },
-    });
+    return this.withMatchLock(matchId, async (db) => {
+      const participant = await db.matchParticipant.findUnique({
+        where: { matchId_userId: { matchId, userId } },
+        include: { match: { select: { status: true } } },
+      });
 
-    if (!participant || participant.status !== ParticipantStatus.INVITED) {
-      throw new BadRequestException('Không tìm thấy lời mời hợp lệ');
-    }
+      if (!participant || participant.status !== ParticipantStatus.INVITED) {
+        throw new BadRequestException('Không tìm thấy lời mời hợp lệ');
+      }
 
-    return this.prisma.matchParticipant.update({
-      where: { id: participant.id },
-      data: { status: ParticipantStatus.REJECTED },
-      select: MATCH_PARTICIPANT_MUTATION_SELECT,
+      this.requireNotCompleted(participant.match.status);
+      return db.matchParticipant.update({
+        where: { id: participant.id },
+        data: { status: ParticipantStatus.REJECTED },
+        select: MATCH_PARTICIPANT_MUTATION_SELECT,
+      });
     });
   }
 
   // 10. Host duyệt yêu cầu xin vào trận
   async hostApproveRequest(matchId: number, hostUserId: number, applicantUserId: number) {
-    const match = await this.prisma.match.findUnique({
-      where: { id: matchId },
-      include: { participants: { where: { status: ParticipantStatus.ACCEPTED } } },
+    return this.withMatchLock(matchId, async (db) => {
+      const match = await db.match.findUnique({
+        where: { id: matchId },
+        include: { participants: { where: { status: ParticipantStatus.ACCEPTED } } },
+      });
+
+      if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
+      if (match.hostId !== hostUserId) {
+        throw new ForbiddenException('Chỉ Host mới có quyền duyệt yêu cầu');
+      }
+      this.requireOpenForAcceptance(match.status);
+      if (match.participants.length >= match.maxPlayers) {
+        throw new BadRequestException('Trận đấu đã đủ người chơi');
+      }
+
+      const participant = await db.matchParticipant.findUnique({
+        where: { matchId_userId: { matchId, userId: applicantUserId } },
+      });
+
+      if (!participant || participant.status !== ParticipantStatus.REQUESTED) {
+        throw new BadRequestException('Không tìm thấy yêu cầu tham gia hợp lệ của người này');
+      }
+
+      const updated = await db.matchParticipant.update({
+        where: { id: participant.id },
+        data: { status: ParticipantStatus.ACCEPTED },
+        select: MATCH_PARTICIPANT_MUTATION_SELECT,
+      });
+
+      await this.checkAndUpdateMatchFullState(matchId, db);
+      return updated;
     });
-
-    if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
-    if (match.hostId !== hostUserId) {
-      throw new ForbiddenException('Chỉ Host mới có quyền duyệt yêu cầu');
-    }
-    this.requireOpenForAcceptance(match.status);
-    if (match.participants.length >= match.maxPlayers) {
-      throw new BadRequestException('Trận đấu đã đủ người chơi');
-    }
-
-    const participant = await this.prisma.matchParticipant.findUnique({
-      where: { matchId_userId: { matchId, userId: applicantUserId } },
-    });
-
-    if (!participant || participant.status !== ParticipantStatus.REQUESTED) {
-      throw new BadRequestException('Không tìm thấy yêu cầu tham gia hợp lệ của người này');
-    }
-
-    const updated = await this.prisma.matchParticipant.update({
-      where: { id: participant.id },
-      data: { status: ParticipantStatus.ACCEPTED },
-      select: MATCH_PARTICIPANT_MUTATION_SELECT,
-    });
-
-    await this.checkAndUpdateMatchFullState(matchId);
-    return updated;
   }
 
   // 11. Host từ chối yêu cầu xin vào trận
   async hostRejectRequest(matchId: number, hostUserId: number, applicantUserId: number) {
-    const match = await this.prisma.match.findUnique({ where: { id: matchId } });
-    if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
-    if (match.hostId !== hostUserId) {
-      throw new ForbiddenException('Chỉ Host mới có quyền từ chối yêu cầu');
-    }
+    return this.withMatchLock(matchId, async (db) => {
+      const match = await db.match.findUnique({ where: { id: matchId } });
+      if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
+      if (match.hostId !== hostUserId) {
+        throw new ForbiddenException('Chỉ Host mới có quyền từ chối yêu cầu');
+      }
+      this.requireNotCompleted(match.status);
 
-    const participant = await this.prisma.matchParticipant.findUnique({
-      where: { matchId_userId: { matchId, userId: applicantUserId } },
-    });
+      const participant = await db.matchParticipant.findUnique({
+        where: { matchId_userId: { matchId, userId: applicantUserId } },
+      });
 
-    if (!participant || participant.status !== ParticipantStatus.REQUESTED) {
-      throw new BadRequestException('Không tìm thấy yêu cầu tham gia hợp lệ của người này');
-    }
+      if (!participant || participant.status !== ParticipantStatus.REQUESTED) {
+        throw new BadRequestException('Không tìm thấy yêu cầu tham gia hợp lệ của người này');
+      }
 
-    return this.prisma.matchParticipant.update({
-      where: { id: participant.id },
-      data: { status: ParticipantStatus.REJECTED },
-      select: MATCH_PARTICIPANT_MUTATION_SELECT,
+      return db.matchParticipant.update({
+        where: { id: participant.id },
+        data: { status: ParticipantStatus.REJECTED },
+        select: MATCH_PARTICIPANT_MUTATION_SELECT,
+      });
     });
   }
 
-  private async checkAndUpdateMatchFullState(matchId: number) {
-    const match = await this.prisma.match.findUnique({
+  private async checkAndUpdateMatchFullState(matchId: number, db: Prisma.TransactionClient) {
+    const match = await db.match.findUnique({
       where: { id: matchId },
       include: {
         booking: true,
@@ -588,8 +711,8 @@ export class MatchesService {
     });
 
     if (!match || (match.status !== MatchState.OPEN && match.status !== MatchState.FULL)) return;
-    await this.prisma.match.update({
-      where: { id: matchId },
+    await db.match.updateMany({
+      where: { id: matchId, status: { in: [MatchState.OPEN, MatchState.FULL] } },
       data: {
         status: match.participants.length >= match.maxPlayers ? MatchState.FULL : MatchState.OPEN,
         ...(match.booking && { feePerPlayer: match.booking.totalPrice / Math.max(1, match.participants.length) }),

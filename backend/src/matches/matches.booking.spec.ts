@@ -125,6 +125,13 @@ describe('Match Booking ownership (Prisma mock)', () => {
     const tx = {
       ...root,
       $queryRaw: jest.fn(async (sql, id) => {
+        if (sql.join('?').includes('"Match"')) {
+          expect(path).toBe('patch');
+          expect(sql.join('?')).toContain('WHERE id = ? FOR UPDATE');
+          expect(id).toBe(11);
+          events.push('match-lock');
+          return [];
+        }
         expect(sql.join('?')).toContain('WHERE id = ? FOR SHARE');
         expect(id).toBe(102);
         events.push('lock');
@@ -143,7 +150,7 @@ describe('Match Booking ownership (Prisma mock)', () => {
     expect(root.$transaction).toHaveBeenCalledTimes(1);
     expect(root.booking.findUnique).not.toHaveBeenCalled();
     expect(root.$queryRaw).not.toHaveBeenCalled();
-    expect(events).toEqual(['lock', 'read', 'write']);
+    expect(events).toEqual(path === 'patch' ? ['match-lock', 'lock', 'read', 'write'] : ['lock', 'read', 'write']);
   });
 
   it.each(['create', 'patch', 'open'])('maps transaction-level booking unique failure to 409 for %s', async (path) => {

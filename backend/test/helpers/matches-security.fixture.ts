@@ -7,6 +7,8 @@ export function matchesWhere(row: any, where: any = {}): boolean {
     if (key === 'OR') return value.some((w: any) => matchesWhere(row, w));
     if (key === 'participants') return row.participants.some((p: any) => matchesWhere(p, value.some));
     if (value && typeof value === 'object' && 'in' in value) return value.in.includes(row[key]);
+    if (value && typeof value === 'object' && 'not' in value) return row[key] !== value.not;
+    if (value && typeof value === 'object' && 'lte' in value) return row[key] <= value.lte;
     return row[key] === value;
   });
 }
@@ -74,6 +76,11 @@ export function makeMatchSecurityFixture() {
         const row = rows.find((entry) => matchesWhere(entry, where));
         Object.assign(row, data);
         return projectMatch(row, select);
+      }),
+      updateMany: jest.fn(async ({ where, data }) => {
+        const matches = rows.filter((row) => matchesWhere(row, where));
+        for (const row of matches) Object.assign(row, data);
+        return { count: matches.length };
       }),
       create: jest.fn(async ({ data, select }) => projectMatch({ ...privateMatch, ...data, participants: privateMatch.participants }, select)),
     },

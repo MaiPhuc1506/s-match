@@ -24,7 +24,7 @@ describe('PATCH Match field presence (Prisma mock)', () => {
     expect(fixture.privateMatch).toEqual({ ...before, title: 'Changed title' });
     expectSafeMatchResponse(result);
     expect(fixture.prisma.booking.findUnique).not.toHaveBeenCalled();
-    expect(fixture.prisma.$transaction).not.toHaveBeenCalled();
+    expect(fixture.prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
   it('a repeated current Booking is validated, remains a no-op, and inherits no defaults', async () => {
@@ -33,7 +33,7 @@ describe('PATCH Match field presence (Prisma mock)', () => {
     expect(JSON.stringify(fixture.rows)).toBe(before);
     expect(fixture.prisma.match.update).not.toHaveBeenCalled();
     expect(fixture.prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(fixture.prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(fixture.prisma.$queryRaw).toHaveBeenCalledTimes(2);
     expectSafeMatchResponse(result);
   });
 

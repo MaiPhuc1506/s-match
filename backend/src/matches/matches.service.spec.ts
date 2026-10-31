@@ -22,7 +22,7 @@ describe('MatchesService', () => {
     prisma = {
       $queryRaw: jest.fn(async () => []),
       booking: { findUnique: jest.fn() },
-      match: { create: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+      match: { create: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
       matchParticipant: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
     };
     prisma.$transaction = jest.fn(async (callback) => callback(prisma));
@@ -105,8 +105,8 @@ describe('MatchesService', () => {
     expect(prisma.matchParticipant.update).toHaveBeenCalledWith({
       where: { id: 2 }, data: { status: ParticipantStatus.CANCELLED },
     });
-    expect(prisma.match.update).toHaveBeenCalledWith({
-      where: { id: 1 }, data: { status: MatchState.OPEN, feePerPlayer: 240000 },
+    expect(prisma.match.updateMany).toHaveBeenCalledWith({
+      where: { id: 1, status: { in: [MatchState.OPEN, MatchState.FULL] } }, data: { status: MatchState.OPEN, feePerPlayer: 240000 },
     });
   });
 });

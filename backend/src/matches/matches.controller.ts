@@ -19,6 +19,8 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '../auth/roles.enum';
 import { CreateOpenMatchDto, QueryOpenMatchDto } from './dto/open-match.dto';
+import { SubmitFeedbackDto } from './dto/submit-feedback.dto';
+import { FeedbackResponseDto } from './dto/feedback-response.dto';
 
 @ApiTags('Matches')
 @ApiBearerAuth()
@@ -74,8 +76,32 @@ export class MatchesController {
     return this.matchesService.cancelMatch(id, userId);
   }
 
-  // --- INVITATIONS & JOIN REQUESTS ---
+  @Patch(':id/complete')
+  @ApiOperation({ summary: 'Host hoàn thành trận khi đã đến thời điểm kết thúc' })
+  @ApiResponse({ status: 200, description: 'Match đã COMPLETED; dùng projection an toàn dành cho Host.' })
+  @ApiResponse({ status: 400, description: 'Match ID không hợp lệ.' })
+  @ApiResponse({ status: 401, description: 'Token hoặc phiên đăng nhập không hợp lệ.' })
+  @ApiResponse({ status: 403, description: 'Chỉ Host được hoàn thành trận, không có ADMIN override.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy Match.' })
+  @ApiResponse({ status: 409, description: 'Chưa đến giờ kết thúc hoặc trạng thái không cho phép.' })
+  completeMatch(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    return this.matchesService.completeMatch(id, req.user.sub);
+  }
 
+  @Post(':id/feedback')
+  @Roles(Role.PLAYER)
+  @ApiOperation({ summary: 'Participant đánh giá một người chơi cùng trận đã hoàn thành' })
+  @ApiResponse({ status: 201, type: FeedbackResponseDto })
+  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ, tự đánh giá hoặc người nhận không ACCEPTED trong trận.' })
+  @ApiResponse({ status: 401, description: 'Token hoặc phiên đăng nhập không hợp lệ.' })
+  @ApiResponse({ status: 403, description: 'Chỉ PLAYER là participant ACCEPTED được gửi.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy Match.' })
+  @ApiResponse({ status: 409, description: 'Trận chưa hoàn thành/đến giờ kết thúc hoặc đã gửi feedback cho người này.' })
+  submitFeedback(@Param('id', ParseIntPipe) id: number, @Request() req: any, @Body() dto: SubmitFeedbackDto) {
+    return this.matchesService.submitFeedback(id, req.user.sub, dto);
+  }
+
+  // --- INVITATIONS & JOIN REQUESTS ---
   @Post(':id/invite')
   @ApiOperation({ summary: 'Host gửi lời mời một người chơi tham gia trận' })
   async inviteUser(
