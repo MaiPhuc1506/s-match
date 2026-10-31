@@ -412,8 +412,7 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
                 ('shop', 'Pro shop'),
               ]
               .map(
-                (a) => SizedBox(
-                  width: 58,
+                (a) => Expanded(
                   child: Column(
                     children: [
                       Container(

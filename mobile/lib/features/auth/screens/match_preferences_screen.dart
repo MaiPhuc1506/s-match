@@ -1,9 +1,12 @@
+import '../../../core/theme/app_motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../widgets/sprint2_presentation.dart';
+import '../services/match_preferences_service.dart';
+import '../../../core/network/api_client.dart';
 
 class MatchPreferencesScreen extends StatefulWidget {
   const MatchPreferencesScreen({super.key});
@@ -25,6 +28,151 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
   String _playingMode = 'Doubles';
   String _opponentLevel = 'Intermediate';
   String _playStyle = 'Balanced';
+  bool _loading = false, _saving = false, _loaded = false;
+  String? _error;
+  Map<String, dynamic>? _existingPreference;
+  List<Map<String, dynamic>> _existingAvailability = [];
+  bool get _preview => ApiClient.instance.token == null;
+  static const _dayIds = {
+    'Sun': 0,
+    'Mon': 1,
+    'Tue': 2,
+    'Wed': 3,
+    'Thu': 4,
+    'Fri': 5,
+    'Sat': 6,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    if (_preview) {
+      _selectedDays
+        ..clear()
+        ..addAll(MatchPreferencesPreview.days);
+      _fromTime = MatchPreferencesPreview.from;
+      _toTime = MatchPreferencesPreview.to;
+      _playingMode = MatchPreferencesPreview.mode;
+      _opponentLevel = MatchPreferencesPreview.level;
+      _playStyle = MatchPreferencesPreview.style;
+    } else {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final data = await MatchPreferencesService.instance.load();
+      if (!mounted) return;
+      setState(() {
+        _existingPreference = data.preference;
+        _existingAvailability = data.availability;
+        _selectedDays
+          ..clear()
+          ..addAll(
+            _dayIds.keys.where(
+              (d) => data.availability.any((s) => s['dayOfWeek'] == _dayIds[d]),
+            ),
+          );
+        if (data.availability.isNotEmpty) {
+          _fromTime = data.availability.first['startTime'].toString().substring(
+            0,
+            5,
+          );
+          _toTime = data.availability.first['endTime'].toString().substring(
+            0,
+            5,
+          );
+        }
+        if (data.preference != null) {
+          _playingMode = data.preference!['preferredMode'] == 'SINGLES'
+              ? 'Singles'
+              : 'Doubles';
+          final min = data.preference!['minSkillLevel'] as int;
+          _opponentLevel = min >= 5
+              ? 'Advanced'
+              : min >= 3
+              ? 'Intermediate'
+              : 'Beginner';
+        }
+        _loading = false;
+        _loaded = true;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = error.toString();
+        });
+      }
+    }
+  }
+
+  Future<void> _save() async {
+    if (_loading || _saving) return;
+    if (_selectedDays.isEmpty || _fromTime.compareTo(_toTime) >= 0) {
+      setState(
+        () => _error =
+            'Select at least one day and an end time after the start time.',
+      );
+      return;
+    }
+    if (!_preview && !_loaded) {
+      await _load();
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      if (_preview) {
+        MatchPreferencesPreview.days = {..._selectedDays};
+        MatchPreferencesPreview.from = _fromTime;
+        MatchPreferencesPreview.to = _toTime;
+        MatchPreferencesPreview.mode = _playingMode;
+        MatchPreferencesPreview.level = _opponentLevel;
+        MatchPreferencesPreview.style = _playStyle;
+      } else {
+        final bounds = switch (_opponentLevel) {
+          'Beginner' => (1, 2),
+          'Advanced' => (5, 5),
+          _ => (3, 4),
+        };
+        await MatchPreferencesService.instance.save(
+          mode: _playingMode,
+          minLevel: bounds.$1,
+          maxLevel: bounds.$2,
+          days: _selectedDays.map((d) => _dayIds[d]!).toSet(),
+          from: _fromTime,
+          to: _toTime,
+          existingPreference: _existingPreference,
+          existingAvailability: _existingAvailability,
+        );
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _preview ? 'UI preview: preferences saved for this session only.' : 'Availability and preferences saved. Play Style is not supported by the current API.',
+          ),
+        ),
+      );
+      Navigator.of(context).pop();
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _loaded = false;
+          _error = error.toString();
+        });
+      }
+    }
+  }
 
   TextStyle _style({
     required double size,
@@ -55,6 +203,17 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
                 child: Sprint2FormBody(
                   button: _buildSaveButton(),
                   children: [
+                    if (_loading) const LinearProgressIndicator(),
+                    if (_error != null)
+                      MaterialBanner(
+                        content: Text(_error!),
+                        actions: [
+                          TextButton(
+                            onPressed: _load,
+                            child: const Text('Reload'),
+                          ),
+                        ],
+                      ),
                     _buildAvailability(),
                     _buildPlayingMode(),
                     _buildOpponentLevel(),
@@ -182,7 +341,7 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
           });
         },
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
+          duration: AppMotion.duration(context, 160),
           height: 40,
           alignment: Alignment.center,
           decoration: BoxDecoration(
@@ -251,7 +410,7 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
               dropdownColor: Colors.white,
               borderRadius: BorderRadius.circular(12),
               style: _style(size: 14, weight: FontWeight.w400, lineHeight: 20),
-              items: values.map((time) {
+              items: {...values, value}.toList().map((time) {
                 return DropdownMenuItem<String>(value: time, child: Text(time));
               }).toList(),
               onChanged: onChanged,
@@ -358,7 +517,7 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
+        duration: AppMotion.duration(context, 160),
         height: compact ? 32.661 : 40,
         alignment: Alignment.center,
         decoration: BoxDecoration(
@@ -384,20 +543,7 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
       width: 345,
       height: 52,
       child: ElevatedButton(
-        onPressed: () {
-          final preferences = {
-            'days': _selectedDays.toList(),
-            'fromTime': _fromTime,
-            'toTime': _toTime,
-            'playingMode': _playingMode,
-            'opponentLevel': _opponentLevel,
-            'playStyle': _playStyle,
-          };
-
-          debugPrint('Match preferences: $preferences');
-
-          Navigator.of(context).pop();
-        },
+        onPressed: _loading || _saving ? null : _save,
         style: ElevatedButton.styleFrom(
           elevation: 0,
           backgroundColor: _primary,
@@ -408,15 +554,23 @@ class _MatchPreferencesScreenState extends State<MatchPreferencesScreen> {
             borderRadius: BorderRadius.circular(26),
           ),
         ),
-        child: Text(
-          'Save Preferences',
-          style: _style(
-            size: 15,
-            weight: FontWeight.w600,
-            lineHeight: 20,
-            color: Colors.white,
-          ),
-        ),
+        child: _saving
+            ? const SizedBox.square(
+                dimension: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Text(
+                'Save Preferences',
+                style: _style(
+                  size: 15,
+                  weight: FontWeight.w600,
+                  lineHeight: 20,
+                  color: Colors.white,
+                ),
+              ),
       ),
     );
   }

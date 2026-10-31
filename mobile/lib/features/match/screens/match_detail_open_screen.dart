@@ -1,3 +1,4 @@
+import '../../../core/theme/app_motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -76,8 +77,10 @@ class MatchDetailOpenScreen extends StatelessWidget {
         builder: (sheetCtx) => ListenableBuilder(
           listenable: _store,
           builder: (sheetCtx, _) => SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                top: 12, bottom: 12 + MediaQuery.viewInsetsOf(sheetCtx).bottom,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,7 +173,7 @@ class MatchDetailOpenScreen extends StatelessWidget {
     Navigator.of(context).push(
       PageRouteBuilder<void>(
         pageBuilder: (_, _, _) => MatchParticipantListScreen(match: match),
-        transitionDuration: const Duration(milliseconds: 200),
+        transitionDuration: AppMotion.duration(context, 200),
         transitionsBuilder: (_, animation, _, child) =>
             FadeTransition(opacity: animation, child: child),
       ),

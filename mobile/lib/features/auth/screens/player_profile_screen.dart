@@ -1,3 +1,4 @@
+import '../../../core/theme/app_motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -88,8 +89,8 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
   ) async {
     final result = await Navigator.of(context).push<Object?>(
       PageRouteBuilder<Object?>(
-        transitionDuration: const Duration(milliseconds: 250),
-        reverseTransitionDuration: const Duration(milliseconds: 250),
+        transitionDuration: AppMotion.duration(context, 250),
+        reverseTransitionDuration: AppMotion.duration(context, 250),
         pageBuilder: (_, animation, secondaryAnimation) {
           return destination;
         },

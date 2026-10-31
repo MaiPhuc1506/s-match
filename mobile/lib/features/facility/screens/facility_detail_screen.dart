@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mobile/core/theme/app_colors.dart';
@@ -30,7 +31,9 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _courtCount = widget.facility.courtCount > 0 ? widget.facility.courtCount : 4;
+    _courtCount = widget.facility.courtCount > 0
+        ? widget.facility.courtCount
+        : 4;
     _operatingHoursText = widget.facility.operatingHours.isEmpty
         ? 'Chưa thiết lập'
         : widget.facility.operatingHours;
@@ -84,6 +87,7 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        toolbarHeight: 44,
         backgroundColor: AppColors.background,
         elevation: 0,
         leading: IconButton(
@@ -144,11 +148,7 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
                 value: 'delete',
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.delete_outline,
-                      size: 18,
-                      color: Colors.red,
-                    ),
+                    Icon(Icons.delete_outline, size: 18, color: Colors.red),
                     SizedBox(width: 8),
                     Text('Xóa cơ sở', style: TextStyle(color: Colors.red)),
                   ],
@@ -163,12 +163,24 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 12),
-
+            SizedBox(
+              height: 118,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Opacity(
+                  opacity: .22,
+                  child: SvgPicture.asset(
+                    'assets/icons/sprint4_court_pattern.svg',
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
             // 1. Facility Hero Card (345 x 108 px)
             _buildHeroCard(),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
             // 2. Ba Stat Cards (105 x 72 px, cách nhau 15 px)
             _buildStatCards(),
@@ -461,11 +473,10 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
   Widget _buildHeroCard() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.zero,
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,14 +484,17 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                widget.facility.name,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textDark,
+              Expanded(
+                child: Text(
+                  widget.facility.name,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textDark,
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -525,7 +539,7 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Tiêu chuẩn thi đấu Yonex, đèn LED chống loá, hệ thống điều hoà và căn tin phục vụ giải khát.',
+            widget.facility.description ?? 'A modern badminton facility with high-quality courts and a friendly community.',
             style: GoogleFonts.plusJakartaSans(
               fontSize: 12,
               fontWeight: FontWeight.w400,
@@ -829,8 +843,9 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
     );
 
     if (confirmed == true) {
-      final result =
-          await FacilityService.instance.deleteFacility(widget.facility.id);
+      final result = await FacilityService.instance.deleteFacility(
+        widget.facility.id,
+      );
       if (!mounted) return;
       if (result.success) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -843,9 +858,7 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              result.message ?? 'Không thể xóa cơ sở.',
-            ),
+            content: Text(result.message ?? 'Không thể xóa cơ sở.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -853,4 +866,3 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
     }
   }
 }
-

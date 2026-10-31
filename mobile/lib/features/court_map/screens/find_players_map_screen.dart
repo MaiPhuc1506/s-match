@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion.dart';
+
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -85,6 +87,12 @@ class _FindPlayersMapScreenState extends ConsumerState<FindPlayersMapScreen>
   }
 
   void _recenter() {
+    if (AppMotion.reduced(context)) {
+      _recenterController.stop();
+      _map.value = Matrix4.identity();
+      ref.read(playerMapCameraProvider.notifier).state = Matrix4.identity();
+      return;
+    }
     // Only the schematic camera is animated; no precise GPS data is used.
     HapticFeedback.selectionClick();
     _recenterTween = Matrix4Tween(
@@ -362,8 +370,8 @@ class _FindPlayersMapScreenState extends ConsumerState<FindPlayersMapScreen>
                                   },
                                   onDoubleTap: () => _detail(p),
                                   child: AnimatedScale(
-                                    scale: _selected == p.id ? 1.04 : 1,
-                                    duration: const Duration(milliseconds: 180),
+                                    scale: !AppMotion.reduced(context) && _selected == p.id ? 1.04 : 1,
+                                    duration: AppMotion.duration(context, 180),
                                     child: _bubble(p),
                                   ),
                                 ),

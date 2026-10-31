@@ -571,7 +571,7 @@ class BookingDetailScreen extends StatelessWidget {
                 onCancelBooking!();
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Booking has been cancelled')),
+                  const SnackBar(content: Text('UI preview: cancellation is not saved to the server.')),
                 );
                 Navigator.maybePop(context);
               }

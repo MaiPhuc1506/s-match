@@ -1,5 +1,8 @@
 import 'dart:math' as math;
 
+import '../../../core/theme/app_motion.dart';
+import '../feedback/screens/rating_history_screen.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -77,8 +80,8 @@ class PlayerBottomNavigation extends StatelessWidget {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
         settings: RouteSettings(name: routeName),
-        transitionDuration: const Duration(milliseconds: 200),
-        reverseTransitionDuration: const Duration(milliseconds: 200),
+        transitionDuration: AppMotion.duration(context, 200),
+        reverseTransitionDuration: AppMotion.duration(context, 200),
         pageBuilder: (context, animation, secondaryAnimation) => destination,
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
@@ -121,7 +124,11 @@ class PlayerBottomNavigation extends StatelessWidget {
         if (onNavigateHome != null) {
           onNavigateHome!();
         } else {
-          showFeatureNotice(context, 'Trang chủ (Home)');
+          navigateTo(
+            context,
+            const PlayerProfileScreen(),
+            routeName: '/player-profile',
+          );
         }
         break;
 
@@ -153,7 +160,11 @@ class PlayerBottomNavigation extends StatelessWidget {
         if (onNavigateFeedback != null) {
           onNavigateFeedback!();
         } else {
-          showFeatureNotice(context, 'Phản hồi (Feedback)');
+          navigateTo(
+            context,
+            const RatingHistoryScreen(),
+            routeName: '/player-feedback',
+          );
         }
         break;
 

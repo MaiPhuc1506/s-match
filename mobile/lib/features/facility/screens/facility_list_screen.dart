@@ -180,29 +180,32 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'My Facilities',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 27,
-                      fontWeight: FontWeight.bold,
-                      height: 36 / 27,
-                      color: AppColors.white,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'My Facilities',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 27,
+                        fontWeight: FontWeight.bold,
+                        height: 36 / 27,
+                        color: AppColors.white,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Manage your badminton venues',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
-                      color: const Color(0xFFBFE8D9),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Manage your badminton venues',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: const Color(0xFFBFE8D9),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 12),
               Container(
                 width: 42,
                 height: 42,
@@ -347,11 +350,21 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavItem(0, Icons.home_outlined, 'Home'),
-              _buildNavItem(1, Icons.domain, 'Facilities'),
-              _buildNavItem(2, Icons.calendar_today_outlined, 'Bookings'),
-              _buildNavItem(3, Icons.chat_bubble_outline, 'Messages'),
-              _buildNavItem(4, Icons.person_outline, 'Profile'),
+              Expanded(child: _buildNavItem(0, Icons.home_outlined, 'Home')),
+              Expanded(child: _buildNavItem(1, Icons.domain, 'Facilities')),
+              Expanded(
+                child: _buildNavItem(
+                  2,
+                  Icons.calendar_today_outlined,
+                  'Bookings',
+                ),
+              ),
+              Expanded(
+                child: _buildNavItem(3, Icons.chat_bubble_outline, 'Messages'),
+              ),
+              Expanded(
+                child: _buildNavItem(4, Icons.person_outline, 'Profile'),
+              ),
             ],
           ),
         ),
@@ -373,7 +386,7 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
         });
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -384,12 +397,15 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
               color: isActive ? AppColors.primary : AppColors.textSecondary,
             ),
             const SizedBox(height: 3),
-            Text(
-              label,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 11,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                color: isActive ? AppColors.primary : AppColors.textSecondary,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                  color: isActive ? AppColors.primary : AppColors.textSecondary,
+                ),
               ),
             ),
           ],

@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -118,6 +120,17 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
   }
 
   void _recenterToUser() {
+    if (AppMotion.reduced(context)) {
+      _recenterController.stop();
+      setState(() {
+        _mapOffset = const Offset(0, -46);
+        _selection = false;
+        _searchOpen = false;
+        _filtersOpen = false;
+        _layersOpen = false;
+      });
+      return;
+    }
     // Recenter target: canvas (0, 46), 0.40s ease-out scroll
     final target = const Offset(0, -46);
     _recenterAnimation =

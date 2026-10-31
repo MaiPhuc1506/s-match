@@ -23,14 +23,14 @@ class CourtScheduleGrid extends StatefulWidget {
 
 class _CourtScheduleGridState extends State<CourtScheduleGrid> {
   final List<String> timeLabels = [
-    '06:00',
-    '08:00',
-    '10:00',
-    '12:00',
-    '14:00',
-    '16:00',
+    '17:00',
+    '17:30',
     '18:00',
+    '18:30',
+    '19:00',
+    '19:30',
     '20:00',
+    '20:30',
     '21:00',
   ];
 
@@ -106,22 +106,23 @@ class _CourtScheduleGridState extends State<CourtScheduleGrid> {
               Row(
                 children: [
                   const SizedBox(
-                    width: 58,
+                    width: 32,
                   ), // Khoảng trống cho tên sân bên trái
                   Expanded(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: timeLabels
                           .map(
-                            (time) => SizedBox(
-                              width: 25,
-                              child: Text(
-                                time.split(':')[0], // Chỉ hiện 06, 08...
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.textSecondary,
+                            (time) => Expanded(
+                              child: SizedBox(
+                                child: Text(
+                                  time,
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
                               ),
                             ),
@@ -137,15 +138,15 @@ class _CourtScheduleGridState extends State<CourtScheduleGrid> {
               ...List.generate(widget.courtCount, (courtIdx) {
                 final courtLabel =
                     (widget.courtNames != null &&
-                            courtIdx < widget.courtNames!.length)
-                        ? widget.courtNames![courtIdx]
-                        : 'Court ${courtIdx + 1}';
+                        courtIdx < widget.courtNames!.length)
+                    ? widget.courtNames![courtIdx]
+                    : 'Court ${courtIdx + 1}';
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(
                     children: [
                       SizedBox(
-                        width: 58,
+                        width: 32,
                         child: Text(
                           courtLabel,
                           maxLines: 1,
@@ -161,7 +162,8 @@ class _CourtScheduleGridState extends State<CourtScheduleGrid> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: List.generate(9, (timeIdx) {
-                            final status = (courtIdx < matrix.length &&
+                            final status =
+                                (courtIdx < matrix.length &&
                                     timeIdx < matrix[courtIdx].length)
                                 ? matrix[courtIdx][timeIdx]
                                 : SlotStatus.available;
@@ -169,28 +171,35 @@ class _CourtScheduleGridState extends State<CourtScheduleGrid> {
                                 selectedCourtIndex == courtIdx &&
                                 selectedTimeIndex == timeIdx;
 
-                            return GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  selectedCourtIndex = courtIdx;
-                                  selectedTimeIndex = timeIdx;
-                                });
-                                widget.onSlotSelected?.call(courtIdx, timeIdx);
-                              },
-                              child: Container(
-                                width: 25,
-                                height: 25,
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? AppColors.slotAvailable
-                                      : _getSlotColor(status),
-                                  borderRadius: BorderRadius.circular(2),
-                                  border: isSelected
-                                      ? Border.all(
-                                          color: AppColors.slotBorderSelected,
-                                          width: 2,
-                                        )
-                                      : null,
+                            return Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.all(1),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      selectedCourtIndex = courtIdx;
+                                      selectedTimeIndex = timeIdx;
+                                    });
+                                    widget.onSlotSelected?.call(
+                                      courtIdx,
+                                      timeIdx,
+                                    );
+                                  },
+                                  child: Container(
+                                    width: 25,
+                                    height: 25,
+                                    decoration: BoxDecoration(
+                                      color: _getSlotColor(status),
+                                      borderRadius: BorderRadius.circular(2),
+                                      border: isSelected
+                                          ? Border.all(
+                                              color:
+                                                  AppColors.slotBorderSelected,
+                                              width: 2,
+                                            )
+                                          : null,
+                                    ),
+                                  ),
                                 ),
                               ),
                             );
@@ -210,8 +219,9 @@ class _CourtScheduleGridState extends State<CourtScheduleGrid> {
         // Legend (Chú thích trạng thái)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 8,
             children: [
               _buildLegendItem('Available', AppColors.slotAvailableLight),
               _buildLegendItem('Booked', AppColors.slotBooked),

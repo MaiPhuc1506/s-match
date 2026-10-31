@@ -1,3 +1,4 @@
+import '../../../core/theme/app_motion.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -28,7 +29,7 @@ class MatchJoinRequestsScreen extends StatelessWidget {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
         pageBuilder: (_, _, _) => const MatchInvitationsScreen(),
-        transitionDuration: const Duration(milliseconds: 200),
+        transitionDuration: AppMotion.duration(context, 200),
         transitionsBuilder: (_, animation, _, child) =>
             FadeTransition(opacity: animation, child: child),
       ),
