@@ -1,4 +1,5 @@
 import '../../../core/theme/app_motion.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -15,6 +16,9 @@ import '../widgets/sprint2_presentation.dart';
 import '../../../core/network/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/player_profile_service.dart';
+import '../../feedback/data/rating_api.dart';
+import '../../feedback/screens/community_rating_screen.dart';
+import '../../feedback/data/feedback_repository.dart';
 
 /// Player Profile — Figma frame 195:178 (393 × 852).
 class PlayerProfileScreen extends StatefulWidget {
@@ -40,11 +44,54 @@ class PlayerProfileScreen extends StatefulWidget {
 class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
   OwnPlayerProfile? _profile;
   int _profileRequestId = 0;
+  RatingSummary? _rating;
+  String? _ratingError;
+  bool _ratingLoading = false;
+  String get _ratingLabel =>
+      ApiClient.instance.token == null ? '4.6' : _rating?.label ?? '—';
+  String get _ratingCaption => ApiClient.instance.token == null
+      ? ' 4.6 (24)'
+      : _ratingLoading
+      ? ' Loading…'
+      : _ratingError != null
+      ? ' —'
+      : ' $_ratingLabel (${_rating?.count ?? 0})';
+  Future<void> _loadRating() async {
+    if (ApiClient.instance.token == null) return;
+    setState(() {
+      _ratingLoading = true;
+      _ratingError = null;
+    });
+    try {
+      final api = RatingApi.current();
+      final value = await api.summary(api.userId);
+      if (mounted) setState(() => _rating = value);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _rating = null;
+          _ratingError = e.toString();
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _ratingLoading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    ratingRevision.removeListener(_loadRating);
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
-    if (ApiClient.instance.token != null) _loadProfile();
+    if (ApiClient.instance.token != null) {
+      _loadProfile();
+      _loadRating();
+    }
+    ratingRevision.addListener(_loadRating);
   }
 
   Future<void> _loadProfile() async {
@@ -340,7 +387,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                             text: '★',
                             style: TextStyle(color: Color(0xFFF5B72F)),
                           ),
-                          const TextSpan(text: ' 4.6 (24)'),
+                          TextSpan(text: _ratingCaption),
                         ],
                       ),
                       style: _textStyle(
@@ -506,8 +553,26 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                   },
                 ),
               ),
-              const Expanded(
-                child: _StatItem(value: '4.6', label: 'Rating'),
+              Expanded(
+                child: _StatItem(
+                  value: _ratingLabel,
+                  label: _ratingError == null ? 'Rating' : 'Retry rating',
+                  onTap: () async {
+                    final id = RatingApi.current().userId;
+                    if (_ratingError != null) {
+                      _loadRating();
+                      return;
+                    }
+                    await _navigateDissolve(
+                      context,
+                      CommunityRatingScreen(
+                        player: FeedbackPlayer('$id', _fullName, ''),
+                        live: ApiClient.instance.token != null,
+                      ),
+                    );
+                    if (mounted) _loadRating();
+                  },
+                ),
               ),
             ],
           ),

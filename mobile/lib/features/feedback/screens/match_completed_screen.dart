@@ -11,7 +11,8 @@ import 'rating_history_screen.dart';
 
 /// Figma Celebration Clean. This sample does not mark any backend match complete.
 class MatchCompletedScreen extends StatefulWidget {
-  const MatchCompletedScreen({super.key, this.repository});
+  const MatchCompletedScreen({super.key, this.repository, this.match});
+  final FeedbackMatch? match;
   final FeedbackRepository? repository;
   @override
   State<MatchCompletedScreen> createState() => _MatchCompletedScreenState();
@@ -206,7 +207,7 @@ class _MatchCompletedScreenState extends State<MatchCompletedScreen>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'COMPLETED · DOUBLES',
+                                      'COMPLETED · ${widget.match?.mode ?? 'DOUBLES'}',
                                       style: feedbackText(
                                         11,
                                         weight: FontWeight.w600,
@@ -215,7 +216,7 @@ class _MatchCompletedScreenState extends State<MatchCompletedScreen>
                                     ),
                                     const SizedBox(height: 12),
                                     Text(
-                                      'Saturday Rally',
+                                      widget.match?.title ?? 'Saturday Rally',
                                       style: feedbackText(
                                         22,
                                         weight: FontWeight.w600,
@@ -223,7 +224,8 @@ class _MatchCompletedScreenState extends State<MatchCompletedScreen>
                                     ),
                                     const SizedBox(height: 12),
                                     Text(
-                                      'Sat, 31 Oct · 18:00–20:00',
+                                      widget.match?.time ??
+                                          'Sat, 31 Oct · 18:00–20:00',
                                       style: feedbackText(
                                         13,
                                         color: AppColors.textSecondary,
@@ -231,7 +233,8 @@ class _MatchCompletedScreenState extends State<MatchCompletedScreen>
                                     ),
                                     const SizedBox(height: 12),
                                     Text(
-                                      'Viet Badminton · Court 03',
+                                      widget.match?.location ??
+                                          'Viet Badminton · Court 03',
                                       style: feedbackText(
                                         13,
                                         color: AppColors.textSecondary,
@@ -240,7 +243,14 @@ class _MatchCompletedScreenState extends State<MatchCompletedScreen>
                                     const SizedBox(height: 12),
                                     Row(
                                       children: [
-                                        for (var i = 0; i < 4; i++)
+                                        for (
+                                          var i = 0;
+                                          i <
+                                              (widget.match?.players.length ??
+                                                      3) +
+                                                  1;
+                                          i++
+                                        )
                                           Expanded(
                                             child: Column(
                                               children: [
@@ -251,20 +261,40 @@ class _MatchCompletedScreenState extends State<MatchCompletedScreen>
                                                         height: 44,
                                                       )
                                                     : ClipOval(
-                                                        child: Image.asset(
-                                                          feedbackTeammates[i -
-                                                                  1]
-                                                              .avatar,
-                                                          width: 44,
-                                                          height: 44,
-                                                          fit: BoxFit.cover,
-                                                        ),
+                                                        child:
+                                                            widget.match != null
+                                                            ? Container(
+                                                                width: 44,
+                                                                height: 44,
+                                                                color:
+                                                                    const Color(
+                                                                      0xFFDDF1E9,
+                                                                    ),
+                                                                child: const Icon(
+                                                                  Icons
+                                                                      .person_outline,
+                                                                ),
+                                                              )
+                                                            : Image.asset(
+                                                                (widget.match?.players ??
+                                                                        feedbackTeammates)[i -
+                                                                        1]
+                                                                    .avatar,
+                                                                width: 44,
+                                                                height: 44,
+                                                                fit: BoxFit
+                                                                    .cover,
+                                                              ),
                                                       ),
                                                 const SizedBox(height: 6),
                                                 Text(
                                                   i == 0
                                                       ? 'You'
-                                                      : feedbackTeammates[i - 1]
+                                                      : (widget
+                                                                    .match
+                                                                    ?.players ??
+                                                                feedbackTeammates)[i -
+                                                                1]
                                                             .name,
                                                   style: feedbackText(12),
                                                 ),
@@ -282,17 +312,28 @@ class _MatchCompletedScreenState extends State<MatchCompletedScreen>
                             ListenableBuilder(
                               listenable: repo,
                               builder: (context, _) => FeedbackAction(
-                                repo.submitted('preview_saturday')
+                                repo.submitted(
+                                      widget.match?.id ?? 'preview_saturday',
+                                    )
                                     ? 'View Rating History'
                                     : 'Rate Your Teammates',
                                 onPressed: () => Navigator.of(context).push(
                                   AppMotion.route(
-                                    repo.submitted('preview_saturday')
+                                    repo.submitted(
+                                          widget.match?.id ??
+                                              'preview_saturday',
+                                        )
                                         ? RatingHistoryScreen(
                                             repository: repo,
                                             initiallyGiven: true,
                                           )
-                                        : FeedbackFormScreen(repository: repo),
+                                        : FeedbackFormScreen(
+                                            repository: repo,
+                                            match: widget.match,
+                                            matchId:
+                                                widget.match?.id ??
+                                                'preview_saturday',
+                                          ),
                                     name: '/feedback-form',
                                   ),
                                 ),
@@ -315,7 +356,9 @@ class _MatchCompletedScreenState extends State<MatchCompletedScreen>
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Text(
-                          'UI preview · Sample match · Not saved to server',
+                          widget.match == null
+                              ? 'UI preview · Sample match · Not saved to server'
+                              : 'Completed match',
                           style: feedbackText(
                             10,
                             color: AppColors.textSecondary,

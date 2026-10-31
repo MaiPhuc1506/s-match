@@ -7,6 +7,7 @@ import '../../navigation/player_bottom_navigation.dart';
 import '../data/feedback_repository.dart';
 import '../widgets/feedback_widgets.dart';
 import 'community_rating_screen.dart';
+import 'live_match_feedback_screen.dart';
 
 class RatingHistoryScreen extends StatefulWidget {
   const RatingHistoryScreen({
@@ -21,8 +22,16 @@ class RatingHistoryScreen extends StatefulWidget {
 }
 
 class _RatingHistoryScreenState extends State<RatingHistoryScreen> {
-  FeedbackRepository get repo =>
-      widget.repository ?? FeedbackRepository.instance;
+  late final FeedbackRepository repo =
+      widget.repository ?? FeedbackRepository.active;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) repo.refresh();
+    });
+  }
+
   late bool given = widget.initiallyGiven;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -31,10 +40,47 @@ class _RatingHistoryScreenState extends State<RatingHistoryScreen> {
       final entries = given ? repo.given : repo.received;
       return FeedbackScaffold(
         title: 'Rating history',
-        subtitle: 'Your growth, one match at a time · UI preview',
+        subtitle: repo.live
+            ? 'Your growth, one match at a time'
+            : 'Your growth, one match at a time · UI preview',
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           children: [
+            if (repo.loading) const LinearProgressIndicator(),
+            if (repo.error != null) ...[
+              Text(repo.error!, style: feedbackText(13)),
+              TextButton(onPressed: repo.refresh, child: const Text('Retry')),
+            ],
+            if (repo.live) ...[
+              TextButton.icon(
+                onPressed: repo.loading ? null : repo.refresh,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Refresh ratings'),
+              ),
+              for (final match in repo.pending)
+                FeedbackCard(
+                  onTap: () async {
+                    await Navigator.of(context).push(
+                      AppMotion.route(
+                        LiveMatchFeedbackScreen(
+                          matchId: match.id,
+                          repository: repo as ApiFeedbackRepository,
+                        ),
+                      ),
+                    );
+                    if (mounted) repo.refresh();
+                  },
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(match.title, style: feedbackText(15)),
+                      ),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  ),
+                ),
+              if (repo.pending.isNotEmpty) const SizedBox(height: 16),
+            ],
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -58,7 +104,11 @@ class _RatingHistoryScreenState extends State<RatingHistoryScreen> {
                       SizedBox(
                         width: 100,
                         child: Text(
-                          repo.withSamples ? '4.8' : '—',
+                          repo.live
+                              ? repo.summary?.label ?? '—'
+                              : repo.withSamples
+                              ? '4.8'
+                              : '—',
                           style: feedbackText(
                             48,
                             weight: FontWeight.w600,
@@ -72,7 +122,9 @@ class _RatingHistoryScreenState extends State<RatingHistoryScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              repo.withSamples
+                              repo.live
+                                  ? 'Community rating'
+                                  : repo.withSamples
                                   ? 'Excellent teammate'
                                   : 'No ratings yet',
                               style: feedbackText(
@@ -82,7 +134,9 @@ class _RatingHistoryScreenState extends State<RatingHistoryScreen> {
                               ),
                             ),
                             Text(
-                              repo.withSamples
+                              repo.live
+                                  ? '${repo.summary?.count ?? 0} ratings'
+                                  : repo.withSamples
                                   ? '24 ratings · 12 matches'
                                   : '0 ratings · 0 matches',
                               style: feedbackText(
@@ -190,7 +244,10 @@ class _RatingHistoryScreenState extends State<RatingHistoryScreen> {
                             given: given,
                             onTap: () => Navigator.of(context).push(
                               AppMotion.route(
-                                CommunityRatingScreen(player: entry.player),
+                                CommunityRatingScreen(
+                                  player: entry.player,
+                                  live: repo.live,
+                                ),
                                 name: '/community-rating',
                               ),
                             ),
@@ -227,7 +284,9 @@ class FeedbackReviewCard extends StatelessWidget {
         FeedbackIdentity(
           player: entry.player,
           name: given ? 'To ${entry.player.name}' : entry.player.name,
-          subtitle: subtitle,
+          subtitle: entry.matchTitle == null
+              ? subtitle
+              : '${entry.matchTitle}${entry.createdAt == null ? '' : ' · ${entry.createdAt!.toLocal().day}/${entry.createdAt!.toLocal().month}'}',
         ),
         const SizedBox(height: 10),
         FeedbackStars(value: entry.stars),

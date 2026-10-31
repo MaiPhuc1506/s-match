@@ -157,6 +157,12 @@ describe('RatingsService', () => {
       await expect(service.create(1, dto)).rejects.toThrow(/huỷ/);
     });
 
+    it.each([MatchState.OPEN, MatchState.FULL, MatchState.IN_PROGRESS])('rejects ended but uncompleted matches (%s)', async (status) => {
+      prisma.match.findUnique.mockResolvedValue(endedMatch({ status }));
+      await expect(service.create(1, dto)).rejects.toThrow(/hoàn thành/);
+      expect(prisma.playerRating.create).not.toHaveBeenCalled();
+    });
+
     it('rejects matches that have not ended yet', async () => {
       prisma.match.findUnique.mockResolvedValue(
         endedMatch({ endTime: new Date(Date.now() + HOUR) }),
