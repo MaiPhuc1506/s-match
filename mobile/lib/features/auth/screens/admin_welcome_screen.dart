@@ -9,7 +9,11 @@ class AdminWelcomeScreen extends StatelessWidget {
   Widget build(BuildContext context) => RoleWelcomeLayout(
     role: WelcomeRole.admin,
     onContinue: () {
-      // The existing project does not yet have an Admin Dashboard destination.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Admin Dashboard is not available in Sprint 1–8 yet.'),
+        ),
+      );
     },
   );
 }

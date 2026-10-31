@@ -1,0 +1,12 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="320" height="96" viewBox="0 0 320 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Sprint3/Decoration/Green Wave" clip-path="url(#clip0_0_99)">
+<path id="Vector" d="M0 36.8C53.6 4.8 97.2 66.4 156.4 37.6C215.6 8.8 265.2 5.2 320 32.8V96H0V36.8Z" fill="#E3F4ED"/>
+<path id="Vector_2" d="M0 54.8C58.4 24.8 100.8 79.6 163.6 55.2C226.4 30.8 272 42 320 57.2V96H0V54.8Z" fill="#BFE8D9"/>
+<path id="Vector_3" d="M0 76C58 58.8 104 87.6 166.4 74C228.8 60 274 70.4 320 83.6V96H0V76Z" fill="#05644F"/>
+</g>
+<defs>
+<clipPath id="clip0_0_99">
+<rect width="320" height="96" fill="white"/>
+</clipPath>
+</defs>
+</svg>

@@ -1,11 +1,36 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/theme/app_motion.dart';
+
 import 'package:flutter/services.dart';
 
 import '../widgets/sprint2_presentation.dart';
 import '../widgets/profile_skill_radar.dart';
 
-class SkillAssessmentScreen extends StatelessWidget {
+class SkillAssessmentScreen extends StatefulWidget {
   const SkillAssessmentScreen({super.key});
+  @override
+  State<SkillAssessmentScreen> createState() => _SkillAssessmentScreenState();
+}
+
+class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
+  String _selected = 'Chart';
+  final _chartKey = GlobalKey(), _detailsKey = GlobalKey();
+  void _select(String label) {
+    setState(() => _selected = label);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target =
+          (label == 'Chart' ? _chartKey : _detailsKey).currentContext;
+      if (target != null) {
+        Scrollable.ensureVisible(
+          target,
+          duration: AppMotion.reduced(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 220),
+        );
+      }
+    });
+  }
 
   TextStyle _style({
     required double size,
@@ -61,8 +86,8 @@ class SkillAssessmentScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                    _buildRadarCard(),
-                    _buildBreakdown(),
+                    KeyedSubtree(key: _chartKey, child: _buildRadarCard()),
+                    KeyedSubtree(key: _detailsKey, child: _buildBreakdown()),
                   ],
                 ),
               ),
@@ -165,7 +190,7 @@ class SkillAssessmentScreen extends StatelessWidget {
                   style: Sprint2Style.font(16, 22, weight: FontWeight.w600),
                 ),
               ),
-              // Presentation only: the current screen has no Chart / Details switching logic.
+              // Both segments focus the matching section without changing skill data.
               Container(
                 width: 142,
                 height: 32,
@@ -177,23 +202,26 @@ class SkillAssessmentScreen extends StatelessWidget {
                   children: [
                     for (final label in ['Chart', 'Details'])
                       Expanded(
-                        child: Container(
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: label == 'Chart'
-                                ? Sprint2Style.primary
-                                : Sprint2Style.surface,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(
-                            label,
-                            style: Sprint2Style.font(
-                              12,
-                              17,
-                              weight: FontWeight.w500,
-                              color: label == 'Chart'
-                                  ? Colors.white
-                                  : Sprint2Style.text,
+                        child: GestureDetector(
+                          onTap: () => _select(label),
+                          child: Container(
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: label == _selected
+                                  ? Sprint2Style.primary
+                                  : Sprint2Style.surface,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              label,
+                              style: Sprint2Style.font(
+                                12,
+                                17,
+                                weight: FontWeight.w500,
+                                color: label == _selected
+                                    ? Colors.white
+                                    : Sprint2Style.text,
+                              ),
                             ),
                           ),
                         ),
@@ -273,7 +301,13 @@ class SkillAssessmentScreen extends StatelessWidget {
       height: 52,
       child: ElevatedButton(
         onPressed: () {
-          // Sau này mở lại flow câu hỏi đánh giá kỹ năng.
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Assessment is a UI preview. Retake Assessment is not connected to an API yet.',
+              ),
+            ),
+          );
         },
         style: ElevatedButton.styleFrom(
           elevation: 0,

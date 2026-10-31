@@ -50,7 +50,13 @@ class PrimaryButton extends StatelessWidget {
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(text, style: AppTextStyles.buttonPrimary),
+                  Flexible(
+                    child: Text(
+                      text,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.buttonPrimary,
+                    ),
+                  ),
                   if (showArrow) const SizedBox(width: 8),
                   // Mũi tên trắng chỉ sang phải
                   if (showArrow)

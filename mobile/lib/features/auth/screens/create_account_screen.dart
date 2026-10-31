@@ -49,7 +49,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       return;
     }
 
-    if (email.isEmpty) {
+    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Vui lòng nhập email'),
@@ -64,6 +64,17 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         const SnackBar(
           content: Text('Mật khẩu phải từ 6 ký tự trở lên'),
           backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedRole == 'Court Owner') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Court Owner registration is not supported by the current API. Please use an existing Owner account.',
+          ),
         ),
       );
       return;

@@ -1,3 +1,4 @@
+import '../../../core/theme/app_motion.dart';
 import 'package:flutter/material.dart';
 
 import '../widgets/role_welcome_layout.dart';
@@ -13,7 +14,7 @@ class PlayerWelcomeScreen extends StatelessWidget {
       Navigator.of(context).push(
         PageRouteBuilder(
           settings: const RouteSettings(name: '/player-profile'),
-          transitionDuration: const Duration(milliseconds: 250),
+          transitionDuration: AppMotion.duration(context, 250),
           pageBuilder: (context, animation, secondaryAnimation) =>
               const PlayerProfileScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) =>

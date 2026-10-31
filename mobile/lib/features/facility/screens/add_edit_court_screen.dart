@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mobile/core/theme/app_colors.dart';
@@ -23,6 +25,8 @@ class AddEditCourtScreen extends StatefulWidget {
 
 class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
   final _nameController = TextEditingController();
+  final _numberController = TextEditingController();
+  final _descriptionController = TextEditingController();
 
   String _courtType = 'Indoor'; // 'Indoor' hoặc 'Outdoor'
   String _status = 'ACTIVE'; // 'ACTIVE', 'MAINTENANCE', 'INACTIVE'
@@ -44,6 +48,8 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _numberController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -94,6 +100,14 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
 
                 const SizedBox(height: 16),
 
+                _buildLabel('Court Number'),
+                const SizedBox(height: 8),
+                _buildTextField(
+                  controller: _numberController,
+                  hintText: '01',
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
                 // 2. Court Type (Indoor / Outdoor)
                 _buildLabel('Court Type'),
                 const SizedBox(height: 8),
@@ -143,15 +157,15 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
                       items: const [
                         DropdownMenuItem(
                           value: 'ACTIVE',
-                          child: Text('Active (Sẵn sàng phục vụ)'),
+                          child: Text('Available'),
                         ),
                         DropdownMenuItem(
                           value: 'MAINTENANCE',
-                          child: Text('Maintenance (Bảo trì)'),
+                          child: Text('Maintenance'),
                         ),
                         DropdownMenuItem(
                           value: 'INACTIVE',
-                          child: Text('Inactive (Tạm ngừng)'),
+                          child: Text('Unavailable'),
                         ),
                       ],
                       onChanged: (val) {
@@ -161,7 +175,41 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 120), // Khoảng trống cho nút Save Court
+                const SizedBox(height: 16),
+                _buildLabel('Description (Optional)'),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _descriptionController,
+                  minLines: 3,
+                  maxLines: 4,
+                  maxLength: 200,
+                  style: GoogleFonts.plusJakartaSans(fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Add a description for this court…\n(e.g. court condition, special notes…)',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Opacity(
+                    opacity: .18,
+                    child: SvgPicture.asset(
+                      'assets/icons/sprint3_shuttle.svg',
+                      width: 112,
+                      height: 112,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 100),
               ],
             ),
           ),
@@ -210,7 +258,9 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
                         if (success) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Lưu sân thành công!'),
+                              content: Text(
+                                'Court saved. Court number and description are UI-only until supported by the API.',
+                              ),
                             ),
                           );
                           Navigator.of(context).pop(true);
@@ -284,6 +334,9 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
+        inputFormatters: keyboardType == TextInputType.number
+            ? [FilteringTextInputFormatter.digitsOnly]
+            : null,
         style: GoogleFonts.plusJakartaSans(fontSize: 14),
         decoration: InputDecoration(
           hintText: hintText,
@@ -319,10 +372,12 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: 20,
-              color: isSelected ? AppColors.primary : AppColors.textSecondary,
+            SvgPicture.asset(
+              title == 'Indoor'
+                  ? 'assets/icons/sprint3_indoor.svg'
+                  : 'assets/icons/sprint3_outdoor.svg',
+              width: 24,
+              height: 24,
             ),
             const SizedBox(width: 8),
             Text(

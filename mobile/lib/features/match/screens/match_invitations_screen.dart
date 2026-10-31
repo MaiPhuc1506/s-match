@@ -454,10 +454,9 @@ class MatchInvitationsScreen extends StatelessWidget {
         SizedBox(
           height: 40,
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(
-                width: 152,
-                height: 40,
+              Expanded(
                 child: InkWell(
                   onTap: () => _respond(context, index, false),
                   borderRadius: BorderRadius.circular(10),
@@ -475,9 +474,7 @@ class MatchInvitationsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              SizedBox(
-                width: 152,
-                height: 40,
+              Expanded(
                 child: InkWell(
                   onTap: () => _respond(context, index, true),
                   borderRadius: BorderRadius.circular(10),

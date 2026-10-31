@@ -1,3 +1,6 @@
+import '../../../core/theme/app_motion.dart';
+import 'booking_summary_screen.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -817,6 +820,17 @@ class _BookingFacilityScheduleScreenState
         onPressed: () {
           if (widget.onContinue != null) {
             widget.onContinue!();
+          } else {
+            Navigator.of(context).push(
+              AppMotion.route(
+                BookingSummaryScreen(
+                  courtName: _courts[_selectedCourtIndex],
+                  timeRange:
+                      '${_timeSlots[_selectedSlotIndex]} – ${_timeSlots[_selectedSlotIndex + 1 < _timeSlots.length ? _selectedSlotIndex + 1 : _selectedSlotIndex]}',
+                ),
+                name: '/booking-summary-preview',
+              ),
+            );
           }
         },
         child: Row(

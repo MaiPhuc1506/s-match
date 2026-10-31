@@ -6,110 +6,74 @@ import '../../../core/theme/app_text_styles.dart';
 
 class AuthHeader extends StatelessWidget {
   const AuthHeader({super.key});
-
   @override
-  Widget build(BuildContext context) {
-    // Chiều cao chuẩn Header theo Figma: 340px
-    return SizedBox(
-      height: 340,
-      width: double.infinity,
-      child: Stack(
-        children: [
-          // Lớp 1: Ảnh nền cây vợt cầu lông thật từ Figma
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/header_bg.png',
-              fit: BoxFit.cover,
-            ),
+  Widget build(BuildContext context) => SizedBox(
+    height: 332,
+    width: double.infinity,
+    child: Stack(
+      clipBehavior: Clip.hardEdge,
+      children: [
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          height: 340,
+          child: Image.asset(
+            'assets/images/auth_login_header.png',
+            fit: BoxFit.cover,
           ),
-
-          // Lớp 2: Lớp phủ Scrim Gradient (xanh đậm từ trên xuống)
-          Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: AppColors.headerScrimGradient,
-                ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          height: 340,
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: AppColors.headerScrimGradient,
               ),
             ),
           ),
-
-          // Lớp 3: Nội dung thương hiệu (Icon Shuttlecock SVG + S-Match + Tagline)
-          Positioned(
-            left: 32,
-            top: 52, // Khớp Figma (32, 52)
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Icon quả cầu lông SVG chính gốc từ Figma
-                SvgPicture.asset(
-                  'assets/images/shuttlecock.svg',
-                  width: 36,
-                  height: 36,
-                  colorFilter: const ColorFilter.mode(
-                    AppColors.white,
-                    BlendMode.srcIn,
+        ),
+        Positioned(
+          left: 32,
+          top: 52,
+          child: Column(
+            children: [
+              SizedBox.square(
+                dimension: 73.539,
+                child: Center(
+                  child: SvgPicture.asset(
+                    'assets/icons/auth_brand_shuttle.svg',
+                    width: 69.862,
+                    height: 69.862,
                   ),
                 ),
-                const SizedBox(height: 8),
-
-                // Tên thương hiệu "S-Match"
-                Text('S-Match', style: AppTextStyles.brandTitle),
-                const SizedBox(height: 12),
-
-                // Khẩu hiệu "Play More\nBetter More"
-                Text('Play More\nBetter More', style: AppTextStyles.tagline),
-              ],
-            ),
+              ),
+              const SizedBox(height: 4),
+              Text('S-Match', style: AppTextStyles.brandTitle),
+            ],
           ),
-
-          // Lớp 4: Vòm cong chuyển tiếp (Curved Boundary) uốn lượn hình cánh cung
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: 95,
-            child: CustomPaint(painter: _CurvedBoundaryPainter()),
+        ),
+        Positioned(
+          left: 32,
+          top: 166,
+          child: Text('Play More\nBetter More', style: AppTextStyles.tagline),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 248,
+          height: 569.973,
+          child: SvgPicture.asset(
+            'assets/icons/auth_header_curve.svg',
+            fit: BoxFit.fill,
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Painter vẽ vòm cong lượn lên hình cánh cung chuẩn Figma
-class _CurvedBoundaryPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppColors
-          .background // Màu nền #F7F8F5
-      ..style = PaintingStyle.fill;
-
-    final path = Path();
-    // Bắt đầu từ mép trái
-    path.moveTo(0, 38);
-
-    // Đường cong hình vòm nhô lên phía trên
-    path.cubicTo(
-      size.width * 0.25,
-      -8, // Điểm uốn trái nhô lên
-      size.width * 0.55,
-      -8, // Điểm uốn giữa nhô lên
-      size.width,
-      58, // Điểm kết thúc mép phải
-    );
-
-    // Kéo xuống hết đáy để phủ màu nền
-    path.lineTo(size.width, size.height);
-    path.lineTo(0, size.height);
-    path.close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+        ),
+      ],
+    ),
+  );
 }

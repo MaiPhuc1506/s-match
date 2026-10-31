@@ -1,3 +1,6 @@
+import '../../../core/theme/app_motion.dart';
+import '../../feedback/screens/match_completed_screen.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -109,6 +112,19 @@ class _MatchListScreenState extends State<MatchListScreen> {
                     children: [
                       // Tabs (345 × 34, gap 4)
                       _buildTabs(),
+                      if (_selectedTabIndex == 1)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Saturday Rally'),
+                          subtitle: const Text('Completed · UI preview'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.of(context).push(
+                            AppMotion.route(
+                              const MatchCompletedScreen(),
+                              name: '/match-completed-preview',
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 12),
 
                       // Filters (345 × 32, gap 7)

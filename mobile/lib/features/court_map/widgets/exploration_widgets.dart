@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -22,16 +24,8 @@ TextStyle exploreText(
   letterSpacing: 0,
 );
 
-Route<T> explorationRoute<T>(Widget screen, String name) => PageRouteBuilder<T>(
-  settings: RouteSettings(name: name),
-  transitionDuration: const Duration(milliseconds: 250),
-  reverseTransitionDuration: const Duration(milliseconds: 250),
-  pageBuilder: (_, _, _) => screen,
-  transitionsBuilder: (_, animation, _, child) => FadeTransition(
-    opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-    child: child,
-  ),
-);
+Route<T> explorationRoute<T>(Widget screen, String name) =>
+    AppMotion.route<T>(screen, name: name, milliseconds: 250);
 
 class ExploreGlyph extends StatelessWidget {
   const ExploreGlyph(this.file, {super.key, this.size = 20});

@@ -1,3 +1,4 @@
+import '../../../core/theme/app_motion.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -29,9 +30,7 @@ class RoleCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(
-          milliseconds: 200,
-        ), // Smart Animate 200ms theo Figma
+        duration: AppMotion.duration(context, 200), // Smart Animate 200ms theo Figma
         width: width,
         height: height,
         padding: const EdgeInsets.only(top: 16, bottom: 12),

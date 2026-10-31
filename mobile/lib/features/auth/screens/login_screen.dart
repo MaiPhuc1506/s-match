@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -36,7 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
-    if (email.isEmpty) {
+    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Vui lòng nhập email'),
@@ -112,14 +113,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   // Tiêu đề Welcome Back
                   Text('Welcome Back', style: AppTextStyles.titleBold),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
 
                   // Dòng phụ đề
                   Text(
                     'Log in to continue your badminton journey',
                     style: AppTextStyles.bodySmallRegular,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 10),
 
                   // Ô nhập Email
                   CustomTextField(
@@ -128,7 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     prefixIcon: Icons.mail_outline_rounded,
                     keyboardType: TextInputType.emailAddress,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
 
                   // Ô nhập Password
                   CustomTextField(
@@ -158,7 +159,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 10),
 
                   // Nút chính "Log In"
                   PrimaryButton(
@@ -166,7 +167,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     isLoading: _isLoading,
                     onPressed: _handleLogin,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 10),
 
                   // Đường kẻ phân cách "OR"
                   Row(
@@ -183,21 +184,32 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 10),
 
                   // Nút "Continue with Google"
                   SocialButton(
                     text: 'Continue with Google',
-                    icon: Image.network(
-                      'https://cdn1.iconfinder.com/data/icons/google-s-logo/150/Google_Icons-09-512.png',
-                      width: 22,
-                      height: 22,
+                    icon: SizedBox.square(
+                      dimension: 24,
+                      child: Center(
+                        child: SvgPicture.asset(
+                          'assets/icons/auth_google.svg',
+                          width: 16.8,
+                          height: 16.8,
+                        ),
+                      ),
                     ),
                     onPressed: () {
-                      // Xử lý đăng nhập Google
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Google login is planned for a future release.',
+                          ),
+                        ),
+                      );
                     },
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
 
                   // Nút "Continue with SMS"
                   SocialButton(
@@ -208,14 +220,21 @@ class _LoginScreenState extends State<LoginScreen> {
                       size: 22,
                     ),
                     onPressed: () {
-                      // Xử lý đăng nhập SMS
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'SMS login is planned for a future release.',
+                          ),
+                        ),
+                      );
                     },
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 10),
 
                   // Dòng đăng ký tài khoản (Footer)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
                         "Don't have an account? ",

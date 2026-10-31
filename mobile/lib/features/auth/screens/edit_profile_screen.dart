@@ -1,3 +1,4 @@
+import '../../../core/theme/app_motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -517,7 +518,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
+        duration: AppMotion.duration(context, 160),
         height: 36,
         alignment: Alignment.center,
         decoration: BoxDecoration(

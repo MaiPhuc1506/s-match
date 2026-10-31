@@ -156,9 +156,9 @@ void main() {
     await tester.ensureVisible(find.text('Invite Players'));
     await tester.tap(find.text('Invite Players'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Invite').first);
+    await tester.tap(find.text('Mời ngay').first);
     await tester.pumpAndSettle();
-    expect(find.text('Invited'), findsOneWidget);
+    expect(find.text('Đã mời'), findsOneWidget);
     expect(
       store.sentInvitations.where((key) => key.startsWith(item.id)).length,
       1,

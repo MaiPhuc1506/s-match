@@ -30,6 +30,59 @@ void main() {
       ApiClient.instance.setToken('profile-ui-regression');
       final interceptor = InterceptorsWrapper(
         onRequest: (options, handler) {
+          if (options.path == '/preferences/me') {
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'preferredMode': 'DOUBLES',
+                  'purpose': 'CASUAL',
+                  'minSkillLevel': 3,
+                  'maxSkillLevel': 4,
+                  'maxDistanceKm': 5,
+                },
+              ),
+            );
+            return;
+          }
+          if (options.path == '/availability/me') {
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: options.method == 'GET'
+                    ? [
+                        {
+                          'id': 1,
+                          'dayOfWeek': 1,
+                          'startTime': '18:00',
+                          'endTime': '22:00',
+                        },
+                        {
+                          'id': 2,
+                          'dayOfWeek': 3,
+                          'startTime': '18:00',
+                          'endTime': '22:00',
+                        },
+                        {
+                          'id': 3,
+                          'dayOfWeek': 5,
+                          'startTime': '18:00',
+                          'endTime': '22:00',
+                        },
+                      ]
+                    : {},
+              ),
+            );
+            return;
+          }
+          if (options.path.startsWith('/availability/me/')) {
+            handler.resolve(
+              Response(requestOptions: options, statusCode: 200, data: {}),
+            );
+            return;
+          }
           final data = options.data;
           handler.resolve(
             Response(
@@ -74,6 +127,8 @@ void main() {
       await tester.tap(find.text('Retake Assessment'));
       await tester.pumpAndSettle();
       expect(find.byType(SkillAssessmentScreen), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
       Navigator.of(tester.element(find.byType(SkillAssessmentScreen))).pop();
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Playing Style'));
@@ -88,6 +143,8 @@ void main() {
       await tester.tap(find.text('Save Preferences'));
       await tester.pumpAndSettle();
       expect(find.byType(PlayerProfileScreen), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Đăng xuất'));
       await tester.tap(find.text('Đăng xuất'));
       await tester.pumpAndSettle();
