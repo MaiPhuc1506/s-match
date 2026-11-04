@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  matchmaking-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: matchmaking-service
+    ports:
+      - "8000:8000"
+    restart: always
