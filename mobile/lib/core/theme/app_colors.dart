@@ -62,16 +62,16 @@ class AppColors {
     Color(0xFF033D33),
   ];
 
-  static const Color textDark = Color(0xFF0D2630);
+  static const Color textDark = Color(0xFF1C1C1C);
   static const Color mintLight = Color(0xFFBFE8D9);
   static const Color mintSurface = Color(0xFFE6F0EC);
   static const Color mintBackground = Color(0xFFF0F8F5);
 
   // Trạng thái Slot ma trận lịch sân (Schedule Grid)
-  static const Color slotAvailableLight = Color(0xFFBFE8D9);
-  static const Color slotAvailable = Color(0xFF128C6B);
-  static const Color slotBooked = Color(0xFFFA635E);
-  static const Color slotLocked = Color(0xFFB8BFBD);
-  static const Color slotEvent = Color(0xFFBD5CD1);
+  static const Color slotAvailableLight = Color(0xFFE0F3E7);
+  static const Color slotAvailable = Color(0xFFE0F3E7);
+  static const Color slotBooked = Color(0xFFFCE6E4);
+  static const Color slotLocked = Color(0xFFD6DCD8);
+  static const Color slotEvent = Color(0xFFF2E4F7);
   static const Color slotBorderSelected = Color(0xFF9DF5D8);
 }

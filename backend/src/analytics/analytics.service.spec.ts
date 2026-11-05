@@ -1,239 +1,101 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import { BookingStatus } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import { Role } from '../auth/roles.enum';
-import { AnalyticsService, REVENUE_STATUSES } from './analytics.service';
-
-const RANGE = { from: '2026-10-26', to: '2026-11-01' }; // 7 ngày (Thứ 2 → Chủ nhật)
-
-const allDaysOpen = [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
-  dayOfWeek,
-  openTime: '08:00',
-  closeTime: '20:00',
-}));
-
-const facility = (overrides: Record<string, unknown> = {}) => ({
-  id: 1,
-  name: 'Sân S-Match',
-  operatingHours: allDaysOpen,
-  courts: [
-    { id: 10, name: 'Sân 1', status: 'ACTIVE' },
-    { id: 11, name: 'Sân 2', status: 'MAINTENANCE' },
-  ],
-  ...overrides,
-});
-
-const booking = (courtId: number, start: string, end: string, totalPrice: number) => ({
-  courtId,
-  startTime: new Date(start),
-  endTime: new Date(end),
-  totalPrice,
-});
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { AnalyticsService } from './analytics.service';
+import { AnalyticsDataProvider } from './interfaces/analytics-data-provider.interface';
 
 describe('AnalyticsService', () => {
-  let service: AnalyticsService;
   let prisma: any;
-  const owner = { userId: 5, role: Role.OWNER };
-  const admin = { userId: 1, role: Role.ADMIN };
+  let provider: jest.Mocked<AnalyticsDataProvider>;
+  let service: AnalyticsService;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     prisma = {
-      facility: { findMany: jest.fn().mockResolvedValue([facility()]) },
-      booking: { findMany: jest.fn().mockResolvedValue([]), groupBy: jest.fn().mockResolvedValue([]) },
+      facility: {
+        findUnique: jest.fn(),
+        count: jest.fn().mockResolvedValue(2),
+      },
+      court: { findMany: jest.fn().mockResolvedValue([]) },
     };
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [AnalyticsService, { provide: PrismaService, useValue: prisma }],
-    }).compile();
-    service = module.get(AnalyticsService);
+    provider = {
+      getOverview: jest.fn().mockResolvedValue({
+        dataStatus: 'PENDING_SMM_40', totalActiveUsers: null, totalBookings: null,
+        bookingStatusBreakdown: { pending: null, confirmed: null, cancelled: null, completed: null },
+        reservedOccupancyRatePercent: null, grossBookedRevenue: null,
+      }),
+      getCourtMetrics: jest.fn().mockResolvedValue({ dataStatus: 'PENDING_SMM_40', metrics: [] }),
+    };
+    service = new AnalyticsService(prisma, provider);
   });
 
-  describe('scope & permissions', () => {
-    it('limits an owner to their own facilities', async () => {
-      await service.getOverview(owner, RANGE);
-      expect(prisma.facility.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { ownerId: 5 } }),
-      );
-      const where = prisma.booking.findMany.mock.calls[0][0].where;
-      expect(where.courtId).toEqual({ in: [10, 11] });
-      expect(where.status).toEqual({ in: REVENUE_STATUSES });
-    });
-
-    it('lets an admin see everything without a courtId filter', async () => {
-      await service.getOverview(admin, RANGE);
-      expect(prisma.facility.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
-      const where = prisma.booking.findMany.mock.calls[0][0].where;
-      expect(where.courtId).toBeUndefined();
-      expect(prisma.booking.groupBy.mock.calls[0][0].where.courtId).toBeUndefined();
-    });
-
-    it('forbids an owner from reading a facility that is not theirs', async () => {
-      prisma.facility.findMany.mockResolvedValue([]);
-      await expect(service.getOverview(owner, { ...RANGE, facilityId: 99 })).rejects.toThrow(
-        ForbiddenException,
-      );
-      expect(prisma.booking.findMany).not.toHaveBeenCalled();
-    });
-
-    it('returns 404 when an admin asks for a missing facility', async () => {
-      prisma.facility.findMany.mockResolvedValue([]);
-      await expect(service.getOverview(admin, { ...RANGE, facilityId: 99 })).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it('returns zeros without hitting bookings when the owner has no courts', async () => {
-      prisma.facility.findMany.mockResolvedValue([]);
-      const result = await service.getOverview(owner, RANGE);
-      expect(result).toMatchObject({ revenue: 0, totalBookings: 0, occupancyRate: null });
-      expect(prisma.booking.findMany).not.toHaveBeenCalled();
-      expect(prisma.booking.groupBy).not.toHaveBeenCalled();
-    });
+  it('returns a truthful pending contract for an owner overview without a Facility filter', async () => {
+    const result = await service.getOwnerOverview(10, { startDate: '2026-11-01T00:00:00.000Z', endDate: '2026-12-01T00:00:00.000Z' });
+    expect(provider.getOverview).toHaveBeenCalledWith(
+      { kind: 'OWNER', ownerId: 10 },
+      { startDate: new Date('2026-11-01T00:00:00.000Z'), endDate: new Date('2026-12-01T00:00:00.000Z') },
+    );
+    expect(prisma.facility.count).toHaveBeenCalledWith({ where: { ownerId: 10 } });
+    expect(result).toEqual(expect.objectContaining({ scope: 'OWNER', dataStatus: 'PENDING_SMM_40' }));
+    expect(result.summary).toMatchObject({ totalFacilities: 2, totalBookings: null, grossBookedRevenue: null });
   });
 
-  describe('getOverview', () => {
-    it('computes revenue, booking counts, cancellation rate and occupancy', async () => {
-      prisma.booking.findMany.mockResolvedValue([
-        booking(10, '2026-10-27T01:00:00Z', '2026-10-27T03:00:00Z', 100000),
-        booking(10, '2026-10-28T11:00:00Z', '2026-10-28T13:00:00Z', 200000),
-      ]);
-      prisma.booking.groupBy.mockResolvedValue([
-        { status: BookingStatus.CONFIRMED, _count: { _all: 1 } },
-        { status: BookingStatus.COMPLETED, _count: { _all: 1 } },
-        { status: BookingStatus.CANCELLED, _count: { _all: 1 } },
-      ]);
-
-      const result = await service.getOverview(owner, RANGE);
-
-      expect(result).toMatchObject({
-        range: { from: '2026-10-26', to: '2026-11-01', days: 7 },
-        revenue: 300000,
-        totalBookings: 3,
-        confirmedBookings: 2,
-        byStatus: { PENDING: 0, CONFIRMED: 1, CANCELLED: 1, COMPLETED: 1 },
-        cancellationRate: 0.3333,
-        averageBookingValue: 150000,
-        bookedHours: 4,
-        availableHours: 84,
-        occupancyRate: 0.0476,
-      });
-    });
-
-    it('reports null rates when there is nothing to divide by', async () => {
-      const result = await service.getOverview(owner, RANGE);
-      expect(result).toMatchObject({
-        revenue: 0,
-        cancellationRate: null,
-        averageBookingValue: null,
-        occupancyRate: 0,
-      });
-    });
-
-    it('has no occupancy when the facility has no operating hours', async () => {
-      prisma.facility.findMany.mockResolvedValue([facility({ operatingHours: [] })]);
-      const result = await service.getOverview(owner, RANGE);
-      expect(result.availableHours).toBe(0);
-      expect(result.occupancyRate).toBeNull();
-    });
-
-    it('rejects an invalid date range before querying', async () => {
-      await expect(service.getOverview(owner, { from: '2026-11-02', to: '2026-11-01' })).rejects.toThrow();
-      expect(prisma.facility.findMany).not.toHaveBeenCalled();
-    });
+  it('allows an owner to filter only a Facility it owns', async () => {
+    prisma.facility.findUnique.mockResolvedValue({ ownerId: 10 });
+    await service.getOwnerOverview(10, { facilityId: 12 });
+    expect(provider.getOverview).toHaveBeenCalledWith({ kind: 'OWNER', ownerId: 10, facilityId: 12 }, expect.anything());
+    expect(prisma.facility.count).toHaveBeenCalledWith({ where: { ownerId: 10, id: 12 } });
   });
 
-  describe('getRevenueTrend', () => {
-    it('zero-fills every day and buckets by Vietnam-local date', async () => {
-      prisma.booking.findMany.mockResolvedValue([
-        booking(10, '2026-10-27T01:00:00Z', '2026-10-27T03:00:00Z', 100000),
-        booking(10, '2026-10-31T18:00:00Z', '2026-10-31T20:00:00Z', 50000),
-      ]);
-
-      const result = await service.getRevenueTrend(owner, RANGE);
-
-      expect(result.granularity).toBe('day');
-      expect(result.series).toHaveLength(7);
-      expect(result.series.find((p) => p.period === '2026-10-27')).toEqual({
-        period: '2026-10-27',
-        revenue: 100000,
-        bookingCount: 1,
-        bookedHours: 2,
-      });
-      expect(result.series.find((p) => p.period === '2026-11-01')).toMatchObject({
-        revenue: 50000,
-        bookingCount: 1,
-      });
-      expect(result.series.find((p) => p.period === '2026-10-29')).toMatchObject({
-        revenue: 0,
-        bookingCount: 0,
-      });
-      expect(result.totalRevenue).toBe(150000);
-      expect(result.totalBookings).toBe(2);
-    });
-
-    it('supports weekly and monthly granularity', async () => {
-      prisma.booking.findMany.mockResolvedValue([
-        booking(10, '2026-10-27T01:00:00Z', '2026-10-27T03:00:00Z', 100000),
-        booking(10, '2026-11-03T01:00:00Z', '2026-11-03T03:00:00Z', 70000),
-      ]);
-
-      const weekly = await service.getRevenueTrend(owner, {
-        from: '2026-10-26',
-        to: '2026-11-08',
-        granularity: 'week',
-      });
-      expect(weekly.series.map((p) => [p.period, p.revenue])).toEqual([
-        ['2026-10-26', 100000],
-        ['2026-11-02', 70000],
-      ]);
-
-      const monthly = await service.getRevenueTrend(owner, {
-        from: '2026-10-26',
-        to: '2026-11-08',
-        granularity: 'month',
-      });
-      expect(monthly.series.map((p) => [p.period, p.revenue])).toEqual([
-        ['2026-10', 100000],
-        ['2026-11', 70000],
-      ]);
-    });
+  it('blocks cross-owner Facility analytics before provider or aggregate calls', async () => {
+    prisma.facility.findUnique.mockResolvedValue({ ownerId: 20 });
+    await expect(service.getOwnerOverview(10, { facilityId: 12 })).rejects.toBeInstanceOf(ForbiddenException);
+    expect(provider.getOverview).not.toHaveBeenCalled();
+    expect(prisma.facility.count).not.toHaveBeenCalled();
   });
 
-  describe('getCourtUtilization', () => {
-    it('ranks courts by utilization and leaves inactive courts without a rate', async () => {
-      prisma.facility.findMany.mockResolvedValue([
-        facility({
-          courts: [
-            { id: 10, name: 'Sân 1', status: 'ACTIVE' },
-            { id: 11, name: 'Sân 2', status: 'ACTIVE' },
-            { id: 12, name: 'Sân 3', status: 'MAINTENANCE' },
-          ],
-        }),
-      ]);
-      prisma.booking.findMany.mockResolvedValue([
-        booking(10, '2026-10-27T01:00:00Z', '2026-10-27T03:00:00Z', 100000),
-        booking(11, '2026-10-27T01:00:00Z', '2026-10-27T09:00:00Z', 400000),
-        booking(11, '2026-10-28T01:00:00Z', '2026-10-28T03:00:00Z', 100000),
-      ]);
+  it('returns 404 for an unknown Owner Facility', async () => {
+    prisma.facility.findUnique.mockResolvedValue(null);
+    await expect(service.getOwnerOverview(10, { facilityId: 12 })).rejects.toBeInstanceOf(NotFoundException);
+  });
 
-      const { courts } = await service.getCourtUtilization(owner, RANGE);
+  it('validates an Admin Facility filter and does not add an owner condition', async () => {
+    prisma.facility.findUnique.mockResolvedValue({ id: 12 });
+    await service.getAdminOverview({ facilityId: 12 });
+    expect(provider.getOverview).toHaveBeenCalledWith({ kind: 'ADMIN', facilityId: 12 }, expect.anything());
+    expect(prisma.facility.count).toHaveBeenCalledWith({ where: { id: 12 } });
+  });
 
-      expect(courts.map((c) => c.courtId)).toEqual([11, 10, 12]);
-      expect(courts[0]).toMatchObject({
-        courtName: 'Sân 2',
-        facilityName: 'Sân S-Match',
-        bookingCount: 2,
-        revenue: 500000,
-        bookedHours: 10,
-        availableHours: 84,
-        utilizationRate: 0.119,
-      });
-      expect(courts[2]).toMatchObject({
-        status: 'MAINTENANCE',
-        bookingCount: 0,
-        availableHours: 0,
-        utilizationRate: null,
-      });
+  it.each([
+    [{ startDate: 'not-a-date' }],
+    [{ startDate: '2026-12-01T00:00:00.000Z', endDate: '2026-11-01T00:00:00.000Z' }],
+  ])('rejects an invalid range before accessing the provider', async (query) => {
+    await expect(service.getAdminOverview(query)).rejects.toBeInstanceOf(BadRequestException);
+    expect(provider.getOverview).not.toHaveBeenCalled();
+  });
+
+  it('limits owner Court Performance to courts joined through that owner facilities', async () => {
+    prisma.court.findMany.mockResolvedValue([{ id: 4, facilityId: 12, name: 'Court 1', status: 'ACTIVE' }]);
+    const result = await service.getCourtPerformance({ id: 10, role: 'COURT_OWNER' }, {});
+    expect(prisma.court.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { facility: { ownerId: 10 } },
+      select: { id: true, facilityId: true, name: true, status: true },
+    }));
+    expect(result).toMatchObject({ dataStatus: 'PENDING_SMM_40', courts: [{ courtId: 4, bookingCount: null }] });
+  });
+
+  it('maps only metrics returned for an accessible Court and never exposes provider extras', async () => {
+    prisma.court.findMany.mockResolvedValue([{ id: 4, facilityId: 12, name: 'Court 1', status: 'ACTIVE' }]);
+    provider.getCourtMetrics.mockResolvedValue({
+      dataStatus: 'READY',
+      metrics: [{
+        courtId: 4, bookingCount: 3, confirmedBookings: 2, cancelledBookings: 1, completedBookings: 0,
+        reservedHours: 4, availableHours: 10, reservedOccupancyRatePercent: 40, grossBookedRevenue: 320000,
+      }],
+    } as any);
+    const result = await service.getCourtPerformance({ id: 1, role: 'ADMIN' }, {});
+    expect(result.dataStatus).toBe('READY');
+    expect(result.courts[0]).toEqual({
+      courtId: 4, facilityId: 12, courtName: 'Court 1', status: 'ACTIVE', bookingCount: 3,
+      confirmedBookings: 2, cancelledBookings: 1, completedBookings: 0, reservedHours: 4,
+      availableHours: 10, reservedOccupancyRatePercent: 40, grossBookedRevenue: 320000,
     });
   });
 });

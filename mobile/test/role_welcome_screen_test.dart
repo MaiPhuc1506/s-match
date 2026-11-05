@@ -6,14 +6,9 @@ import 'package:mobile/features/auth/screens/court_owner_welcome_screen.dart';
 import 'package:mobile/features/auth/screens/admin_welcome_screen.dart';
 import 'package:mobile/features/auth/screens/player_profile_screen.dart';
 import 'package:mobile/features/auth/widgets/role_welcome_layout.dart';
-import 'package:mobile/features/facility/screens/facility_list_screen.dart';
-
-class _NavigationObserver extends NavigatorObserver {
-  final routes = <Route<dynamic>>[];
-  @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
-      routes.add(route);
-}
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile/features/dashboard/data/dashboard_repository.dart';
+import 'package:mobile/features/dashboard/screens/dashboard_screen.dart';
 
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
@@ -80,43 +75,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Court Owner Continue preserves the Facility List route', (
-    tester,
-  ) async {
-    await size(tester, const Size(393, 852));
-    final observer = _NavigationObserver();
-    await tester.pumpWidget(
-      MaterialApp(
-        navigatorObservers: [observer],
-        home: const CourtOwnerWelcomeScreen(),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Continue'));
-    final route = observer.routes.last as MaterialPageRoute;
-    expect(
-      route.builder(tester.element(find.byType(CourtOwnerWelcomeScreen))),
-      isA<FacilityListScreen>(),
-    );
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets('Admin does not navigate into a different role workspace', (
-    tester,
-  ) async {
-    await size(tester, const Size(393, 852));
-    final observer = _NavigationObserver();
-    await tester.pumpWidget(
-      MaterialApp(
-        navigatorObservers: [observer],
-        home: const AdminWelcomeScreen(),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Continue'));
-    await tester.pumpAndSettle();
-    expect(observer.routes, hasLength(1));
-    expect(find.byType(AdminWelcomeScreen), findsOneWidget);
-  });
+  for (final role in DashboardRole.values) {
+    testWidgets('$role Continue opens its own Sprint 9 dashboard', (
+      tester,
+    ) async {
+      await size(tester, const Size(393, 852));
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: role == DashboardRole.owner
+                ? const CourtOwnerWelcomeScreen()
+                : const AdminWelcomeScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+      final dashboard = tester.widget<DashboardScreen>(
+        find.byType(DashboardScreen),
+      );
+      expect(dashboard.role, role);
+      expect(dashboard.preview, isFalse);
+      // Without a logged-in account, preserve the auth guard instead of
+      // silently logging in as a seeded Owner or exposing fixture data.
+      expect(
+        find.text('Please log in with the correct Owner or Admin account.'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

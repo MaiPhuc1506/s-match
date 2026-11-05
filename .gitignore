@@ -40,3 +40,6 @@ build/
 .vscode/
 .idea/
 *.code-workspace
+
+# Keep the SwiftPM lockfile in Runner.xcworkspace only.
+/mobile/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved

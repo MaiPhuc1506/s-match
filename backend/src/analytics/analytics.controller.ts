@@ -1,47 +1,58 @@
 import { Controller, Get, Query, Request, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '../auth/roles.enum';
 import { RolesGuard } from '../auth/roles.guard';
 import { AnalyticsService } from './analytics.service';
-import { AnalyticsQueryDto, RevenueTrendQueryDto } from './dto/analytics-query.dto';
+import { GetAnalyticsQueryDto } from './dto/get-analytics-query.dto';
+import { AnalyticsOverviewResponseDto, CourtPerformanceListResponseDto } from './dto/analytics-response.dto';
 
-@ApiTags('Revenue Analytics')
+@ApiTags('Analytics')
 @ApiBearerAuth()
 @UseGuards(RolesGuard)
-@Roles(Role.OWNER, Role.ADMIN)
-@Controller('analytics/revenue')
+@Controller('analytics')
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
-  private caller(req: any) {
-    const user = req.user || req.raw?.user;
-    return {
-      userId: Number(user?.id ?? user?.sub ?? user?.userId),
-      role: String(user?.role?.name || user?.role || user?.roleName || ''),
-    };
+  @Get('owner/overview')
+  @Roles(Role.OWNER)
+  @ApiOperation({ summary: 'Owner xem dashboard analytics trong phạm vi các cơ sở mình sở hữu' })
+  @ApiQuery({ type: GetAnalyticsQueryDto })
+  @ApiOkResponse({ type: AnalyticsOverviewResponseDto })
+  @ApiResponse({ status: 400, description: 'Query date range hoặc facilityId không hợp lệ.' })
+  @ApiResponse({ status: 401, description: 'Thiếu hoặc sai access token/session.' })
+  @ApiResponse({ status: 403, description: 'Không phải COURT_OWNER hoặc Facility không thuộc Owner.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy Facility được lọc.' })
+  getOwnerOverview(@Request() req: { user: { sub: number } }, @Query() query: GetAnalyticsQueryDto) {
+    return this.analyticsService.getOwnerOverview(req.user.sub, query);
   }
 
-  @Get('overview')
-  @ApiOperation({ summary: 'Tổng quan doanh thu, số đơn đặt sân và tỉ lệ lấp đầy' })
-  @ApiResponse({ status: 200, description: 'revenue, totalBookings, byStatus, occupancyRate, ...' })
-  @ApiResponse({ status: 400, description: 'Khoảng ngày không hợp lệ (sai định dạng, from > to, quá 366 ngày).' })
-  @ApiResponse({ status: 403, description: 'Không có quyền xem cơ sở này.' })
-  overview(@Request() req: any, @Query() query: AnalyticsQueryDto) {
-    return this.analyticsService.getOverview(this.caller(req), query);
+  @Get('admin/overview')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Admin xem dashboard analytics toàn hệ thống hoặc một Facility' })
+  @ApiQuery({ type: GetAnalyticsQueryDto })
+  @ApiOkResponse({ type: AnalyticsOverviewResponseDto })
+  @ApiResponse({ status: 400, description: 'Query date range hoặc facilityId không hợp lệ.' })
+  @ApiResponse({ status: 401, description: 'Thiếu hoặc sai access token/session.' })
+  @ApiResponse({ status: 403, description: 'Không phải ADMIN.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy Facility được lọc.' })
+  getAdminOverview(@Query() query: GetAnalyticsQueryDto) {
+    return this.analyticsService.getAdminOverview(query);
   }
 
-  @Get('trend')
-  @ApiOperation({ summary: 'Chuỗi doanh thu / số đơn / giờ sân theo ngày, tuần hoặc tháng' })
-  @ApiResponse({ status: 200, description: '{ granularity, totalRevenue, totalBookings, series[] }' })
-  trend(@Request() req: any, @Query() query: RevenueTrendQueryDto) {
-    return this.analyticsService.getRevenueTrend(this.caller(req), query);
-  }
-
-  @Get('court-utilization')
-  @ApiOperation({ summary: 'Mức sử dụng từng sân (giờ đã bán / giờ khả dụng), xếp cao → thấp' })
-  @ApiResponse({ status: 200, description: '{ courts[] }' })
-  courtUtilization(@Request() req: any, @Query() query: AnalyticsQueryDto) {
-    return this.analyticsService.getCourtUtilization(this.caller(req), query);
+  @Get('courts/performance')
+  @Roles(Role.OWNER, Role.ADMIN)
+  @ApiOperation({ summary: 'Owner/Admin xem Court Performance trong phạm vi được cấp quyền' })
+  @ApiQuery({ type: GetAnalyticsQueryDto })
+  @ApiOkResponse({ type: CourtPerformanceListResponseDto })
+  @ApiResponse({ status: 400, description: 'Query date range hoặc facilityId không hợp lệ.' })
+  @ApiResponse({ status: 401, description: 'Thiếu hoặc sai access token/session.' })
+  @ApiResponse({ status: 403, description: 'Không có quyền xem Court Performance của Facility này.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy Facility được lọc.' })
+  getCourtPerformance(
+    @Request() req: { user: { sub: number; role: 'COURT_OWNER' | 'ADMIN' } },
+    @Query() query: GetAnalyticsQueryDto,
+  ) {
+    return this.analyticsService.getCourtPerformance({ id: req.user.sub, role: req.user.role }, query);
   }
 }

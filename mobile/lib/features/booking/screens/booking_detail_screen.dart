@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../booking_theme.dart';
 
 class BookingDetailScreen extends StatelessWidget {
+  final bool readOnly;
   final String bookingId;
   final String facilityName;
   final String courtName;
@@ -18,6 +19,7 @@ class BookingDetailScreen extends StatelessWidget {
 
   const BookingDetailScreen({
     super.key,
+    this.readOnly = false,
     this.bookingId = '#SM20260920001',
     this.facilityName = 'Sunrise Badminton Club',
     this.courtName = 'Sân 3 · Indoor Badminton Court',
@@ -49,9 +51,9 @@ class BookingDetailScreen extends StatelessWidget {
               const SizedBox(height: 20),
               _buildBookingInformationSection(),
               const SizedBox(height: 16),
-              _buildFacilityAndPolicyCard(context),
+              if (!readOnly) _buildFacilityAndPolicyCard(context),
               const SizedBox(height: 24),
-              _buildCancelButton(context),
+              if (!readOnly) _buildCancelButton(context),
               const SizedBox(height: 24),
             ],
           ),
@@ -571,7 +573,11 @@ class BookingDetailScreen extends StatelessWidget {
                 onCancelBooking!();
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('UI preview: cancellation is not saved to the server.')),
+                  const SnackBar(
+                    content: Text(
+                      'UI preview: cancellation is not saved to the server.',
+                    ),
+                  ),
                 );
                 Navigator.maybePop(context);
               }

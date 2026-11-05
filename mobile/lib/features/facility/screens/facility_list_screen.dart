@@ -7,18 +7,21 @@ import '../services/facility_service.dart';
 import '../widgets/facility_card.dart';
 import 'add_edit_facility_screen.dart';
 import 'facility_detail_screen.dart';
-import '../../auth/widgets/logout_dialog.dart';
+import '../../dashboard/data/dashboard_repository.dart';
+import '../../dashboard/screens/dashboard_screen.dart';
+import '../../dashboard/widgets/dashboard_widgets.dart';
+import '../../../core/theme/app_motion.dart';
 
 class FacilityListScreen extends StatefulWidget {
-  const FacilityListScreen({super.key});
+  const FacilityListScreen({super.key, this.onNavigateTab});
+
+  final ValueChanged<int>? onNavigateTab;
 
   @override
   State<FacilityListScreen> createState() => _FacilityListScreenState();
 }
 
 class _FacilityListScreenState extends State<FacilityListScreen> {
-  int _currentNavIndex = 1; // Tab Facilities đang active
-
   List<FacilityCardItem> _facilities = [];
   bool _isLoading = true;
   bool _loadFailed = false;
@@ -337,80 +340,20 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
     }
   }
 
-  Widget _buildBottomNavigation() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.white,
-        border: Border(top: BorderSide(color: AppColors.divider, width: 1)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Expanded(child: _buildNavItem(0, Icons.home_outlined, 'Home')),
-              Expanded(child: _buildNavItem(1, Icons.domain, 'Facilities')),
-              Expanded(
-                child: _buildNavItem(
-                  2,
-                  Icons.calendar_today_outlined,
-                  'Bookings',
-                ),
-              ),
-              Expanded(
-                child: _buildNavItem(3, Icons.chat_bubble_outline, 'Messages'),
-              ),
-              Expanded(
-                child: _buildNavItem(4, Icons.person_outline, 'Profile'),
-              ),
-            ],
-          ),
+  Widget _buildBottomNavigation() => DashboardBottomNavigation(
+    palette: const DashboardPalette(DashboardRole.owner),
+    index: 1,
+    onChanged: (index) {
+      if (index == 1) return;
+      if (widget.onNavigateTab != null) {
+        widget.onNavigateTab!(index);
+        return;
+      }
+      Navigator.of(context).pushReplacement(
+        AppMotion.route(
+          DashboardScreen(role: DashboardRole.owner, initialTab: index),
         ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final isActive = _currentNavIndex == index;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        if (index == 4) {
-          showLogoutConfirmationDialog(context);
-          return;
-        }
-        setState(() {
-          _currentNavIndex = index;
-        });
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 22,
-              color: isActive ? AppColors.primary : AppColors.textSecondary,
-            ),
-            const SizedBox(height: 3),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                label,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 11,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                  color: isActive ? AppColors.primary : AppColors.textSecondary,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+      );
+    },
+  );
 }

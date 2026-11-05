@@ -3,6 +3,8 @@ import '../../features/feedback/screens/feedback_form_screen.dart';
 import '../../features/feedback/screens/rating_history_screen.dart';
 import '../../features/feedback/screens/community_rating_screen.dart';
 import '../../features/feedback/data/feedback_repository.dart';
+import '../../features/dashboard/data/dashboard_repository.dart';
+import '../../features/dashboard/screens/dashboard_screen.dart';
 
 import 'package:flutter/material.dart';
 
@@ -81,10 +83,54 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
   String _selectedCategory = 'Tất cả';
 
   late final List<_DevScreenItem> _allScreens = [
-    _DevScreenItem(title: 'Verify Code', category: 'Auth',
-      description: 'Recovery preview · demo code 2846', builder: (_) => const VerifyCodeScreen()),
-    _DevScreenItem(title: 'Create New Password', category: 'Auth',
-      description: 'Recovery preview · no real password change', builder: (_) => const CreateNewPasswordScreen()),
+    for (final role in DashboardRole.values)
+      for (var tab = 0; tab < 4; tab++)
+        _DevScreenItem(
+          title: role == DashboardRole.owner
+              ? [
+                  'Owner Dashboard',
+                  'Court Map / Schedule Grid',
+                  'Owner Booking Management',
+                  'Owner Analytics',
+                ][tab]
+              : [
+                  'Admin Dashboard',
+                  'User Management',
+                  'Facility Management',
+                  'System Analytics',
+                ][tab],
+          category: 'Dashboard',
+          description:
+              'Sprint 9 · ${role.name} · UI preview with sample data; no server writes',
+          builder: (_) =>
+              DashboardScreen(role: role, preview: true, initialTab: tab),
+        ),
+    _DevScreenItem(
+      title: 'Owner Booking Details',
+      category: 'Dashboard',
+      description: 'Sprint 9 · sample booking details',
+      builder: (_) => const OwnerBookingDetailScreen(
+        booking: DashboardBooking(
+          'Court 01',
+          'Nguyen Van A',
+          '18:00–19:00',
+          'Confirmed',
+          '120,000đ',
+        ),
+      ),
+    ),
+    _DevScreenItem(
+      title: 'Verify Code',
+      category: 'Auth',
+      description: 'Recovery preview · demo code 2846',
+      builder: (_) => const VerifyCodeScreen(),
+    ),
+    _DevScreenItem(
+      title: 'Create New Password',
+      category: 'Auth',
+      description: 'Recovery preview · no real password change',
+      builder: (_) => const CreateNewPasswordScreen(),
+    ),
 
     _DevScreenItem(
       title: 'Match Completed — Celebration Clean',
