@@ -1,3 +1,7 @@
+import 'package:maplibre_gl/maplibre_gl.dart';
+
+import 'support/fake_court_map_platform.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -10,6 +14,10 @@ import 'package:mobile/features/court_map/screens/find_courts_map_screen.dart';
 import 'package:mobile/features/court_map/screens/find_players_map_screen.dart';
 
 void main() {
+  final originalPlatform = MapLibrePlatform.createInstance;
+  setUp(() => MapLibrePlatform.createInstance = FakeCourtMapPlatform.new);
+  tearDown(() => MapLibrePlatform.createInstance = originalPlatform);
+
   final boundary = GlobalKey();
   Future<void> pump(
     WidgetTester tester,
@@ -22,7 +30,10 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       ProviderScope(
-        overrides: overrides,
+        overrides: [
+          nearbyCourtsProvider.overrideWith((ref) async => mockCourts),
+          ...overrides,
+        ],
         child: MaterialApp(
           home: RepaintBoundary(key: boundary, child: screen),
         ),
@@ -34,6 +45,33 @@ void main() {
       await tester.pump();
     }
   }
+
+  testWidgets('Selected facility is preserved in Preview and its court list', (
+    tester,
+  ) async {
+    final location = CourtLocation.fromJson({
+      'id': 45,
+      'name': 'VNB Test',
+      'address': 'Da Nang',
+      'courts': [
+        {
+          'id': 51,
+          'name': 'VNB Court 5',
+          'courtType': 'INDOOR',
+          'status': 'ACTIVE',
+        },
+      ],
+    });
+    await pump(tester, CourtPreviewScreen(location: location));
+    expect(find.text('VNB Test'), findsOneWidget);
+    expect(find.text('Sky Badminton'), findsNothing);
+    expect(find.text('4.6 (128)'), findsNothing);
+    await tester.ensureVisible(find.text('See all'));
+    await tester.tap(find.text('See all'));
+    await tester.pumpAndSettle();
+    expect(find.text('VNB Court 5'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'Court Preview fits two sizes and View Courts invokes its destination',

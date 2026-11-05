@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../dashboard/data/dashboard_repository.dart';
+import '../../dashboard/screens/dashboard_screen.dart';
 import '../widgets/role_welcome_layout.dart';
 
 class AdminWelcomeScreen extends StatelessWidget {
@@ -9,9 +11,10 @@ class AdminWelcomeScreen extends StatelessWidget {
   Widget build(BuildContext context) => RoleWelcomeLayout(
     role: WelcomeRole.admin,
     onContinue: () {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Admin Dashboard is not available in Sprint 1–8 yet.'),
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const DashboardScreen(role: DashboardRole.admin),
         ),
       );
     },

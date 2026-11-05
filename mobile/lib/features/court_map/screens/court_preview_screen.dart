@@ -1,3 +1,5 @@
+import '../../booking/screens/booking_facility_schedule_screen.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -11,9 +13,13 @@ import '../exploration_data.dart';
 import '../widgets/exploration_widgets.dart';
 
 final courtFavoriteProvider = StateProvider<bool>((ref) => false);
+final courtFavoriteByIdProvider = StateProvider.family<bool, int>(
+  (ref, id) => false,
+);
 
 class CourtPreviewScreen extends ConsumerStatefulWidget {
-  const CourtPreviewScreen({super.key, this.onViewCourts});
+  const CourtPreviewScreen({super.key, this.onViewCourts, this.location});
+  final CourtLocation? location;
   final VoidCallback? onViewCourts;
   @override
   ConsumerState<CourtPreviewScreen> createState() => _CourtPreviewScreenState();
@@ -21,6 +27,9 @@ class CourtPreviewScreen extends ConsumerStatefulWidget {
 
 class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
   final _gallery = PageController();
+  StateProvider<bool> get _favorite => widget.location == null
+      ? courtFavoriteProvider
+      : courtFavoriteByIdProvider(widget.location!.id);
   int _image = 0;
   @override
   void dispose() {
@@ -31,6 +40,15 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
   void _viewCourts() {
     if (widget.onViewCourts != null) {
       widget.onViewCourts!();
+      return;
+    }
+    if (widget.location != null) {
+      Navigator.of(context).push(
+        explorationRoute<void>(
+          BookingFacilityScheduleScreen(facilityId: widget.location!.id),
+          '/facility-booking',
+        ),
+      );
       return;
     }
     // Verified Figma destination 301:637: existing Player booking schedule.
@@ -65,8 +83,7 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
     try {
       await SharePlus.instance.share(
         ShareParams(
-          text:
-              '${court.name}\n${court.address}\n06:00 - 23:00\n80.000 - 120.000 VND / hour',
+          text: '${court.name}\n${court.address}',
           subject: court.name,
           sharePositionOrigin: box == null
               ? null
@@ -85,7 +102,16 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final data = ref.watch(courtPreviewProvider);
+    final location = widget.location;
+    final data = location == null
+        ? ref.watch(courtPreviewProvider)
+        : AsyncData(
+            CourtPreviewData(
+              name: location.name,
+              address: location.address,
+              photos: location.photos,
+            ),
+          );
     return Scaffold(
       backgroundColor: exploreBackground,
       bottomNavigationBar: Container(
@@ -193,7 +219,14 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
                             onPageChanged: (value) =>
                                 setState(() => _image = value),
                             itemBuilder: (_, index) =>
-                                ExplorePhoto(asset: court.photos[index]),
+                                court.photos[index].startsWith('http')
+                                ? Image.network(
+                                    court.photos[index],
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) =>
+                                        const Icon(Icons.broken_image_outlined),
+                                  )
+                                : ExplorePhoto(asset: court.photos[index]),
                           ),
                   ),
                 ),
@@ -205,10 +238,9 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
                     label: 'Favorite court',
                     onTap: () {
                       HapticFeedback.selectionClick();
-                      ref.read(courtFavoriteProvider.notifier).state = !ref
-                          .read(courtFavoriteProvider);
+                      ref.read(_favorite.notifier).state = !ref.read(_favorite);
                     },
-                    child: ref.watch(courtFavoriteProvider)
+                    child: ref.watch(_favorite)
                         ? const Icon(
                             Icons.favorite,
                             size: 20,
@@ -286,7 +318,9 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
                       style: exploreText(22, weight: FontWeight.w600, line: 30),
                     ),
                     const SizedBox(height: 6),
-                    Row(
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      runSpacing: 4,
                       children: [
                         Text(
                           '★',
@@ -298,7 +332,7 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          '4.6 (128)',
+                          widget.location?.ratingText ?? '4.6 (128)',
                           style: exploreText(
                             12,
                             weight: FontWeight.w500,
@@ -308,7 +342,10 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
                         const SizedBox(width: 8),
                         const ExploreGlyph('location', size: 14),
                         const SizedBox(width: 8),
-                        Text('1.3 km', style: exploreText(12, line: 17)),
+                        Text(
+                          widget.location?.distanceText ?? '1.3 km',
+                          style: exploreText(12, line: 17),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 6),
@@ -329,22 +366,34 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    _amenities(),
+                    if (widget.location == null) _amenities(),
                     const SizedBox(height: 12),
                     _valueRow(
                       'clock',
                       'Operating Hours',
-                      '06:00 - 23:00',
-                      onTap: () => _info('Operating Hours', '06:00 - 23:00'),
-                      badge: true,
+                      widget.location == null
+                          ? '06:00 - 23:00'
+                          : 'Chưa có thông tin',
+                      onTap: () => _info(
+                        'Operating Hours',
+                        widget.location == null
+                            ? '06:00 - 23:00'
+                            : 'Chưa có thông tin xác nhận giờ mở cửa.',
+                      ),
+                      badge: widget.location == null,
                     ),
                     _valueRow(
                       'price',
                       'Price Range',
-                      '80.000 - 120.000 VND / hour',
+                      widget.location == null
+                          ? '80.000 - 120.000 VND / hour'
+                          : widget.location!.priceRange ?? 'Chưa có thông tin',
                       onTap: () => _info(
                         'Price Range',
-                        'Court 1 / Court 2: 80.000 VND / hour\nCourt 3: 100.000 VND / hour\nDemo pricing — not a live quote.',
+                        widget.location == null
+                            ? 'Demo pricing — not a live quote.'
+                            : widget.location!.priceRange ??
+                                  'Chưa có thông tin giá.',
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -384,7 +433,7 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
                       height: 128,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
-                        itemCount: 3,
+                        itemCount: widget.location?.courts.length ?? 3,
                         separatorBuilder: (_, _) => const SizedBox(width: 10),
                         itemBuilder: (_, i) => _courtCard(i),
                       ),
@@ -486,60 +535,95 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
     ),
   );
 
-  Widget _courtCard(int index) => InkWell(
-    onTap: _viewCourts,
-    child: Container(
-      width: 112,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A133C31),
-            offset: Offset(0, 4),
-            blurRadius: 8,
+  Widget _courtCard(int index) => widget.location != null
+      ? Container(
+          width: 160,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: exploreLight,
+            borderRadius: BorderRadius.circular(12),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 62, width: 112, child: ExplorePhoto()),
-          Padding(
-            padding: const EdgeInsets.only(left: 8, top: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.sports_tennis, color: exploreGreen),
+              const SizedBox(height: 8),
+              Text(
+                widget.location!.courts[index]['name']?.toString() ?? 'Court',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: exploreText(12),
+              ),
+              Text(
+                widget.location!.courts[index]['courtType']?.toString() ?? '',
+                style: exploreText(10),
+              ),
+              Text(
+                widget.location!.courts[index]['status']?.toString() ??
+                    'Chưa rõ trạng thái',
+                style: exploreText(10),
+              ),
+            ],
+          ),
+        )
+      : InkWell(
+          onTap: _viewCourts,
+          child: Container(
+            width: 112,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0A133C31),
+                  offset: Offset(0, 4),
+                  blurRadius: 8,
+                ),
+              ],
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Court ${index + 1}',
-                  style: exploreText(12, weight: FontWeight.w600, line: 17),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  index == 2 ? '● Busy' : '● Available',
-                  maxLines: 1,
-                  style: exploreText(
-                    10,
-                    line: 14,
-                    color: index == 2
-                        ? const Color(0xFFF25561)
-                        : const Color(0xFF07934F),
+                const SizedBox(height: 62, width: 112, child: ExplorePhoto()),
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, top: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Court ${index + 1}',
+                        style: exploreText(
+                          12,
+                          weight: FontWeight.w600,
+                          line: 17,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        index == 2 ? '● Busy' : '● Available',
+                        maxLines: 1,
+                        style: exploreText(
+                          10,
+                          line: 14,
+                          color: index == 2
+                              ? const Color(0xFFF25561)
+                              : const Color(0xFF07934F),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        index == 2 ? '100.000 VND' : '80.000 VND',
+                        maxLines: 1,
+                        style: exploreText(10, line: 14),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  index == 2 ? '100.000 VND' : '80.000 VND',
-                  maxLines: 1,
-                  style: exploreText(10, line: 14),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    ),
-  );
+        );
 
   void _showCourts() => showModalBottomSheet<void>(
     context: context,
@@ -556,11 +640,13 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
               style: exploreText(18, weight: FontWeight.w600),
             ),
             const SizedBox(height: 16),
+            if (widget.location != null && widget.location!.courts.isEmpty)
+              const Text('Cơ sở chưa có thông tin sân con.'),
             SizedBox(
               height: 128,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: 3,
+                itemCount: widget.location?.courts.length ?? 3,
                 separatorBuilder: (_, _) => const SizedBox(width: 10),
                 itemBuilder: (_, i) => _courtCard(i),
               ),

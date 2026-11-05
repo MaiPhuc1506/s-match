@@ -1,3 +1,6 @@
+import 'package:dio/dio.dart';
+
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_motion.dart';
 import 'booking_detail_screen.dart';
 
@@ -11,6 +14,7 @@ import 'package:mobile/features/navigation/player_bottom_navigation.dart';
 enum BookingStatus { upcoming, completed, cancelled }
 
 class BookingHistoryItem {
+  final Map<String, dynamic>? source;
   final String id;
   final String facilityName;
   final String courtName;
@@ -19,6 +23,7 @@ class BookingHistoryItem {
   final BookingStatus status;
 
   const BookingHistoryItem({
+    this.source,
     required this.id,
     required this.facilityName,
     required this.courtName,
@@ -29,6 +34,8 @@ class BookingHistoryItem {
 }
 
 class BookingHistoryScreen extends StatefulWidget {
+  final bool live;
+  final PlayerNavTab originTab;
   final ValueChanged<BookingHistoryItem>? onSelectBooking;
   final VoidCallback? onNavigateHome;
   final VoidCallback? onNavigateMap;
@@ -38,6 +45,8 @@ class BookingHistoryScreen extends StatefulWidget {
 
   const BookingHistoryScreen({
     super.key,
+    this.live = false,
+    this.originTab = PlayerNavTab.map,
     this.onSelectBooking,
     this.onNavigateHome,
     this.onNavigateMap,
@@ -54,7 +63,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   int _activeTabIndex = 0; // 0: Upcoming, 1: Completed, 2: Cancelled
 
   // Dữ liệu mẫu chuẩn 4 card của Figma
-  final List<BookingHistoryItem> _allBookings = const [
+  List<BookingHistoryItem> _allBookings = const [
     BookingHistoryItem(
       id: '#SM20260920001',
       facilityName: 'Sunrise Badminton Club',
@@ -89,6 +98,78 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
     ),
   ];
 
+  String _date(String raw) {
+    final d = DateTime.parse(raw).toLocal();
+    return '${d.day}/${d.month}/${d.year}';
+  }
+
+  String _time(String raw) {
+    final d = DateTime.parse(raw).toLocal();
+    return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+
+  bool _loading = false;
+  String? _error;
+  @override
+  void initState() {
+    super.initState();
+    if (widget.live) {
+      _allBookings = [];
+      _loadBookings();
+    }
+  }
+
+  Future<void> _loadBookings() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final client = ApiClient.instance;
+    final token = client.token;
+    try {
+      if (token == null) {
+        throw Exception('Please sign in to view your bookings.');
+      }
+      final response = await client.dio.get(
+        '/bookings/my',
+        options: Options(extra: {'expectedAuthToken': token}),
+      );
+      if (token != client.token) {
+        throw Exception('Session changed. Please reopen your bookings.');
+      }
+      final items = (response.data as List).map((raw) {
+        final b = Map<String, dynamic>.from(raw as Map);
+        final court = b['court'] as Map;
+        final facility = court['facility'] as Map;
+        return BookingHistoryItem(
+          source: b,
+          id: '${b['id']}',
+          facilityName: '${facility['name']}',
+          courtName: '${court['name']}',
+          dateTimeText:
+              '${_date(b['startTime'])} · ${_time(b['startTime'])}–${_time(b['endTime'])}',
+          priceText: '${b['totalPrice']} VND',
+          status: b['status'] == 'CANCELLED'
+              ? BookingStatus.cancelled
+              : b['status'] == 'COMPLETED'
+              ? BookingStatus.completed
+              : BookingStatus.upcoming,
+        );
+      }).toList();
+      if (mounted) setState(() => _allBookings = items);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = token == null
+              ? 'Please sign in to view your bookings.'
+              : 'Could not load bookings. Please retry.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   List<BookingHistoryItem> get _displayedBookings {
     switch (_activeTabIndex) {
       case 0:
@@ -118,37 +199,63 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-              child: Text(
-                'My Bookings',
-                style: BookingTypography.inter(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: BookingColors.textDark,
-                ),
+              child: Row(
+                children: [
+                  if (Navigator.canPop(context))
+                    BackButton(onPressed: () => Navigator.pop(context)),
+                  Expanded(
+                    child: Text(
+                      'My Bookings',
+                      style: BookingTypography.inter(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: BookingColors.textDark,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 14),
             _buildTabs(),
             const SizedBox(height: 14),
             Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 4,
-                ),
-                itemCount: _displayedBookings.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final booking = _displayedBookings[index];
-                  return _buildBookingCard(booking);
-                },
-              ),
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_error!),
+                          TextButton(
+                            onPressed: _loadBookings,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : _displayedBookings.isEmpty
+                  ? const Center(child: Text('No bookings in this category.'))
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 4,
+                      ),
+                      itemCount: _displayedBookings.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final booking = _displayedBookings[index];
+                        return _buildBookingCard(booking);
+                      },
+                    ),
             ),
           ],
         ),
       ),
       bottomNavigationBar: PlayerBottomNavigation(
-        currentTab: null,
+        currentTab: widget.originTab,
+        allowCurrentTabNavigation: true,
         onNavigateHome: widget.onNavigateHome,
         onNavigateMap: widget.onNavigateMap,
         onNavigateMatch: widget.onNavigateMatch,
@@ -165,7 +272,11 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         children: [
-          _buildTabButton(index: 0, title: 'Upcoming (2)'),
+          _buildTabButton(
+            index: 0,
+            title:
+                'Upcoming (${_allBookings.where((b) => b.status == BookingStatus.upcoming).length})',
+          ),
           const SizedBox(width: 8),
           _buildTabButton(index: 1, title: 'Completed'),
           const SizedBox(width: 8),
@@ -217,6 +328,25 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                 facilityName: booking.facilityName,
                 courtName: booking.courtName,
                 priceText: booking.priceText,
+                address:
+                    booking.source?['court']?['facility']?['address']
+                        ?.toString() ??
+                    '—',
+                dateText: booking.source == null
+                    ? booking.dateTimeText
+                    : _date(booking.source!['startTime']),
+                timeRange: booking.source == null
+                    ? '—'
+                    : '${_time(booking.source!['startTime'])}–${_time(booking.source!['endTime'])}',
+                durationText: booking.source == null
+                    ? '—'
+                    : '${DateTime.parse(booking.source!['endTime']).difference(DateTime.parse(booking.source!['startTime'])).inMinutes} minutes',
+                courtType:
+                    booking.source?['court']?['courtType']?.toString() ?? '—',
+                statusText:
+                    booking.source?['status']?.toString() ??
+                    booking.status.name,
+                readOnly: widget.live,
               ),
               name: '/booking-detail-preview',
             ),

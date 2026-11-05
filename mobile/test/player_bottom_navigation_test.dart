@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -6,6 +7,7 @@ import 'package:mobile/features/navigation/player_bottom_navigation.dart';
 import 'package:mobile/features/feedback/screens/rating_history_screen.dart';
 import 'package:mobile/features/auth/screens/player_profile_screen.dart';
 import 'package:mobile/features/match/screens/match_list_screen.dart';
+import 'package:mobile/features/court_map/exploration_data.dart';
 import 'package:mobile/features/court_map/screens/find_courts_map_screen.dart';
 import 'package:mobile/features/booking/screens/booking_history_screen.dart';
 
@@ -203,7 +205,15 @@ void main() {
       (tester) async {
         await setPhoneViewport(tester);
 
-        await tester.pumpWidget(const MaterialApp(home: FindCourtsMapScreen()));
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              nearbyCourtsProvider.overrideWith((ref) async => mockCourts),
+            ],
+            child: const MaterialApp(home: FindCourtsMapScreen()),
+          ),
+        );
+        await tester.pumpAndSettle();
 
         expect(find.byType(PlayerBottomNavigation), findsOneWidget);
         final nav = tester.widget<PlayerBottomNavigation>(
@@ -226,7 +236,8 @@ void main() {
         final nav = tester.widget<PlayerBottomNavigation>(
           find.byType(PlayerBottomNavigation),
         );
-        expect(nav.currentTab, isNull);
+        expect(nav.currentTab, PlayerNavTab.map);
+        expect(nav.allowCurrentTabNavigation, isTrue);
         expect(find.text('Home'), findsOneWidget);
         expect(find.text('Map'), findsOneWidget);
         expect(find.text('Match'), findsOneWidget);

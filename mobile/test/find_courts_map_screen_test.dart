@@ -1,8 +1,18 @@
+import 'package:maplibre_gl/maplibre_gl.dart';
+
+import 'support/fake_court_map_platform.dart';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile/features/court_map/exploration_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/features/court_map/screens/find_courts_map_screen.dart';
 
 void main() {
+  final originalPlatform = MapLibrePlatform.createInstance;
+  setUp(() => MapLibrePlatform.createInstance = FakeCourtMapPlatform.new);
+  tearDown(() => MapLibrePlatform.createInstance = originalPlatform);
+
   Future<void> pumpScreen(
     WidgetTester tester, {
     Size size = const Size(393, 852),
@@ -15,19 +25,26 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: FindCourtsMapScreen(
-          onFindPlayers: onFindPlayers,
-          onCourtPreview: onCourtPreview,
-          onNavigateProfile: onNavigateProfile,
-          onNavigateMatch: onNavigateMatch,
+      ProviderScope(
+        overrides: [
+          nearbyCourtsProvider.overrideWith((ref) async => mockCourts),
+        ],
+        child: MaterialApp(
+          home: FindCourtsMapScreen(
+            onFindPlayers: onFindPlayers,
+            onCourtPreview: onCourtPreview,
+            onNavigateProfile: onNavigateProfile,
+            onNavigateMatch: onNavigateMatch,
+          ),
         ),
       ),
     );
     await tester.pumpAndSettle();
   }
 
-  testWidgets('FindCourtsMapScreen renders at 393 × 852 without overflow', (tester) async {
+  testWidgets('FindCourtsMapScreen renders at 393 × 852 without overflow', (
+    tester,
+  ) async {
     await pumpScreen(tester);
 
     expect(find.byType(FindCourtsMapScreen), findsOneWidget);
@@ -38,44 +55,55 @@ void main() {
     expect(find.text('Map'), findsOneWidget);
   });
 
-  testWidgets('FindCourtsMapScreen renders at smaller screen 360 × 640 without overflow', (tester) async {
-    await pumpScreen(tester, size: const Size(360, 640));
+  testWidgets(
+    'FindCourtsMapScreen renders at smaller screen 360 × 640 without overflow',
+    (tester) async {
+      await pumpScreen(tester, size: const Size(360, 640));
 
-    expect(find.byType(FindCourtsMapScreen), findsOneWidget);
-    expect(find.text('Find Courts'), findsOneWidget);
-    expect(find.text('Nearby Courts'), findsOneWidget);
-  });
+      expect(find.byType(FindCourtsMapScreen), findsOneWidget);
+      expect(find.text('Find Courts'), findsOneWidget);
+      expect(find.text('Nearby Courts'), findsOneWidget);
+    },
+  );
 
-  testWidgets('Initial state has selected Sky bubble; background tap dismisses it', (tester) async {
-    await pumpScreen(tester);
+  testWidgets(
+    'Initial state has selected Sky bubble; background tap dismisses it',
+    (tester) async {
+      await pumpScreen(tester);
 
-    expect(find.text('1.3 km · \$'), findsOneWidget);
+      expect(find.text('1.3 km · \$'), findsOneWidget);
 
-    // Tap map canvas background
-    await tester.tapAt(const Offset(50, 200));
-    await tester.pumpAndSettle();
+      // Tap map canvas background
+      await tester.tapAt(const Offset(50, 200));
+      await tester.pumpAndSettle();
 
-    expect(find.text('1.3 km · \$'), findsNothing);
-  });
+      expect(find.text('1.3 km · \$'), findsNothing);
+    },
+  );
 
-  testWidgets('Search trigger opens search panel and close button dismisses it', (tester) async {
-    await pumpScreen(tester);
+  testWidgets(
+    'Search trigger opens search panel and close button dismisses it',
+    (tester) async {
+      await pumpScreen(tester);
 
-    expect(find.text('Search courts'), findsNothing);
+      expect(find.text('Search courts'), findsNothing);
 
-    await tester.tap(find.byKey(const Key('find_courts_search_trigger')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('find_courts_search_trigger')));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Search courts'), findsOneWidget);
-    expect(find.text('Court name or area'), findsOneWidget);
+      expect(find.text('Search courts'), findsOneWidget);
+      expect(find.text('Court name or area'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.close));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Search courts'), findsNothing);
-  });
+      expect(find.text('Search courts'), findsNothing);
+    },
+  );
 
-  testWidgets('Filters panel supports distance, toggles, and apply button', (tester) async {
+  testWidgets('Filters panel supports distance, toggles, and apply button', (
+    tester,
+  ) async {
     await pumpScreen(tester);
 
     expect(find.text('Filters'), findsNothing);
@@ -112,7 +140,9 @@ void main() {
     expect(find.text('Filters'), findsNothing);
   });
 
-  testWidgets('Map layers panel switches between Standard and Court clusters', (tester) async {
+  testWidgets('Map layers panel switches between Standard and Court clusters', (
+    tester,
+  ) async {
     await pumpScreen(tester);
 
     expect(find.text('3'), findsNothing);
@@ -138,38 +168,40 @@ void main() {
     expect(find.text('3'), findsNothing);
   });
 
-  testWidgets('Nearby courts sheet expands to half-expanded and collapse button returns to collapsed', (tester) async {
-    await pumpScreen(tester);
+  testWidgets(
+    'Nearby courts sheet expands to half-expanded and collapse button returns to collapsed',
+    (tester) async {
+      await pumpScreen(tester);
 
-    expect(find.text('3 courts'), findsOneWidget);
-    expect(find.text('VNB Court'), findsNothing);
+      expect(find.text('3 courts'), findsOneWidget);
+      expect(find.text('VNB Court'), findsNothing);
 
-    // Tap collapsed summary card
-    await tester.tap(find.byKey(const Key('find_courts_sheet_summary')));
-    await tester.pumpAndSettle();
+      // Tap collapsed summary card
+      await tester.tap(find.byKey(const Key('find_courts_sheet_summary')));
+      await tester.pumpAndSettle();
 
-    expect(find.text('3 courts'), findsNothing);
-    expect(find.text('VNB Court'), findsOneWidget);
+      expect(find.text('3 courts'), findsNothing);
+      expect(find.text('VNB Court'), findsOneWidget);
 
-    // Scroll list to reveal third card
-    await tester.drag(find.text('VNB Court'), const Offset(0, -100));
-    await tester.pumpAndSettle();
-    expect(find.text('Duy Tân Sport Center'), findsOneWidget);
+      // Scroll list to reveal third card
+      await tester.drag(find.text('VNB Court'), const Offset(0, -100));
+      await tester.pumpAndSettle();
+      expect(find.text('Duy Tân Sport Center'), findsOneWidget);
 
-    // Tap collapse button
-    await tester.tap(find.byKey(const Key('find_courts_collapse_sheet')));
-    await tester.pumpAndSettle();
+      // Tap collapse button
+      await tester.tap(find.byKey(const Key('find_courts_collapse_sheet')));
+      await tester.pumpAndSettle();
 
-    expect(find.text('3 courts'), findsOneWidget);
-    expect(find.text('VNB Court'), findsNothing);
-  });
+      expect(find.text('3 courts'), findsOneWidget);
+      expect(find.text('VNB Court'), findsNothing);
+    },
+  );
 
-  testWidgets('Bottom navigation item Match triggers navigation', (tester) async {
+  testWidgets('Bottom navigation item Match triggers navigation', (
+    tester,
+  ) async {
     bool matchNavigated = false;
-    await pumpScreen(
-      tester,
-      onNavigateMatch: () => matchNavigated = true,
-    );
+    await pumpScreen(tester, onNavigateMatch: () => matchNavigated = true);
 
     await tester.tap(find.text('Match'));
     await tester.pumpAndSettle();
@@ -177,12 +209,11 @@ void main() {
     expect(matchNavigated, isTrue);
   });
 
-  testWidgets('Bottom navigation item Profile triggers navigation', (tester) async {
+  testWidgets('Bottom navigation item Profile triggers navigation', (
+    tester,
+  ) async {
     bool profileNavigated = false;
-    await pumpScreen(
-      tester,
-      onNavigateProfile: () => profileNavigated = true,
-    );
+    await pumpScreen(tester, onNavigateProfile: () => profileNavigated = true);
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
@@ -190,7 +221,9 @@ void main() {
     expect(profileNavigated, isTrue);
   });
 
-  testWidgets('Current location button recenters map without error', (tester) async {
+  testWidgets('Current location button recenters map without error', (
+    tester,
+  ) async {
     await pumpScreen(tester);
 
     await tester.tap(find.byKey(const Key('find_courts_location_button')));
