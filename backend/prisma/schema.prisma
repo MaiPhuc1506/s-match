@@ -175,6 +175,9 @@ model Facility {
   operatingHours OperatingHours[]
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
+
+  // SMM-40: tra cứu cơ sở theo chủ sân (analytics, danh sách cơ sở của tôi)
+  @@index([ownerId])
 }
 model Court {
   id         Int         @id @default(autoincrement())
@@ -187,6 +190,9 @@ model Court {
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   bookings   Booking[]
+
+  // SMM-40: lấy sân của một cơ sở, lọc theo trạng thái
+  @@index([facilityId, status])
 }
 // SMM-20 — Slot & Pricing Backend (Sprint 4).
 // Khung giờ định kỳ hàng tuần của một sân, kèm giá cho khung giờ đó.
@@ -242,6 +248,9 @@ model Booking {
 
   @@index([courtId, startTime, endTime])
   @@index([userId])
+  // SMM-40: analytics — lọc theo sân + trạng thái + khoảng thời gian, và thống kê toàn hệ thống theo trạng thái + thời gian
+  @@index([courtId, status, startTime])
+  @@index([status, startTime])
 }
 
 //Match Management Models & Enums
