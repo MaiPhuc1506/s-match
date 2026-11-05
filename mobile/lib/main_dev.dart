@@ -18,7 +18,7 @@ void main() {
   // BẢO VỆ PHÁT HÀNH SẢN XUẤT (Release Guard):
   // Nếu vô tình build với cấu hình release, chế độ Developer Mode sẽ tự động
   // chuyển hướng về ứng dụng thông thường, không để lộ Testing Hub ra bên ngoài.
-  if (kReleaseMode) {
+  if (!kDebugMode) {
     runApp(const ProviderScope(child: SMatchApp()));
     return;
   }

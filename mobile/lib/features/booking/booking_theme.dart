@@ -1,26 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/theme/app_colors.dart';
+
 /// Bảng màu chuẩn Figma cho Sprint 4 (Node 301:635)
 class BookingColors {
   BookingColors._();
 
   // Nền chung của cả 5 màn hình
-  static const Color background = Color(0xFFF7F8F5);
+  static const Color background = AppColors.background;
 
   // Màu thương hiệu chính (Primary Green)
-  static const Color primary = Color(0xFF05644F);
+  static const Color primary = AppColors.primary;
   static const Color primaryPressed = Color(0xFF054D3F);
 
   // Màu chữ chính và phụ
-  static const Color textDark = Color(0xFF062F3A);
-  static const Color textDarkM1 = Color(0xFF0D2630); // Dùng riêng ở Màn 01
-  static const Color textSecondary = Color(0xFF68736F);
-  static const Color textSecondaryM1 = Color(0xFF66706E); // Dùng riêng ở Màn 01
+  static const Color textDark = AppColors.textPrimary;
+  static const Color textDarkM1 = AppColors.textPrimary; // Dùng riêng ở Màn 01
+  static const Color textSecondary = AppColors.textSecondary;
+  static const Color textSecondaryM1 =
+      AppColors.textSecondary; // Dùng riêng ở Màn 01
 
   // Card, viền & bề mặt
   static const Color cardBg = Color(0xFFFFFFFF);
-  static const Color border = Color(0xFFD7DFDB);
+  static const Color border = AppColors.border;
   static const Color borderLight = Color(0xFFEBF0ED);
   static const Color borderHistoryCard = Color(0xFFEBF0ED);
   static const Color borderStat = Color(0xFFDBE3DE);
@@ -37,10 +40,10 @@ class BookingColors {
   static const Color badgeCancelledText = Color(0xFFE2544B);
 
   // Màu ma trận trạng thái slot trên lịch (Schedule Grid)
-  static const Color slotAvailable = Color(0xFF128C6B);
-  static const Color slotBooked = Color(0xFFFA635E);
-  static const Color slotLocked = Color(0xFFB8BFBD);
-  static const Color slotEvent = Color(0xFFBD5CD1);
+  static const Color slotAvailable = AppColors.slotAvailable;
+  static const Color slotBooked = AppColors.slotBooked;
+  static const Color slotLocked = AppColors.slotLocked;
+  static const Color slotEvent = AppColors.slotEvent;
   static const Color slotSelectedBorder = Color(0xFFA9DDCC);
 }
 
@@ -83,7 +86,7 @@ class BookingIcons {
 
 /// Typography helper theo đúng phân bổ font của Figma:
 /// - Màn 01 dùng GoogleFonts.plusJakartaSans
-/// - Màn 02-05 dùng GoogleFonts.inter
+/// - All booking screens use Plus Jakarta Sans; legacy helper names are retained.
 class BookingTypography {
   BookingTypography._();
 
@@ -110,7 +113,7 @@ class BookingTypography {
     double? height,
     double? letterSpacing,
   }) {
-    return GoogleFonts.inter(
+    return GoogleFonts.plusJakartaSans(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,

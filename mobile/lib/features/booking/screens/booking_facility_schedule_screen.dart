@@ -1,3 +1,4 @@
+import '../widgets/live_facility_schedule.dart';
 import '../../../core/theme/app_motion.dart';
 import 'booking_summary_screen.dart';
 
@@ -10,8 +11,13 @@ enum SlotStatus { available, booked, locked, event }
 
 class BookingFacilityScheduleScreen extends StatefulWidget {
   final VoidCallback? onContinue;
+  final int? facilityId;
 
-  const BookingFacilityScheduleScreen({super.key, this.onContinue});
+  const BookingFacilityScheduleScreen({
+    super.key,
+    this.onContinue,
+    this.facilityId,
+  });
 
   @override
   State<BookingFacilityScheduleScreen> createState() =>
@@ -151,6 +157,9 @@ class _BookingFacilityScheduleScreenState
 
   @override
   Widget build(BuildContext context) {
+    if (widget.facilityId != null) {
+      return LiveFacilitySchedule(facilityId: widget.facilityId!);
+    }
     return Scaffold(
       backgroundColor: BookingColors.background,
       body: SafeArea(
@@ -363,7 +372,7 @@ class _BookingFacilityScheduleScreenState
                 width: 6,
                 height: 6,
                 decoration: const BoxDecoration(
-                  color: BookingColors.slotAvailable,
+                  color: BookingColors.primary,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -699,7 +708,7 @@ class _BookingFacilityScheduleScreenState
                             color: isSelected
                                 ? BookingColors.primary
                                 : _getSlotColor(status),
-                            borderRadius: BorderRadius.circular(2),
+                            borderRadius: BorderRadius.circular(8),
                             border: isSelected
                                 ? Border.all(
                                     color: BookingColors.slotSelectedBorder,
@@ -742,7 +751,7 @@ class _BookingFacilityScheduleScreenState
           height: 10,
           decoration: BoxDecoration(
             color: color,
-            borderRadius: BorderRadius.circular(2),
+            borderRadius: BorderRadius.circular(8),
           ),
         ),
         const SizedBox(width: 4),

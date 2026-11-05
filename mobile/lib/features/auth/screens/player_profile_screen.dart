@@ -18,6 +18,7 @@ import '../services/auth_service.dart';
 import '../services/player_profile_service.dart';
 import '../../feedback/data/rating_api.dart';
 import '../../feedback/screens/community_rating_screen.dart';
+import '../../feedback/screens/rating_history_screen.dart';
 import '../../feedback/data/feedback_repository.dart';
 
 /// Player Profile — Figma frame 195:178 (393 × 852).
@@ -290,6 +291,13 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
         _buildSkillOverview(context),
         const SizedBox(height: 8),
         _buildPlayingStyle(context),
+        const SizedBox(height: 16),
+        Text(
+          'Activity & History',
+          style: _textStyle(size: 16, lineHeight: 22, weight: FontWeight.w600),
+        ),
+        const SizedBox(height: 10),
+        _buildHistoryLinks(context),
         const SizedBox(height: 24),
         _buildLogoutButton(context),
         const SizedBox(height: 16),
@@ -547,7 +555,10 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => const BookingHistoryScreen(),
+                        builder: (_) => const BookingHistoryScreen(
+                          live: true,
+                          originTab: PlayerNavTab.profile,
+                        ),
                       ),
                     );
                   },
@@ -709,6 +720,100 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryLinks(BuildContext context) {
+    Widget entry(
+      String title,
+      String subtitle,
+      IconData icon,
+      Widget destination,
+    ) => ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: const Color(0xFFEAF6EF),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: _primary, size: 22),
+      ),
+      title: Text(
+        title,
+        style: _textStyle(size: 15, lineHeight: 21, weight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: _textStyle(
+          size: 12,
+          lineHeight: 18,
+          weight: FontWeight.w400,
+          color: const Color(0xFF6B6B6B),
+        ),
+      ),
+      trailing: const Icon(
+        Icons.chevron_right_rounded,
+        color: _primary,
+        size: 20,
+      ),
+      onTap: () => _navigateDissolve(context, destination),
+    );
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFFD6DCD8)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          entry(
+            'My Bookings',
+            'Upcoming, completed & cancelled',
+            Icons.calendar_month_outlined,
+            const BookingHistoryScreen(
+              live: true,
+              originTab: PlayerNavTab.profile,
+            ),
+          ),
+          const Divider(
+            height: 1,
+            indent: 72,
+            endIndent: 16,
+            color: Color(0xFFD6DCD8),
+          ),
+          entry(
+            'Player Ratings',
+            'Your performance ratings',
+            Icons.star_outline_rounded,
+            CommunityRatingScreen(
+              live: true,
+              player: FeedbackPlayer(
+                '${RatingApi.current().userId}',
+                _fullName,
+                '',
+              ),
+            ),
+          ),
+          const Divider(
+            height: 1,
+            indent: 72,
+            endIndent: 16,
+            color: Color(0xFFD6DCD8),
+          ),
+          entry(
+            'My Reviews & Feedback',
+            'Reviews and app feedback',
+            Icons.chat_bubble_outline_rounded,
+            RatingHistoryScreen(
+              initiallyGiven: true,
+              repository: ApiFeedbackRepository(RatingApi.current()),
+            ),
+          ),
+        ],
       ),
     );
   }

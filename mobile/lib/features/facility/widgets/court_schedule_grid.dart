@@ -190,7 +190,7 @@ class _CourtScheduleGridState extends State<CourtScheduleGrid> {
                                     height: 25,
                                     decoration: BoxDecoration(
                                       color: _getSlotColor(status),
-                                      borderRadius: BorderRadius.circular(2),
+                                      borderRadius: BorderRadius.circular(8),
                                       border: isSelected
                                           ? Border.all(
                                               color:
@@ -242,7 +242,7 @@ class _CourtScheduleGridState extends State<CourtScheduleGrid> {
           height: 10,
           decoration: BoxDecoration(
             color: color,
-            borderRadius: BorderRadius.circular(2),
+            borderRadius: BorderRadius.circular(8),
           ),
         ),
         const SizedBox(width: 4),

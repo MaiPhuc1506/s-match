@@ -23,9 +23,9 @@ enum PlayerNavTab { home, map, match, feedback, profile }
 /// - Reference padding: top 8, right 12, bottom 22, left 12
 /// - Five equally distributed items (reference size: 64 × 48)
 /// - Icon size: 22 × 22, gap: 4
-/// - Font: Plus Jakarta Sans, Medium 500, size 11, line-height 15
+/// - Font: Plus Jakarta Sans, Medium 500, size 12, line-height 17
 /// - Colors: Selected #05644F, Inactive #7A8985
-/// - Background: Pure white, no decorative borders or shadows
+/// - Background: white; selected tab has a mint pill with radius 16.
 class PlayerBottomNavigation extends StatelessWidget {
   final PlayerNavTab? currentTab;
   final ValueChanged<PlayerNavTab>? onTapTab;
@@ -52,8 +52,15 @@ class PlayerBottomNavigation extends StatelessWidget {
   static const Color _inactiveColor = Color(0xFF7A8985);
 
   /// Includes the device inset once; callers must not wrap the bar in SafeArea.
+  static double itemHeightFor(BuildContext context) => math.max(
+    48,
+    27 + MediaQuery.textScalerOf(context).scale(17).ceilToDouble(),
+  );
+
   static double heightFor(BuildContext context) =>
-      84 + math.max(0, MediaQuery.viewPaddingOf(context).bottom - 22);
+      8 +
+      math.max(22, MediaQuery.viewPaddingOf(context).bottom) +
+      math.max(54, itemHeightFor(context));
 
   static (String asset, String label) _tabData(PlayerNavTab tab) {
     switch (tab) {
@@ -208,9 +215,16 @@ class PlayerBottomNavigation extends StatelessWidget {
               behavior: HitTestBehavior.opaque,
               onTap: () => _handleTap(context, tab),
               child: Center(
-                child: SizedBox(
-                  width: 64,
-                  height: 48,
+                child: AnimatedContainer(
+                  duration: AppMotion.duration(context, 120),
+                  width: double.infinity,
+                  height: itemHeightFor(context),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? const Color(0xFFEAF6EF)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
@@ -232,9 +246,9 @@ class PlayerBottomNavigation extends StatelessWidget {
                           label,
                           maxLines: 1,
                           style: GoogleFonts.plusJakartaSans(
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: FontWeight.w500,
-                            height: 15 / 11,
+                            height: 17 / 12,
                             color: color,
                             letterSpacing: 0,
                           ),

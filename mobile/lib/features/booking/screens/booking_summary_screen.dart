@@ -16,6 +16,7 @@ class BookingSummaryScreen extends StatelessWidget {
   final String courtType;
   final String priceText;
   final VoidCallback? onConfirm;
+  final bool isSubmitting;
 
   const BookingSummaryScreen({
     super.key,
@@ -28,6 +29,7 @@ class BookingSummaryScreen extends StatelessWidget {
     this.courtType = 'Indoor',
     this.priceText = '100,000 VND',
     this.onConfirm,
+    this.isSubmitting = false,
   });
 
   @override
@@ -293,12 +295,15 @@ class BookingSummaryScreen extends StatelessWidget {
                       color: BookingColors.textSecondary,
                     ),
                   ),
-                  Text(
-                    priceText,
-                    style: BookingTypography.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: BookingColors.textDark,
+                  Flexible(
+                    child: Text(
+                      priceText,
+                      textAlign: TextAlign.right,
+                      style: BookingTypography.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: BookingColors.textDark,
+                      ),
                     ),
                   ),
                 ],
@@ -344,12 +349,15 @@ class BookingSummaryScreen extends StatelessWidget {
                       color: BookingColors.textDark,
                     ),
                   ),
-                  Text(
-                    priceText,
-                    style: BookingTypography.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: BookingColors.primary,
+                  Flexible(
+                    child: Text(
+                      priceText,
+                      textAlign: TextAlign.right,
+                      style: BookingTypography.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: BookingColors.primary,
+                      ),
                     ),
                   ),
                 ],
@@ -414,25 +422,27 @@ class BookingSummaryScreen extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
           ),
         ),
-        onPressed: () {
-          if (onConfirm != null) {
-            onConfirm!();
-          } else {
-            Navigator.of(context).push(
-              AppMotion.route(
-                BookingSuccessScreen(
-                  facilityName: facilityName,
-                  courtName: courtName,
-                  dateTimeText: '$dateText · $timeRange',
-                  totalPrice: priceText,
-                ),
-                name: '/booking-success-preview',
-              ),
-            );
-          }
-        },
+        onPressed: isSubmitting
+            ? null
+            : () {
+                if (onConfirm != null) {
+                  onConfirm!();
+                } else {
+                  Navigator.of(context).push(
+                    AppMotion.route(
+                      BookingSuccessScreen(
+                        facilityName: facilityName,
+                        courtName: courtName,
+                        dateTimeText: '$dateText · $timeRange',
+                        totalPrice: priceText,
+                      ),
+                      name: '/booking-success-preview',
+                    ),
+                  );
+                }
+              },
         child: Text(
-          'Confirm Booking',
+          isSubmitting ? 'Confirming…' : 'Confirm Booking',
           style: BookingTypography.inter(
             fontSize: 15,
             fontWeight: FontWeight.w600,

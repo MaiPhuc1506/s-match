@@ -1,4 +1,4 @@
-import '../../../core/theme/app_motion.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -6,6 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mobile/features/navigation/player_bottom_navigation.dart';
 
+import '../exploration_data.dart';
+import '../widgets/court_maplibre_map.dart';
 import '../widgets/exploration_widgets.dart';
 import 'court_preview_screen.dart';
 import 'find_players_map_screen.dart';
@@ -18,7 +20,7 @@ import 'find_players_map_screen.dart';
 /// - 3-state draggable Nearby Courts sheet (Collapsed, Half-expanded, Expanded).
 /// - Conditional overlays: Search panel, Filters panel, and Map layers panel.
 /// - Bottom navigation matching S-Match visual system with Map selected.
-class FindCourtsMapScreen extends StatefulWidget {
+class FindCourtsMapScreen extends ConsumerStatefulWidget {
   final VoidCallback? onFindPlayers;
   final VoidCallback? onCourtPreview;
   final VoidCallback? onNavigateHome;
@@ -37,15 +39,80 @@ class FindCourtsMapScreen extends StatefulWidget {
   });
 
   @override
-  State<FindCourtsMapScreen> createState() => _FindCourtsMapScreenState();
+  ConsumerState<FindCourtsMapScreen> createState() =>
+      _FindCourtsMapScreenState();
 }
 
 enum _SheetSnapState { collapsed, halfExpanded, expanded }
 
-class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
-    with SingleTickerProviderStateMixin {
+class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
   // --- UI States (Initial prototype values from Figma collection) ---
   bool _selection = true; // Sky Badminton bubble selected by default
+  CourtLocation? _selectedCourt;
+  String _query = '';
+  List<CourtLocation> get _allCourts =>
+      ref.read(nearbyCourtsProvider).asData?.value ?? [];
+  bool get _supportsDistance => _allCourts.any((c) => c.distanceKm != null);
+  bool _supports(String label) => switch (label) {
+    'Open now' => _allCourts.any((c) => c.isOpen != null),
+    'Indoor' => _allCourts.any((c) => c.courts.isNotEmpty),
+    r'$' || r'$$' => _allCourts.any((c) => c.priceRange != null),
+    _ => true,
+  };
+  List<CourtLocation> get _courts {
+    final all =
+        ref.read(nearbyCourtsProvider).asData?.value ?? <CourtLocation>[];
+    return all
+        .where(
+          (c) => ('${c.name} ${c.address}').toLowerCase().contains(
+            _query.toLowerCase(),
+          ),
+        )
+        .where((c) {
+          if (!_filtersApplied) return true;
+          if (_distanceChosen &&
+              (c.distanceKm == null ||
+                  c.distanceKm! >
+                      double.parse(_selectedDistance.split(' ').first))) {
+            return false;
+          }
+          if (_openNowSelected && c.isOpen != true) return false;
+          if (_indoorSelected &&
+              !c.courts.any((court) => court['courtType'] == 'INDOOR')) {
+            return false;
+          }
+          if ((_price1Selected || _price2Selected) &&
+              !(_price1Selected && c.priceRange == r'$') &&
+              !(_price2Selected && c.priceRange == r'$$')) {
+            return false;
+          }
+          return true;
+        })
+        .toList();
+  }
+
+  CourtLocation? get _currentCourt {
+    final courts = _courts;
+    for (final court in courts) {
+      if (court.id == _selectedCourt?.id) return court;
+    }
+    return courts.isEmpty ? null : courts.first;
+  }
+
+  CourtMapController? _courtMapController;
+  bool _hasCentered = false;
+  void _centerOnFirstCourt() {
+    final court = _currentCourt;
+    if (_hasCentered ||
+        _courtMapController == null ||
+        court == null ||
+        !court.hasCoordinates) {
+      return;
+    }
+    _hasCentered = true;
+    _courtMapController!.moveToCourt(court);
+  }
+
   bool _searchOpen = false;
   bool _filtersOpen = false;
   bool _layersOpen = false;
@@ -53,6 +120,7 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
   bool _pins = true;
   final bool _accuracy = true;
   bool _filtersApplied = false;
+  bool _distanceChosen = false;
 
   // Filter values
   String _selectedDistance = '5 km'; // '3 km', '5 km', '10 km'
@@ -68,33 +136,21 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
   _SheetSnapState _sheetState = _SheetSnapState.collapsed;
   double _sheetDragDelta = 0;
 
-  // Map canvas offset (canvas size 500 × 900)
-  Offset _mapOffset = Offset.zero;
-  late final AnimationController _recenterController;
-  late Animation<Offset> _recenterAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _recenterController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-  }
-
-  @override
-  void dispose() {
-    _recenterController.dispose();
-    super.dispose();
-  }
-
   void _openCourtPreview() {
+    if (_currentCourt == null) return;
     if (widget.onCourtPreview != null) {
       widget.onCourtPreview!();
     } else {
-      Navigator.of(context).push(
-        explorationRoute<void>(const CourtPreviewScreen(), '/court-preview'),
-      );
+      Navigator.of(context)
+          .push(
+            explorationRoute<void>(
+              CourtPreviewScreen(location: _currentCourt),
+              '/court-preview',
+            ),
+          )
+          .then((_) {
+            if (mounted) ref.invalidate(nearbyCourtsProvider);
+          });
     }
   }
 
@@ -120,38 +176,21 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
   }
 
   void _recenterToUser() {
-    if (AppMotion.reduced(context)) {
-      _recenterController.stop();
-      setState(() {
-        _mapOffset = const Offset(0, -46);
-        _selection = false;
-        _searchOpen = false;
-        _filtersOpen = false;
-        _layersOpen = false;
-      });
-      return;
-    }
-    // Recenter target: canvas (0, 46), 0.40s ease-out scroll
-    final target = const Offset(0, -46);
-    _recenterAnimation =
-        Tween<Offset>(begin: _mapOffset, end: target).animate(
-          CurvedAnimation(parent: _recenterController, curve: Curves.easeOut),
-        )..addListener(() {
-          setState(() => _mapOffset = _recenterAnimation.value);
-        });
-
+    _courtMapController?.recenter();
     setState(() {
       _selection = false;
       _searchOpen = false;
       _filtersOpen = false;
       _layersOpen = false;
     });
-
-    _recenterController.forward(from: 0);
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(nearbyCourtsProvider);
+    ref.listen(nearbyCourtsProvider, (_, next) {
+      if (next.hasValue) _centerOnFirstCourt();
+    });
     return Scaffold(
       backgroundColor: const Color(0xFFFAFBF9),
       body: LayoutBuilder(
@@ -265,308 +304,43 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
   }
 
   // ==========================================
-  // 1. MAP VIEWPORT & SCHEMATIC CANVAS
+  // 1. MAP VIEWPORT & MAPLIBRE VECTOR MAP
   // ==========================================
   Widget _buildMapViewport(double viewportWidth, double viewportHeight) {
-    const canvasWidth = 500.0;
-    const canvasHeight = 900.0;
-
-    return ClipRect(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onPanUpdate: (details) {
+    return SizedBox(
+      width: viewportWidth,
+      height: viewportHeight,
+      child: CourtMapLibreMap(
+        courts: _courts,
+        selectedCourt: _currentCourt,
+        showPins: _pins,
+        showAccuracy: _accuracy && _courts.any((court) => court.demo),
+        showCluster: _cluster,
+        showSelection: _selection,
+        onMapReady: (controller) {
+          _courtMapController = controller;
+          _centerOnFirstCourt();
+        },
+        onCourtSelected: (court) {
           setState(() {
-            final newDx = (_mapOffset.dx + details.delta.dx).clamp(
-              -(canvasWidth - viewportWidth),
-              20.0,
-            );
-            final newDy = (_mapOffset.dy + details.delta.dy).clamp(
-              -(canvasHeight - viewportHeight),
-              20.0,
-            );
-            _mapOffset = Offset(newDx, newDy);
+            _selectedCourt = court;
+            _selection = true;
+            _searchOpen = false;
+            _filtersOpen = false;
+            _layersOpen = false;
           });
         },
-        onTap: _dismissOverlays,
-        child: SizedBox(
-          width: viewportWidth,
-          height: viewportHeight,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned(
-                left: _mapOffset.dx,
-                top: _mapOffset.dy,
-                width: canvasWidth,
-                height: canvasHeight,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    // Base Schematic Map SVG
-                    SvgPicture.asset(
-                      'assets/sprint6/find_courts/map_base.svg',
-                      width: canvasWidth,
-                      height: canvasHeight,
-                      fit: BoxFit.fill,
-                    ),
-
-                    // User Location Group (152, 386), size 88 × 88
-                    if (_accuracy)
-                      Positioned(
-                        left: 152,
-                        top: 386,
-                        width: 88,
-                        height: 88,
-                        child: _buildUserLocation(),
-                      ),
-
-                    // Pins (visible when _pins is true)
-                    if (_pins) ...[
-                      // VNB Court Marker: (96, 280), 26 × 30
-                      Positioned(
-                        left: 96,
-                        top: 280,
-                        width: 26,
-                        height: 30,
-                        child: GestureDetector(
-                          onTap: _openCourtPreview,
-                          child: SvgPicture.asset(
-                            'assets/sprint6/find_courts/court_pin.svg',
-                            width: 26,
-                            height: 30,
-                          ),
-                        ),
-                      ),
-
-                      // Sky Badminton Marker: (255, 400), 26 × 30
-                      Positioned(
-                        left: 255,
-                        top: 400,
-                        width: 26,
-                        height: 30,
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _selection = true;
-                              _searchOpen = false;
-                              _filtersOpen = false;
-                              _layersOpen = false;
-                            });
-                          },
-                          child: SvgPicture.asset(
-                            'assets/sprint6/find_courts/court_pin.svg',
-                            width: 26,
-                            height: 30,
-                          ),
-                        ),
-                      ),
-
-                      // Duy Tân Sport Center Marker: (100, 548), 26 × 30
-                      Positioned(
-                        left: 100,
-                        top: 548,
-                        width: 26,
-                        height: 30,
-                        child: GestureDetector(
-                          onTap: _openCourtPreview,
-                          child: SvgPicture.asset(
-                            'assets/sprint6/find_courts/court_pin.svg',
-                            width: 26,
-                            height: 30,
-                          ),
-                        ),
-                      ),
-                    ],
-
-                    // Selected Sky Badminton Bubble: (207, 300), 156 × 52
-                    if (_selection && _pins)
-                      Positioned(
-                        left: 207,
-                        top: 300,
-                        width: 156,
-                        height: 52,
-                        child: _buildSelectedSkyBubble(),
-                      ),
-
-                    // Cluster Group: (168, 392), 56 × 56
-                    if (_cluster)
-                      Positioned(
-                        left: 168,
-                        top: 392,
-                        width: 56,
-                        height: 56,
-                        child: _buildClusterBadge(),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUserLocation() {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // Accuracy circle: 88 × 88, #2996F5 at 15% opacity
-        Container(
-          width: 88,
-          height: 88,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: Color(0x262996F5),
-          ),
-        ),
-        // Center dot: 20 × 20, #1689FA, white border 3, S3 shadow
-        Container(
-          width: 20,
-          height: 20,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFF1689FA),
-            border: Border.all(color: Colors.white, width: 3),
-            boxShadow: const [
-              BoxShadow(
-                color: Color.fromRGBO(19, 60, 49, 0.08),
-                blurRadius: 12,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSelectedSkyBubble() {
-    return GestureDetector(
-      onTap: _openCourtPreview,
-      child: Container(
-        width: 156,
-        height: 52,
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: const [
-            BoxShadow(
-              color: Color.fromRGBO(19, 60, 49, 0.08),
-              blurRadius: 12,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Green circular badge: 40 × 40, radius 20
-            Container(
-              width: 40,
-              height: 40,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFF05644F),
-              ),
-              alignment: Alignment.center,
-              child: SvgPicture.asset(
-                'assets/sprint6/find_courts/shuttle_white.svg',
-                width: 26,
-                height: 26,
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Text block: 96 × 36
-            SizedBox(
-              width: 96,
-              height: 36,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Sky Badminton',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      height: 17 / 12,
-                      color: const Color(0xFF102D28),
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    '1.3 km · \$',
-                    maxLines: 1,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w400,
-                      height: 15 / 11,
-                      color: const Color(0xFF102D28),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildClusterBadge() {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _cluster = false;
-          _pins = true;
-          _selection = false;
-          _layersOpen = false;
-          _activeLayer = 'standard';
-        });
-      },
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Green halo: 56 × 56, #05644F at 12% opacity
-          Container(
-            width: 56,
-            height: 56,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color(0x1F05644F),
-            ),
-          ),
-          // Green core: 40 × 40, white border 2, S4 shadow
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFF05644F),
-              border: Border.all(color: Colors.white, width: 2),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color.fromRGBO(19, 60, 49, 0.10),
-                  blurRadius: 12,
-                  offset: Offset(0, 4),
-                ),
-              ],
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              '3',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                height: 21 / 15,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
+        onCourtPreview: _openCourtPreview,
+        onClusterTap: () {
+          setState(() {
+            _cluster = false;
+            _pins = true;
+            _selection = false;
+            _layersOpen = false;
+            _activeLayer = 'standard';
+          });
+        },
+        onBackgroundTap: _dismissOverlays,
       ),
     );
   }
@@ -775,7 +549,7 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
 
   Widget _buildQuickFiltersRow() {
     final chips = [
-      ('Within 5 km ⌄', 104.0),
+      (_supportsDistance ? 'Within $_selectedDistance ⌄' : 'Distance ⌄', 104.0),
       ('Open now', 85.0),
       ('Indoor', 66.0),
       ('Price ⌄', 72.0),
@@ -973,9 +747,23 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
                   color: const Color(0xFF102D28),
                 ),
               ),
+              Semantics(
+                button: true,
+                label: 'Refresh courts',
+                child: GestureDetector(
+                  key: const Key('refresh_courts'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => ref.invalidate(nearbyCourtsProvider),
+                  child: const SizedBox.square(
+                    dimension: 20,
+                    child: Icon(Icons.refresh, size: 18),
+                  ),
+                ),
+              ),
+
               if (isCollapsed)
                 Text(
-                  '3 courts',
+                  '${_courts.length} courts',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w400,
@@ -1043,6 +831,28 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
   }
 
   Widget _buildCollapsedSummary() {
+    final state = ref.watch(nearbyCourtsProvider);
+    if (state.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (state.hasError) {
+      return TextButton(
+        onPressed: () => ref.invalidate(nearbyCourtsProvider),
+        child: const Text('Không tải được sân. Thử lại'),
+      );
+    }
+    final court = _currentCourt;
+    if (court == null) {
+      return Center(
+        child: TextButton(
+          onPressed: () => setState(() {
+            _query = '';
+            _filtersApplied = false;
+          }),
+          child: const Text('Không có sân phù hợp. Xóa bộ lọc'),
+        ),
+      );
+    }
     return GestureDetector(
       key: const Key('find_courts_sheet_summary'),
       behavior: HitTestBehavior.opaque,
@@ -1054,7 +864,7 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
         child: Row(
           children: [
             // Photo: 44 × 44, radius 12
-            _buildCroppedPhoto(44, 44, 12),
+            _buildCroppedPhoto(44, 44, 12, court),
             const SizedBox(width: 10),
 
             // Text column
@@ -1064,7 +874,7 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    'Sky Badminton',
+                    court.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.plusJakartaSans(
@@ -1089,7 +899,7 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          '4.6 (128) · 1.3 km',
+                          '${court.ratingText} · ${court.distanceText}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.plusJakartaSans(
@@ -1116,7 +926,9 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
               ),
               alignment: Alignment.center,
               child: Text(
-                'Open now',
+                court.availabilityText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
@@ -1132,7 +944,8 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
   }
 
   Widget _buildExpandedCourtList() {
-    final courts = ['Sky Badminton', 'VNB Court', 'Duy Tân Sport Center'];
+    if (_courts.isEmpty) return _buildCollapsedSummary();
+    final courts = _courts;
 
     return ListView.separated(
       padding: EdgeInsets.zero,
@@ -1144,9 +957,16 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
     );
   }
 
-  Widget _buildCourtCard(String courtName) {
+  Widget _buildCourtCard(CourtLocation court) {
     return GestureDetector(
-      onTap: _openCourtPreview,
+      onTap: () {
+        setState(() {
+          _selectedCourt = court;
+          _selection = true;
+        });
+        _courtMapController?.moveToCourt(court);
+        _openCourtPreview();
+      },
       child: Container(
         width: double.infinity,
         height: 102,
@@ -1166,7 +986,7 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Photo: 92 × 94, radius 12
-            _buildCroppedPhoto(92, 94, 12),
+            _buildCroppedPhoto(92, 94, 12, court),
             const SizedBox(width: 12),
 
             // Summary Column
@@ -1181,7 +1001,7 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
                     children: [
                       Expanded(
                         child: Text(
-                          courtName,
+                          court.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.plusJakartaSans(
@@ -1216,7 +1036,7 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          '4.6 (128)   1.3 km',
+                          '${court.ratingText} · ${court.distanceText}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.plusJakartaSans(
@@ -1233,7 +1053,7 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
 
                   // Address
                   Text(
-                    'Hải Châu, Đà Nẵng',
+                    court.address,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.plusJakartaSans(
@@ -1258,7 +1078,9 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
                         ),
                         alignment: Alignment.center,
                         child: Text(
-                          'Open now',
+                          court.availabilityText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 11,
                             fontWeight: FontWeight.w500,
@@ -1268,7 +1090,7 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
                         ),
                       ),
                       Text(
-                        '\$\$',
+                        court.priceRange ?? 'Chưa có giá',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
@@ -1288,20 +1110,37 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
   }
 
   /// Photo cropped matching Figma transform: [[1, 0, 0], [0, 0.68, 0.22]]
-  Widget _buildCroppedPhoto(double width, double height, double radius) {
-    return Container(
+  Widget _buildCroppedPhoto(
+    double width,
+    double height,
+    double radius,
+    CourtLocation court,
+  ) {
+    final path = court.photos.isEmpty ? null : court.photos.first;
+    final placeholder = Container(
+      color: const Color(0xFFEAF4EE),
+      child: const Center(
+        child: Icon(Icons.sports_tennis, color: Color(0xFF05644F)),
+      ),
+    );
+    return SizedBox(
       width: width,
       height: height,
-      decoration: BoxDecoration(
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        image: const DecorationImage(
-          image: AssetImage('assets/images/match/facility_court.jpg'),
-          fit: BoxFit.cover,
-          alignment: Alignment(
-            0,
-            0.12,
-          ), // Center of 0.22 -> 0.90 vertical slice
-        ),
+        child: path == null
+            ? placeholder
+            : path.startsWith('https://') || path.startsWith('http://')
+            ? Image.network(
+                path,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => placeholder,
+              )
+            : Image.asset(
+                path,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => placeholder,
+              ),
       ),
     );
   }
@@ -1369,13 +1208,13 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
                   ),
                 ),
                 const SizedBox(width: 10),
-                Text(
-                  'Sky Badminton',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    height: 19 / 14,
-                    color: const Color(0xFF102D28),
+                Expanded(
+                  child: TextField(
+                    onChanged: (value) => setState(() => _query = value),
+                    decoration: const InputDecoration(
+                      hintText: 'Tên sân hoặc khu vực',
+                      border: InputBorder.none,
+                    ),
                   ),
                 ),
               ],
@@ -1396,7 +1235,9 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
           const SizedBox(height: 8),
 
           // Sample Result Court Card (321 × 102)
-          _buildCourtCard('Sky Badminton'),
+          _courts.isEmpty
+              ? const Text('Không tìm thấy sân.')
+              : _buildCourtCard(_courts.first),
         ],
       ),
     );
@@ -1446,7 +1287,7 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
 
           // Distance Group
           Text(
-            'Distance',
+            _supportsDistance ? 'Distance' : 'Distance · Chưa có dữ liệu',
             style: GoogleFonts.plusJakartaSans(
               fontSize: 13,
               fontWeight: FontWeight.w500,
@@ -1462,7 +1303,12 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: GestureDetector(
-                    onTap: () => setState(() => _selectedDistance = dist),
+                    onTap: !_supportsDistance
+                        ? null
+                        : () => setState(() {
+                            _selectedDistance = dist;
+                            _distanceChosen = true;
+                          }),
                     child: Container(
                       height: 36,
                       alignment: Alignment.center,
@@ -1562,7 +1408,7 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
                   ),
                   const SizedBox(width: 8),
                   _buildChoicePill(
-                    label: '\$\$',
+                    label: r'$$',
                     width: 71,
                     selected: _price2Selected,
                     onTap: () =>
@@ -1624,23 +1470,32 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
     required bool selected,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: width,
-        height: 36,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF05644F) : const Color(0xFFF3F6F3),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            height: 18 / 13,
-            color: selected ? Colors.white : const Color(0xFF142824),
+    return Opacity(
+      opacity: _supports(label) ? 1 : .45,
+      child: Semantics(
+        enabled: _supports(label),
+        label: _supports(label) ? label : '$label · Chưa có dữ liệu',
+        child: GestureDetector(
+          onTap: _supports(label) ? onTap : null,
+          child: Container(
+            width: width,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected
+                  ? const Color(0xFF05644F)
+                  : const Color(0xFFF3F6F3),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              label,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                height: 18 / 13,
+                color: selected ? Colors.white : const Color(0xFF142824),
+              ),
+            ),
           ),
         ),
       ),
@@ -1701,7 +1556,7 @@ class _FindCourtsMapScreenState extends State<FindCourtsMapScreen>
             onTap: () {
               setState(() {
                 _activeLayer = 'cluster';
-                _pins = false;
+                _pins = true;
                 _cluster = true;
                 _selection = false;
                 _layersOpen = false;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../facility/screens/facility_list_screen.dart';
+import '../../dashboard/data/dashboard_repository.dart';
+import '../../dashboard/screens/dashboard_screen.dart';
 import '../widgets/role_welcome_layout.dart';
 
 class CourtOwnerWelcomeScreen extends StatelessWidget {
@@ -12,7 +13,10 @@ class CourtOwnerWelcomeScreen extends StatelessWidget {
     onContinue: () {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => const FacilityListScreen()),
+        MaterialPageRoute(
+          builder: (context) =>
+              const DashboardScreen(role: DashboardRole.owner),
+        ),
       );
     },
   );
