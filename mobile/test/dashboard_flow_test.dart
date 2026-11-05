@@ -210,7 +210,7 @@ void main() {
     expect(calls, 0);
   });
   test(
-    'Live Admin uses existing users/facilities APIs and never invents statuses',
+    'Live Admin uses existing users/facilities and analytics APIs and never invents statuses',
     () async {
       final dio = Dio();
       final paths = <String>[];
@@ -218,28 +218,93 @@ void main() {
         InterceptorsWrapper(
           onRequest: (o, h) {
             paths.add(o.path);
-            h.resolve(
-              Response(
-                requestOptions: o,
-                data: o.path == '/users'
-                    ? [
-                        {
-                          'id': 1,
-                          'fullName': 'Live Player',
-                          'role': {'name': 'PLAYER'},
-                        },
-                      ]
-                    : [
-                        {
-                          'id': 9,
-                          'name': 'Live Facility',
-                          'courts': [
-                            {'id': 1},
-                          ],
-                        },
-                      ],
-              ),
-            );
+            final Object data = switch (o.path) {
+              '/users' => [
+                {
+                  'id': 1,
+                  'fullName': 'Live Player',
+                  'role': {'name': 'PLAYER'},
+                },
+              ],
+              '/facilities' => [
+                {
+                  'id': 9,
+                  'name': 'Live Facility',
+                  'courts': [
+                    {'id': 1},
+                  ],
+                },
+              ],
+              '/analytics/admin/overview' => {
+                'scope': 'ADMIN',
+                'dataStatus': 'READY',
+                'summary': {
+                  'totalActiveUsers': null,
+                  'totalFacilities': 1,
+                  'totalBookings': 4,
+                  'bookingStatusBreakdown': {
+                    'pending': 1,
+                    'confirmed': 2,
+                    'cancelled': 0,
+                    'completed': 1,
+                  },
+                  'reservedOccupancyRatePercent': 18.5,
+                  'grossBookedRevenue': 480000,
+                },
+              },
+              '/analytics/revenue/overview' => {
+                'range': {'from': '2026-10-01', 'to': '2026-11-01', 'days': 32},
+                'revenue': 480000,
+                'grossBookedRevenue': 480000,
+                'collectedRevenue': null,
+                'totalBookings': 4,
+                'confirmedBookings': 3,
+                'byStatus': {
+                  'PENDING': 1,
+                  'CONFIRMED': 2,
+                  'CANCELLED': 0,
+                  'COMPLETED': 1,
+                },
+                'occupancyRate': 0.185,
+              },
+              '/analytics/revenue/trend' => {
+                'granularity': 'month',
+                'totalRevenue': 480000,
+                'totalBookings': 4,
+                'series': [
+                  {
+                    'period': '2026-10',
+                    'revenue': 300000,
+                    'bookingCount': 2,
+                    'bookedHours': 4,
+                  },
+                  {
+                    'period': '2026-11',
+                    'revenue': 180000,
+                    'bookingCount': 2,
+                    'bookedHours': 3,
+                  },
+                ],
+              },
+              '/analytics/revenue/court-utilization' => {
+                'courts': [
+                  {
+                    'courtId': 1,
+                    'courtName': 'Court 1',
+                    'facilityId': 9,
+                    'facilityName': 'Live Facility',
+                    'status': 'ACTIVE',
+                    'bookingCount': 3,
+                    'revenue': 480000,
+                    'bookedHours': 7,
+                    'availableHours': 84,
+                    'utilizationRate': 0.0833,
+                  },
+                ],
+              },
+              _ => const <Object>[],
+            };
+            h.resolve(Response(requestOptions: o, data: data));
           },
         ),
       );
@@ -247,12 +312,62 @@ void main() {
         dio: dio,
         token: () => 'admin-token',
         role: () => 'ADMIN',
-      ).load(DashboardRole.admin);
-      expect(paths, unorderedEquals(['/users', '/facilities']));
+      ).load(DashboardRole.admin, period: '6 Months', facilityId: 9);
+      expect(
+        paths,
+        unorderedEquals([
+          '/users',
+          '/facilities',
+          '/analytics/admin/overview',
+          '/analytics/revenue/overview',
+          '/analytics/revenue/trend',
+          '/analytics/revenue/court-utilization',
+        ]),
+      );
       expect(data.preview, isFalse);
       expect(data.playerCount, 1);
       expect(data.people.single.status, isNull);
       expect(data.facilities.single.status, isNull);
+      expect(data.analytics, isNotNull);
+      expect(data.analytics!.grossBookedRevenue, 480000);
+      expect(data.analytics!.collectedRevenue, isNull);
+      expect(data.analytics!.totalBookings, 4);
+      expect(data.analytics!.occupancyRatePercent, 18.5);
+      expect(data.analytics!.trendSeries, hasLength(2));
+      expect(data.analytics!.courts.single.courtName, 'Court 1');
+    },
+  );
+  testWidgets(
+    'Live Owner dashboard renders real analytics metrics and updates facility/period filters without fixtures',
+    (tester) async {
+      final requestedFacilities = <Object?>[];
+      final requestedPeriods = <String?>[];
+      final repo = _FakeLiveDashboardRepository(
+        onLoad: (role, period, facilityId) {
+          requestedPeriods.add(period);
+          requestedFacilities.add(facilityId);
+        },
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [dashboardRepositoryProvider.overrideWithValue(repo)],
+          child: const MaterialApp(
+            home: DashboardScreen(role: DashboardRole.owner, preview: false),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Gross Booked Value'), findsOneWidget);
+      expect(find.text('640,000đ'), findsOneWidget);
+      expect(find.text('14.2%'), findsOneWidget);
+      expect(find.text('24,850,000đ'), findsNothing);
+
+      await tester.tap(find.text('Sky Badminton Center'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Star Badminton Club'));
+      await tester.pumpAndSettle();
+      expect(requestedFacilities.last, 2);
     },
   );
   test(
@@ -289,7 +404,7 @@ void main() {
       dio.interceptors.add(
         InterceptorsWrapper(
           onRequest: (o, h) async {
-            ready.complete(o);
+            if (!ready.isCompleted) ready.complete(o);
             await reply.future;
             h.resolve(Response(requestOptions: o, data: []));
           },
@@ -310,4 +425,75 @@ void main() {
       await check;
     },
   );
+}
+
+class _FakeLiveDashboardRepository extends DashboardRepository {
+  _FakeLiveDashboardRepository({required this.onLoad})
+    : super(token: () => 'owner-token', role: () => 'COURT_OWNER');
+
+  final void Function(DashboardRole role, String? period, int? facilityId)
+  onLoad;
+
+  @override
+  Future<DashboardData> load(
+    DashboardRole role, {
+    bool preview = false,
+    String? period,
+    int? facilityId,
+    DateTime? now,
+  }) async {
+    onLoad(role, period, facilityId);
+    return const DashboardData(
+      preview: false,
+      people: [],
+      facilities: [
+        DashboardFacility(1, 'Sky Badminton Center', 4),
+        DashboardFacility(2, 'Star Badminton Club', 3),
+      ],
+      analytics: DashboardAnalytics(
+        dataStatus: 'READY',
+        grossBookedRevenue: 640000,
+        collectedRevenue: null,
+        totalBookings: 8,
+        confirmedBookings: 6,
+        occupancyRatePercent: 14.2,
+        bookedHours: 12,
+        availableHours: 84,
+        byStatus: {
+          'PENDING': 1,
+          'CONFIRMED': 5,
+          'CANCELLED': 1,
+          'COMPLETED': 1,
+        },
+        trendSeries: [
+          DashboardTrendPoint(
+            period: '2026-10-28',
+            revenue: 320000,
+            bookingCount: 4,
+            bookedHours: 6,
+          ),
+          DashboardTrendPoint(
+            period: '2026-10-29',
+            revenue: 320000,
+            bookingCount: 4,
+            bookedHours: 6,
+          ),
+        ],
+        courts: [
+          DashboardCourtUtilization(
+            courtId: 1,
+            courtName: 'Court 1',
+            facilityId: 1,
+            facilityName: 'Sky Badminton Center',
+            status: 'ACTIVE',
+            bookingCount: 6,
+            revenue: 640000,
+            bookedHours: 12,
+            availableHours: 84,
+            utilizationRate: 0.142,
+          ),
+        ],
+      ),
+    );
+  }
 }

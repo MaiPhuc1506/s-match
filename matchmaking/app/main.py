@@ -78,6 +78,25 @@ def api_calculate_distance(payload: DistanceRequestPayload):
         "unit": "km"
     }
 
+REQUIRED_SKILL_KEYS = ("smash", "defense", "net_play", "stamina", "footwork", "serve")
+
+
+def extract_skill_vector(
+    skills: Optional[List[float]],
+    skill: Optional[Union[List[float], Dict[str, Any]]],
+    strict: bool,
+) -> Optional[List[float]]:
+    if isinstance(skills, list):
+        return [float(x) for x in skills]
+    if isinstance(skill, list):
+        return [float(x) for x in skill]
+    if isinstance(skill, dict):
+        if strict and any(k not in skill or skill[k] is None for k in REQUIRED_SKILL_KEYS):
+            return None
+        return [float(skill.get(k, 3.0)) for k in REQUIRED_SKILL_KEYS]
+    return None
+
+
 @app.post("/api/v1/match")
 @app.post("/match")
 def finalize_matchmaking(payload: MatchRequestPayload):
@@ -88,19 +107,7 @@ def finalize_matchmaking(payload: MatchRequestPayload):
             detail="Error: Host skill profile is incomplete. Exactly 6 performance metrics are required."
         )
 
-    # Lấy danh sách kỹ năng sau khi đã qua validator
-    skills_list = user.skills
-    
-    # Kiểm tra nếu truyền dạng object 'skill' thì lấy từ dict ra list 6 phần tử
-    if not skills_list and isinstance(user.skill, dict):
-        skills_list = [
-            float(user.skill.get('smash', 3.0)),
-            float(user.skill.get('defense', 3.0)),
-            float(user.skill.get('net_play', 3.0)),
-            float(user.skill.get('stamina', 3.0)),
-            float(user.skill.get('footwork', 3.0)),
-            float(user.skill.get('serve', 3.0))
-        ]
+    skills_list = extract_skill_vector(user.skills, user.skill, strict=True)
 
     # Kiểm tra nghiêm ngặt: Nếu không đủ đúng 6 phần tử sẽ báo lỗi 400
     if not skills_list or len(skills_list) != 6:
@@ -120,14 +127,14 @@ def finalize_matchmaking(payload: MatchRequestPayload):
 
     matched_users = []
     
-    u_lat = user.location.latitude if user.location else (user.lat if user.lat else 16.0544)
-    u_lon = user.location.longitude if user.location else (user.lon if user.lon else 108.2022)
+    u_lat = user.location.latitude if user.location else (user.lat if user.lat is not None else 16.0544)
+    u_lon = user.location.longitude if user.location else (user.lon if user.lon is not None else 108.2022)
     max_allowed_dist = user.max_distance_km if user.max_distance_km is not None else 20.0
     user_skills_arr = np.array(skills_list)
 
     for cand in candidates:
-        c_lat = cand.location.latitude if cand.location else (cand.lat if cand.lat else 16.0544)
-        c_lon = cand.location.longitude if cand.location else (cand.lon if cand.lon else 108.2022)
+        c_lat = cand.location.latitude if cand.location else (cand.lat if cand.lat is not None else 16.0544)
+        c_lon = cand.location.longitude if cand.location else (cand.lon if cand.lon is not None else 108.2022)
 
         dist = calculate_haversine(u_lat, u_lon, c_lat, c_lon)
         
@@ -135,23 +142,17 @@ def finalize_matchmaking(payload: MatchRequestPayload):
         if dist > max_allowed_dist or dist > cand_max_dist:
             continue
 
-        cand_skills = cand.skills
-        if not cand_skills and isinstance(cand.skill, dict):
-            cand_skills = [
-                float(cand.skill.get('smash', 3.0)),
-                float(cand.skill.get('defense', 3.0)),
-                float(cand.skill.get('net_play', 3.0)),
-                float(cand.skill.get('stamina', 3.0)),
-                float(cand.skill.get('footwork', 3.0)),
-                float(cand.skill.get('serve', 3.0))
-            ]
-        elif not cand_skills:
+        cand_skills = extract_skill_vector(cand.skills, cand.skill, strict=False)
+        if not cand_skills or len(cand_skills) != 6:
             cand_skills = [3.0] * 6
 
         cand_skills_arr = np.array(cand_skills)
 
         skill_similarity = max(0.0, 1.0 - (np.linalg.norm(user_skills_arr - cand_skills_arr) / 10.0))
-        distance_score = max(0.0, 1.0 - (dist / max_allowed_dist)) * 100.0
+        if max_allowed_dist > 0:
+            distance_score = max(0.0, 1.0 - (dist / max_allowed_dist)) * 100.0
+        else:
+            distance_score = 100.0 if dist == 0 else 0.0
         
         total_score = float((skill_similarity * 0.3 + (distance_score / 100.0) * 0.25 + 0.45) * 100)
 
@@ -167,7 +168,7 @@ def finalize_matchmaking(payload: MatchRequestPayload):
 
     matched_users.sort(key=lambda x: (-x["match_score"], x["distance_km"]))
     
-    if payload.limit:
+    if payload.limit is not None:
         matched_users = matched_users[:payload.limit]
 
     if payload.current_user is not None:

@@ -31,5 +31,21 @@ export const findPlayerRequest: FindPlayerDto = {
 };
 
 export function fastApiResponse() {
-  return { matched_users: [{ user_id: '7', match_score: 85 }, { user_id: '3', match_score: 80 }], total_candidates_processed: 2 };
+  return {
+    matched_users: [
+      {
+        user_id: '7',
+        match_score: 85,
+        distance_km: 1.2,
+        breakdown: { distance_score: 88, skill_score: 80 },
+      },
+      {
+        user_id: '3',
+        match_score: 80,
+        distance_km: 3.4,
+        breakdown: { distance_score: 66, skill_score: 75 },
+      },
+    ],
+    total_candidates_processed: 2,
+  };
 }

@@ -7,6 +7,7 @@ import { isCandidateData, isRecord } from './candidate-data';
 import { RankedResult } from './ranked-result';
 
 export const FASTAPI_HTTP = Symbol('FASTAPI_HTTP');
+export const FASTAPI_BREAKDOWN_KEYS = ['distance_score', 'skill_score'] as const;
 
 function toFastApiProfile(profile: CandidateProfile) {
   return {
@@ -77,10 +78,25 @@ export class FastApiClient {
       if (!isRecord(row) || typeof row.user_id !== 'string' || !allowed.has(row.user_id) ||
           row.user_id === data.currentUser.userId || seen.has(row.user_id) ||
           typeof row.match_score !== 'number' || !Number.isFinite(row.match_score)) throw invalid();
-      if (row.breakdown !== undefined && row.breakdown !== null && (!isRecord(row.breakdown) ||
-          !['skill_score', 'time_score', 'distance_score', 'style_score', 'reliability_score']
-            .every((key) => typeof (row.breakdown as Record<string, unknown>)[key] === 'number' &&
-              Number.isFinite((row.breakdown as Record<string, unknown>)[key])))) throw invalid();
+      if (row.distance_km !== undefined && row.distance_km !== null &&
+          (typeof row.distance_km !== 'number' || !Number.isFinite(row.distance_km) || row.distance_km < 0)) {
+        throw invalid();
+      }
+      if (row.breakdown !== undefined && row.breakdown !== null) {
+        if (!isRecord(row.breakdown)) throw invalid();
+        const breakdownRecord = row.breakdown as Record<string, unknown>;
+        const keys = Object.keys(breakdownRecord);
+        if (
+          keys.length !== FASTAPI_BREAKDOWN_KEYS.length ||
+          !FASTAPI_BREAKDOWN_KEYS.every(
+            (key) =>
+              typeof breakdownRecord[key] === 'number' &&
+              Number.isFinite(breakdownRecord[key]),
+          )
+        ) {
+          throw invalid();
+        }
+      }
       seen.add(row.user_id);
       return { userId: row.user_id, matchScore: row.match_score };
     });

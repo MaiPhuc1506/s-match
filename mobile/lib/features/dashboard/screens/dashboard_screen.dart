@@ -45,6 +45,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       _query = '';
   bool _owners = false;
   int _facilityIndex = 0;
+  int? _selectedFacilityId;
   DateTime _date = DateTime(2026, 11, 3);
   final _scroll = ScrollController();
   final _search = TextEditingController();
@@ -73,10 +74,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       });
     }
     if (!widget.preview) _date = DateTime.now();
-    _data = ref
-        .read(dashboardRepositoryProvider)
-        .load(widget.role, preview: widget.preview);
+    _data = _fetchData();
   }
+
+  Future<DashboardData> _fetchData() => ref
+      .read(dashboardRepositoryProvider)
+      .load(
+        widget.role,
+        preview: widget.preview,
+        period: p.admin ? _adminPeriod : _period,
+        facilityId: _selectedFacilityId,
+      );
 
   @override
   void dispose() {
@@ -86,9 +94,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   void _reload() => setState(() {
-    _data = ref
-        .read(dashboardRepositoryProvider)
-        .load(widget.role, preview: widget.preview);
+    _data = _fetchData();
   });
   void _select(int value) {
     if (!p.admin && value == 4) {
@@ -123,7 +129,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       p.admin
           ? ['3 Months', '6 Months', 'This Year']
           : ['7 Days', 'This Month', 'This Year'],
-      subtitle: 'Illustrative analytics · changing the period does not query a live analytics API.',
+      subtitle: widget.preview
+          ? 'Illustrative analytics · changing the period does not query a live analytics API.'
+          : 'Select a reporting period to refresh live analytics.',
     );
     if (value != null && mounted) {
       setState(() {
@@ -132,6 +140,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         } else {
           _period = value;
         }
+        _data = _fetchData();
       });
     }
   }
@@ -465,20 +474,40 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     ),
   );
 
+  String _currency(num? value) =>
+      value == null ? 'Unavailable' : '${_number(value.round())}đ';
+
+  String _compactCurrency(num? value) {
+    if (value == null) return '—';
+    if (value >= 1000000) {
+      final m = (value / 1000000).toStringAsFixed(2);
+      return '${m}Mđ';
+    }
+    return '${_number(value.round())}đ';
+  }
+
+  String _percent(double? value) {
+    if (value == null) return '—';
+    final rounded = value == value.roundToDouble()
+        ? value.round().toString()
+        : value.toStringAsFixed(1);
+    return '$rounded%';
+  }
+
   List<Widget> _content(DashboardData data) {
     if (p.admin) {
       return switch (_tab) {
         0 => _adminOverview(data),
         1 => _users(data),
         2 => _facilities(data),
-        _ => _systemAnalytics(),
+        _ => _systemAnalytics(data),
       };
     }
     return switch (_tab) {
       0 => _ownerOverview(data),
       1 => _schedule(data),
       2 => _bookings(data),
-      _ => _ownerAnalytics(),
+      _ => _ownerAnalytics(data),
     };
   }
 
@@ -549,215 +578,295 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     ),
   );
 
-  List<Widget> _ownerOverview(DashboardData data) => [
-    DashboardSelector(
-      data.facilities.isEmpty
-          ? 'No facilities'
-          : data
-                .facilities[_facilityIndex.clamp(0, data.facilities.length - 1)]
-                .name,
-      palette: p,
-      onTap: () async {
-        if (data.facilities.isEmpty) return;
-        final choice = await dashboardOptions(
-          context,
-          p,
-          'Switch Facility',
-          data.facilities.map((f) => f.name).toList(),
-        );
-        if (mounted && choice != null) {
-          setState(
-            () => _facilityIndex = data.facilities.indexWhere(
-              (f) => f.name == choice,
-            ),
+  List<Widget> _ownerOverview(DashboardData data) {
+    final analytics = data.analytics;
+    final live = !data.preview;
+    return [
+      DashboardSelector(
+        data.facilities.isEmpty
+            ? 'No facilities'
+            : data
+                  .facilities[_facilityIndex.clamp(
+                    0,
+                    data.facilities.length - 1,
+                  )]
+                  .name,
+        palette: p,
+        onTap: () async {
+          if (data.facilities.isEmpty) return;
+          final choice = await dashboardOptions(
+            context,
+            p,
+            'Switch Facility',
+            data.facilities.map((f) => f.name).toList(),
           );
-        }
-      },
-    ),
-    _gap(),
-    _hero(
-      title: widget.preview ? 'Booking Value' : 'Booking Value · Demo',
-      value: '24,850,000đ',
-      detail: '↑ 12.8% vs last month · This Month',
-    ),
-    _gap(),
-    Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: DashboardMetric(
-            'Bookings',
-            '326',
-            '↑ 8.4% this month',
-            palette: p,
-            icon: 'owner.imgIconCalendar',
-            onTap: () => _select(2),
+          if (mounted && choice != null) {
+            final idx = data.facilities.indexWhere((f) => f.name == choice);
+            setState(() {
+              _facilityIndex = idx < 0 ? 0 : idx;
+              _selectedFacilityId = idx < 0 ? null : data.facilities[idx].id;
+              _data = _fetchData();
+            });
+          }
+        },
+      ),
+      _gap(),
+      _hero(
+        title: live ? 'Gross Booked Value' : 'Booking Value',
+        value: live
+            ? _currency(analytics?.grossBookedRevenue)
+            : '24,850,000đ',
+        detail: live
+            ? 'Confirmed & completed booking value · $_period'
+            : '↑ 12.8% vs last month · This Month',
+      ),
+      _gap(),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: DashboardMetric(
+              'Bookings',
+              live
+                  ? (analytics?.totalBookings != null
+                        ? _number(analytics!.totalBookings!)
+                        : '—')
+                  : '326',
+              live
+                  ? '${analytics?.confirmedBookings ?? 0} confirmed · $_period'
+                  : '↑ 8.4% this month',
+              palette: p,
+              icon: 'owner.imgIconCalendar',
+              onTap: () => _select(2),
+            ),
           ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: DashboardMetric(
-            'Occupancy',
-            '76%',
-            'Scheduled court time',
-            palette: p,
-            icon: 'metric.occupancy',
-            onTap: () => _select(3),
+          const SizedBox(width: 16),
+          Expanded(
+            child: DashboardMetric(
+              'Occupancy',
+              live ? _percent(analytics?.occupancyRatePercent) : '76%',
+              'Scheduled court time',
+              palette: p,
+              icon: 'metric.occupancy',
+              onTap: () => _select(3),
+            ),
           ),
-        ),
-      ],
-    ),
-    _gap(),
-    DashboardTrendChart(palette: p, period: _period, onPeriod: _periodPicker),
-    _gap(),
-    _note(
-      'Demo analytics · booking value, occupancy and trend APIs are not available.',
-    ),
-  ];
-  List<Widget> _adminOverview(DashboardData data) => [
-    _hero(
-      title: 'S-Match Analytics',
-      detail: 'Monitor your badminton community',
-    ),
-    _gap(),
-    Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: DashboardMetric(
-            'Total Players',
-            _number(data.playerCount),
-            'Registered players',
-            palette: p,
-            icon: 'owner.imgVector',
-            onTap: () {
-              setState(() => _owners = false);
-              _select(1);
-            },
+        ],
+      ),
+      _gap(),
+      DashboardTrendChart(
+        palette: p,
+        period: _period,
+        onPeriod: _periodPicker,
+        series: analytics?.trendSeries,
+        live: live,
+      ),
+      _gap(),
+      _note(
+        live
+            ? 'Live analytics · gross booked value from confirmed/completed bookings. Collected payment revenue is unavailable.'
+            : 'Demo analytics · booking value, occupancy and trend APIs are not available.',
+      ),
+    ];
+  }
+
+  List<Widget> _adminOverview(DashboardData data) {
+    final analytics = data.analytics;
+    final live = !data.preview;
+    return [
+      _hero(
+        title: 'S-Match Analytics',
+        detail: 'Monitor your badminton community',
+      ),
+      _gap(),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: DashboardMetric(
+              'Total Players',
+              _number(data.playerCount),
+              'Registered players',
+              palette: p,
+              icon: 'owner.imgVector',
+              onTap: () {
+                setState(() => _owners = false);
+                _select(1);
+              },
+            ),
           ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: DashboardMetric(
-            'Court Owners',
-            _number(data.ownerCount),
-            'Owner accounts',
-            palette: p,
-            icon: 'admin.imgIconCalendar1',
-            onTap: () {
-              setState(() => _owners = true);
-              _select(1);
-            },
+          const SizedBox(width: 16),
+          Expanded(
+            child: DashboardMetric(
+              'Court Owners',
+              _number(data.ownerCount),
+              'Owner accounts',
+              palette: p,
+              icon: 'admin.imgIconCalendar1',
+              onTap: () {
+                setState(() => _owners = true);
+                _select(1);
+              },
+            ),
           ),
-        ),
-      ],
-    ),
-    _gap(),
-    Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: DashboardMetric(
-            'Registered Courts',
-            '${data.courtCount}',
-            'Across all facilities',
-            palette: p,
-            icon: 'admin.imgIconCalendar2',
-            onTap: () => _select(2),
+        ],
+      ),
+      _gap(),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: DashboardMetric(
+              'Registered Courts',
+              '${data.courtCount}',
+              'Across all facilities',
+              palette: p,
+              icon: 'admin.imgIconCalendar2',
+              onTap: () => _select(2),
+            ),
           ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: DashboardMetric(
-            'Total Bookings',
-            '2,410',
-            'All-time bookings · demo',
-            palette: p,
-            icon: 'owner.imgIconCalendar',
-            onTap: () => _select(3),
+          const SizedBox(width: 16),
+          Expanded(
+            child: DashboardMetric(
+              'Total Bookings',
+              live
+                  ? (analytics?.totalBookings != null
+                        ? _number(analytics!.totalBookings!)
+                        : '—')
+                  : '2,410',
+              live
+                  ? 'Bookings in $_adminPeriod'
+                  : 'All-time bookings · demo',
+              palette: p,
+              icon: 'owner.imgIconCalendar',
+              onTap: () => _select(3),
+            ),
           ),
-        ),
-      ],
-    ),
-    _gap(),
-    DashboardTrendChart(
-      palette: p,
-      period: _adminPeriod,
-      onPeriod: _periodPicker,
-      growth: true,
-    ),
-    _gap(),
-    _note(
-      data.preview ? 'UI preview · all values and records are illustrative.' : 'Users and courts: live API · booking totals and growth: demo analytics.',
-    ),
-  ];
-  List<Widget> _ownerAnalytics() => [
-    DashboardSelector(
-      _period == '7 Days' ? 'This Month' : _period,
-      palette: p,
-      onTap: _periodPicker,
-    ),
-    _gap(),
-    Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: DashboardMetric(
-            'Bookings',
-            '326',
-            'This month',
-            palette: p,
-            icon: 'owner.imgIconCalendar',
-            compact: true,
+        ],
+      ),
+      _gap(),
+      DashboardTrendChart(
+        palette: p,
+        period: _adminPeriod,
+        onPeriod: _periodPicker,
+        growth: true,
+        series: analytics?.trendSeries,
+        live: live,
+      ),
+      _gap(),
+      _note(
+        data.preview
+            ? 'UI preview · all values and records are illustrative.'
+            : 'Live API · users, courts, booking totals and revenue trend.',
+      ),
+    ];
+  }
+
+  List<Widget> _ownerAnalytics(DashboardData data) {
+    final analytics = data.analytics;
+    final live = !data.preview;
+    return [
+      DashboardSelector(
+        _period == '7 Days' ? 'This Month' : _period,
+        palette: p,
+        onTap: _periodPicker,
+      ),
+      _gap(),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: DashboardMetric(
+              'Bookings',
+              live
+                  ? (analytics?.totalBookings != null
+                        ? _number(analytics!.totalBookings!)
+                        : '—')
+                  : '326',
+              live ? _period : 'This month',
+              palette: p,
+              icon: 'owner.imgIconCalendar',
+              compact: true,
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: DashboardMetric(
-            'Value',
-            '24.85Mđ',
-            'This month',
-            palette: p,
-            icon: 'metric.value',
-            compact: true,
+          const SizedBox(width: 12),
+          Expanded(
+            child: DashboardMetric(
+              'Value',
+              live
+                  ? _compactCurrency(analytics?.grossBookedRevenue)
+                  : '24.85Mđ',
+              live ? _period : 'This month',
+              palette: p,
+              icon: 'metric.value',
+              compact: true,
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: DashboardMetric(
-            'Occupancy',
-            '76%',
-            'This month',
-            palette: p,
-            icon: 'metric.occupancy',
-            compact: true,
+          const SizedBox(width: 12),
+          Expanded(
+            child: DashboardMetric(
+              'Occupancy',
+              live ? _percent(analytics?.occupancyRatePercent) : '76%',
+              live ? _period : 'This month',
+              palette: p,
+              icon: 'metric.occupancy',
+              compact: true,
+            ),
           ),
-        ),
-      ],
-    ),
-    _gap(),
-    DashboardTrendChart(palette: p, period: _period, onPeriod: _periodPicker),
-    _gap(),
-    DashboardPeakChart(palette: p),
-    _gap(),
-    _note('Illustrative analytics · no revenue or occupancy API is available.'),
-  ];
-  List<Widget> _systemAnalytics() => [
-    DashboardSelector(_adminPeriod, palette: p, onTap: _periodPicker),
-    _gap(),
-    DashboardTrendChart(
-      palette: p,
-      period: _adminPeriod,
-      onPeriod: _periodPicker,
-      growth: true,
-    ),
-    _gap(),
-    DashboardStatusChart(palette: p),
-    _gap(),
-    _note(
-      'Illustrative series · user growth and court approval status are not provided by the current APIs.',
-    ),
-  ];
+        ],
+      ),
+      _gap(),
+      DashboardTrendChart(
+        palette: p,
+        period: _period,
+        onPeriod: _periodPicker,
+        series: analytics?.trendSeries,
+        live: live,
+      ),
+      _gap(),
+      DashboardPeakChart(
+        palette: p,
+        courts: analytics?.courts,
+        live: live,
+      ),
+      _gap(),
+      _note(
+        live
+            ? 'Live analytics · gross booked value, occupancy and court utilization.'
+            : 'Illustrative analytics · no revenue or occupancy API is available.',
+      ),
+    ];
+  }
+
+  List<Widget> _systemAnalytics(DashboardData data) {
+    final analytics = data.analytics;
+    final live = !data.preview;
+    return [
+      DashboardSelector(_adminPeriod, palette: p, onTap: _periodPicker),
+      _gap(),
+      DashboardTrendChart(
+        palette: p,
+        period: _adminPeriod,
+        onPeriod: _periodPicker,
+        growth: true,
+        series: analytics?.trendSeries,
+        live: live,
+      ),
+      _gap(),
+      DashboardStatusChart(
+        palette: p,
+        courts: analytics?.courts,
+        totalCourts: data.courtCount,
+        live: live,
+      ),
+      _gap(),
+      _note(
+        live
+            ? 'Live analytics · booking trend and court operational status.'
+            : 'Illustrative series · user growth and court approval status are not provided by the current APIs.',
+      ),
+    ];
+  }
 
   Widget _searchField(String hint) => TextField(
     controller: _search,
@@ -807,7 +916,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   );
 
   List<Widget> _bookings(DashboardData data) {
-    final rows = DashboardFixtures.bookings.where(
+    final rows = data.bookings.where(
       (b) =>
           (_bookingFilter == 'All' || b.status == _bookingFilter) &&
           '${b.court} ${b.player}'.toLowerCase().contains(_query),

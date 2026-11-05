@@ -2,13 +2,16 @@ import { BadRequestException } from '@nestjs/common';
 import {
   availableHours,
   bookedHoursInRange,
+  bookedHoursInWindow,
   enumeratePeriods,
   MAX_RANGE_DAYS,
+  percentRatio,
   periodKey,
   ratio,
   resolveDateRange,
   timeToHours,
   weekdayCounts,
+  weekdayCountsForUtcInterval,
   weeklyOpenHours,
 } from './analytics.util';
 
@@ -112,6 +115,26 @@ describe('analytics.util', () => {
       expect(ratio(3, 0)).toBeNull();
       expect(ratio(5, 4)).toBe(1);
       expect(ratio(4, 84)).toBe(0.0476);
+    });
+
+    it('computes percentRatio on [0, 100] scale and clips bookedHoursInWindow', () => {
+      expect(percentRatio(3, 0)).toBeNull();
+      expect(percentRatio(5, 4)).toBe(100);
+      expect(percentRatio(4, 84)).toBe(4.76);
+      expect(
+        bookedHoursInWindow(
+          new Date('2026-10-27T01:00:00Z'),
+          new Date('2026-10-27T05:00:00Z'),
+          new Date('2026-10-27T02:00:00Z'),
+          new Date('2026-10-27T04:00:00Z'),
+        ),
+      ).toBe(2);
+      expect(
+        weekdayCountsForUtcInterval(
+          new Date('2026-10-26T00:00:00Z'),
+          new Date('2026-11-02T00:00:00Z'),
+        ),
+      ).toEqual([1, 1, 1, 1, 1, 1, 1]);
     });
   });
 });

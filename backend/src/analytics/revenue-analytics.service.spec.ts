@@ -108,6 +108,8 @@ describe('RevenueAnalyticsService', () => {
       expect(result).toMatchObject({
         range: { from: '2026-10-26', to: '2026-11-01', days: 7 },
         revenue: 300000,
+        grossBookedRevenue: 300000,
+        collectedRevenue: null,
         totalBookings: 3,
         confirmedBookings: 2,
         byStatus: { PENDING: 0, CONFIRMED: 1, CANCELLED: 1, COMPLETED: 1 },
@@ -123,6 +125,8 @@ describe('RevenueAnalyticsService', () => {
       const result = await service.getOverview(owner, RANGE);
       expect(result).toMatchObject({
         revenue: 0,
+        grossBookedRevenue: 0,
+        collectedRevenue: null,
         cancellationRate: null,
         averageBookingValue: null,
         occupancyRate: 0,
@@ -234,6 +238,77 @@ describe('RevenueAnalyticsService', () => {
         availableHours: 0,
         utilizationRate: null,
       });
+    });
+  });
+
+  describe('SMM-38 unified provider methods (getOverviewForScope & getCourtMetricsForScope)', () => {
+    it('computes overview metrics for bounded and unbounded ranges without fabricating unavailable metrics', async () => {
+      prisma.booking.findMany.mockResolvedValue([
+        booking(10, '2026-10-27T01:00:00Z', '2026-10-27T03:00:00Z', 100000),
+      ]);
+      prisma.booking.groupBy.mockResolvedValue([
+        { status: BookingStatus.CONFIRMED, _count: { _all: 1 } },
+        { status: BookingStatus.PENDING, _count: { _all: 2 } },
+      ]);
+
+      const bounded = await service.getOverviewForScope(
+        { kind: 'OWNER', ownerId: 5 },
+        { startDate: new Date('2026-10-26T00:00:00Z'), endDate: new Date('2026-11-02T00:00:00Z') },
+      );
+      expect(bounded).toEqual({
+        dataStatus: 'READY',
+        totalActiveUsers: null,
+        totalBookings: 3,
+        bookingStatusBreakdown: { pending: 2, confirmed: 1, cancelled: 0, completed: 0 },
+        reservedOccupancyRatePercent: 2.38,
+        grossBookedRevenue: 100000,
+      });
+
+      const unbounded = await service.getOverviewForScope({ kind: 'ADMIN' }, { startDate: null, endDate: null });
+      expect(unbounded.reservedOccupancyRatePercent).toBeNull();
+      expect(unbounded.totalActiveUsers).toBeNull();
+      expect(unbounded.grossBookedRevenue).toBe(100000);
+    });
+
+    it('computes per-court metrics including status breakdown and occupancy when bounded', async () => {
+      prisma.booking.findMany.mockResolvedValue([
+        booking(10, '2026-10-27T01:00:00Z', '2026-10-27T05:00:00Z', 240000),
+      ]);
+      prisma.booking.groupBy.mockResolvedValue([
+        { courtId: 10, status: BookingStatus.CONFIRMED, _count: { _all: 1 } },
+        { courtId: 10, status: BookingStatus.CANCELLED, _count: { _all: 1 } },
+      ]);
+
+      const res = await service.getCourtMetricsForScope(
+        { kind: 'OWNER', ownerId: 5 },
+        { startDate: new Date('2026-10-26T00:00:00Z'), endDate: new Date('2026-11-02T00:00:00Z') },
+      );
+
+      expect(res.dataStatus).toBe('READY');
+      expect(res.metrics).toEqual([
+        {
+          courtId: 10,
+          bookingCount: 2,
+          confirmedBookings: 1,
+          cancelledBookings: 1,
+          completedBookings: 0,
+          reservedHours: 4,
+          availableHours: 84,
+          reservedOccupancyRatePercent: 4.76,
+          grossBookedRevenue: 240000,
+        },
+        {
+          courtId: 11,
+          bookingCount: 0,
+          confirmedBookings: 0,
+          cancelledBookings: 0,
+          completedBookings: 0,
+          reservedHours: 0,
+          availableHours: 0,
+          reservedOccupancyRatePercent: null,
+          grossBookedRevenue: 0,
+        },
+      ]);
     });
   });
 });

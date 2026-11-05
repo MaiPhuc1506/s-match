@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
+import { AnalyticsDataService } from './analytics-data.service';
 import { AnalyticsDataProvider } from './interfaces/analytics-data-provider.interface';
 
 describe('AnalyticsService', () => {
@@ -17,24 +18,56 @@ describe('AnalyticsService', () => {
     };
     provider = {
       getOverview: jest.fn().mockResolvedValue({
-        dataStatus: 'PENDING_SMM_40', totalActiveUsers: null, totalBookings: null,
-        bookingStatusBreakdown: { pending: null, confirmed: null, cancelled: null, completed: null },
-        reservedOccupancyRatePercent: null, grossBookedRevenue: null,
+        dataStatus: 'READY', totalActiveUsers: null, totalBookings: 5,
+        bookingStatusBreakdown: { pending: 1, confirmed: 2, cancelled: 1, completed: 1 },
+        reservedOccupancyRatePercent: 25, grossBookedRevenue: 450000,
       }),
-      getCourtMetrics: jest.fn().mockResolvedValue({ dataStatus: 'PENDING_SMM_40', metrics: [] }),
+      getCourtMetrics: jest.fn().mockResolvedValue({ dataStatus: 'READY', metrics: [] }),
     };
     service = new AnalyticsService(prisma, provider);
   });
 
-  it('returns a truthful pending contract for an owner overview without a Facility filter', async () => {
+  it('returns aggregated READY overview for an owner without a Facility filter', async () => {
     const result = await service.getOwnerOverview(10, { startDate: '2026-11-01T00:00:00.000Z', endDate: '2026-12-01T00:00:00.000Z' });
     expect(provider.getOverview).toHaveBeenCalledWith(
       { kind: 'OWNER', ownerId: 10 },
       { startDate: new Date('2026-11-01T00:00:00.000Z'), endDate: new Date('2026-12-01T00:00:00.000Z') },
     );
     expect(prisma.facility.count).toHaveBeenCalledWith({ where: { ownerId: 10 } });
-    expect(result).toEqual(expect.objectContaining({ scope: 'OWNER', dataStatus: 'PENDING_SMM_40' }));
-    expect(result.summary).toMatchObject({ totalFacilities: 2, totalBookings: null, grossBookedRevenue: null });
+    expect(result).toEqual(expect.objectContaining({ scope: 'OWNER', dataStatus: 'READY' }));
+    expect(result.summary).toMatchObject({
+      totalFacilities: 2,
+      totalBookings: 5,
+      grossBookedRevenue: 450000,
+      reservedOccupancyRatePercent: 25,
+    });
+  });
+
+  it('delegates through AnalyticsDataService to RevenueAnalyticsService', async () => {
+    const revenueAnalytics = {
+      getOverviewForScope: jest.fn().mockResolvedValue({
+        dataStatus: 'READY',
+        totalActiveUsers: null,
+        totalBookings: 3,
+        bookingStatusBreakdown: { pending: 0, confirmed: 2, cancelled: 0, completed: 1 },
+        reservedOccupancyRatePercent: 12.5,
+        grossBookedRevenue: 300000,
+      }),
+      getCourtMetricsForScope: jest.fn().mockResolvedValue({
+        dataStatus: 'READY',
+        metrics: [],
+      }),
+    } as any;
+    const dataService = new AnalyticsDataService(revenueAnalytics);
+    const integratedService = new AnalyticsService(prisma, dataService);
+
+    const res = await integratedService.getOwnerOverview(10, {});
+    expect(revenueAnalytics.getOverviewForScope).toHaveBeenCalledWith(
+      { kind: 'OWNER', ownerId: 10 },
+      { startDate: null, endDate: null },
+    );
+    expect(res.dataStatus).toBe('READY');
+    expect(res.summary.grossBookedRevenue).toBe(300000);
   });
 
   it('allows an owner to filter only a Facility it owns', async () => {
@@ -78,7 +111,7 @@ describe('AnalyticsService', () => {
       where: { facility: { ownerId: 10 } },
       select: { id: true, facilityId: true, name: true, status: true },
     }));
-    expect(result).toMatchObject({ dataStatus: 'PENDING_SMM_40', courts: [{ courtId: 4, bookingCount: null }] });
+    expect(result).toMatchObject({ dataStatus: 'READY', courts: [{ courtId: 4, bookingCount: null }] });
   });
 
   it('maps only metrics returned for an accessible Court and never exposes provider extras', async () => {

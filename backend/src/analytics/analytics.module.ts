@@ -4,7 +4,7 @@ import { RevenueAnalyticsService } from './revenue-analytics.service';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AnalyticsController } from './analytics.controller';
-import { PendingAnalyticsDataService } from './analytics-data.service';
+import { AnalyticsDataService } from './analytics-data.service';
 import { AnalyticsService } from './analytics.service';
 import { ANALYTICS_DATA_PROVIDER } from './interfaces/analytics-data-provider.interface';
 
@@ -14,8 +14,8 @@ import { ANALYTICS_DATA_PROVIDER } from './interfaces/analytics-data-provider.in
   providers: [
     AnalyticsService,
     RevenueAnalyticsService,
-    PendingAnalyticsDataService,
-    { provide: ANALYTICS_DATA_PROVIDER, useExisting: PendingAnalyticsDataService },
+    AnalyticsDataService,
+    { provide: ANALYTICS_DATA_PROVIDER, useExisting: AnalyticsDataService },
   ],
   exports: [AnalyticsService, RevenueAnalyticsService, ANALYTICS_DATA_PROVIDER],
 })
