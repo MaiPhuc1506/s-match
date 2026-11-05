@@ -3,11 +3,12 @@ import 'dashboard_motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../data/dashboard_repository.dart';
 import 'dashboard_assets.dart';
 import 'dashboard_widgets.dart';
 
 /// The Figma chart series remain discrete SVGs; axes, selection and tooltips
-/// are native widgets. These series are design fixtures until analytics APIs exist.
+/// are native widgets connected to live analytics data when available.
 class DashboardTrendChart extends StatelessWidget {
   const DashboardTrendChart({
     super.key,
@@ -15,15 +16,50 @@ class DashboardTrendChart extends StatelessWidget {
     required this.period,
     required this.onPeriod,
     this.growth = false,
+    this.series,
+    this.live = false,
   });
   final DashboardPalette palette;
   final String period;
   final VoidCallback onPeriod;
   final bool growth;
+  final List<DashboardTrendPoint>? series;
+  final bool live;
+
+  List<DashboardTrendPoint> get _displaySeries {
+    final raw = series;
+    if (raw == null || raw.isEmpty) return const [];
+    final maxPoints = growth ? 6 : 7;
+    return raw.length <= maxPoints ? raw : raw.sublist(raw.length - maxPoints);
+  }
+
+  String _shortPeriod(String raw) {
+    if (raw.length == 10 && raw[4] == '-' && raw[7] == '-') {
+      final month = int.tryParse(raw.substring(5, 7)) ?? 1;
+      final day = int.tryParse(raw.substring(8, 10)) ?? 1;
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      return '${months[(month - 1).clamp(0, 11)]} $day';
+    }
+    return raw;
+  }
 
   @override
   Widget build(BuildContext context) {
     final prefix = growth ? 'admin' : 'owner';
+    final livePoints = _displaySeries;
     return DashboardCard(
       palette: palette,
       child: Column(
@@ -59,6 +95,22 @@ class DashboardTrendChart extends StatelessWidget {
             builder: (context, box) => GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapUp: (details) {
+                if (live && livePoints.isNotEmpty) {
+                  final count = livePoints.length;
+                  final i = ((details.localPosition.dx / box.maxWidth) * count)
+                      .floor()
+                      .clamp(0, count - 1);
+                  final pt = livePoints[i];
+                  dashboardOptions(
+                    context,
+                    palette,
+                    _shortPeriod(pt.period),
+                    [],
+                    subtitle:
+                        'Live · ${pt.bookingCount} bookings · ${pt.revenue.round()}đ (${pt.bookedHours}h)',
+                  );
+                  return;
+                }
                 final count = growth ? 6 : 7;
                 final i = ((details.localPosition.dx / box.maxWidth) * count)
                     .floor()
@@ -90,8 +142,8 @@ class DashboardTrendChart extends StatelessWidget {
               child: Semantics(
                 button: true,
                 label: growth
-                    ? 'User growth chart, demo data. Tap for details.'
-                    : 'Booking trend chart, demo data. Tap for details.',
+                    ? 'User growth chart, ${live ? "live" : "demo"} data. Tap for details.'
+                    : 'Booking trend chart, ${live ? "live" : "demo"} data. Tap for details.',
                 child: AspectRatio(
                   aspectRatio: 321 / 142,
                   child: FittedBox(
@@ -184,7 +236,11 @@ class DashboardTrendChart extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children:
-                (growth
+                (live && livePoints.isNotEmpty
+                        ? livePoints
+                              .map((pt) => _shortPeriod(pt.period))
+                              .toList()
+                        : growth
                         ? ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct']
                         : ['Oct 28', '29', '30', '31', 'Nov 1', '2', '3'])
                     .map(
@@ -228,8 +284,15 @@ class DashboardTrendChart extends StatelessWidget {
 }
 
 class DashboardPeakChart extends StatelessWidget {
-  const DashboardPeakChart({super.key, required this.palette});
+  const DashboardPeakChart({
+    super.key,
+    required this.palette,
+    this.courts,
+    this.live = false,
+  });
   final DashboardPalette palette;
+  final List<DashboardCourtUtilization>? courts;
+  final bool live;
   @override
   Widget build(BuildContext context) => DashboardCard(
     palette: palette,
@@ -248,15 +311,35 @@ class DashboardPeakChart extends StatelessWidget {
             (i) => Expanded(
               child: Semantics(
                 button: true,
-                label: '${[6, 9, 12, 15, 18, 21][i]} hours, demo bookings',
+                label: '${[6, 9, 12, 15, 18, 21][i]} hours, bookings',
                 child: InkWell(
-                  onTap: () => dashboardOptions(
-                    context,
-                    palette,
-                    '${[6, 9, 12, 15, 18, 21][i]}:00',
-                    [],
-                    subtitle: 'Demo · ${[12, 25, 19, 34, 54, 31][i]} bookings',
-                  ),
+                  onTap: () {
+                    final courtList = courts;
+                    if (live && courtList != null && courtList.isNotEmpty) {
+                      final topCourt = courtList[i % courtList.length];
+                      final rate = topCourt.utilizationRate != null
+                          ? '${(topCourt.utilizationRate! * 100).toStringAsFixed(1)}%'
+                          : 'N/A';
+                      dashboardOptions(
+                        context,
+                        palette,
+                        topCourt.courtName,
+                        [],
+                        subtitle:
+                            'Live utilization · ${topCourt.bookingCount} bookings · ${topCourt.bookedHours}h / ${topCourt.availableHours}h ($rate)',
+                      );
+                      return;
+                    }
+                    dashboardOptions(
+                      context,
+                      palette,
+                      '${[6, 9, 12, 15, 18, 21][i]}:00',
+                      [],
+                      subtitle: live
+                          ? 'Hourly slot distribution is not exposed by the API.'
+                          : 'Demo · ${[12, 25, 19, 34, 54, 31][i]} bookings',
+                    );
+                  },
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -294,131 +377,174 @@ class DashboardPeakChart extends StatelessWidget {
 }
 
 class DashboardStatusChart extends StatelessWidget {
-  const DashboardStatusChart({super.key, required this.palette});
+  const DashboardStatusChart({
+    super.key,
+    required this.palette,
+    this.courts,
+    this.totalCourts,
+    this.live = false,
+  });
   final DashboardPalette palette;
+  final List<DashboardCourtUtilization>? courts;
+  final int? totalCourts;
+  final bool live;
+
   @override
-  Widget build(BuildContext context) => DashboardCard(
-    palette: palette,
-    onTap: () => dashboardOptions(
-      context,
-      palette,
-      'Court Registration Status',
-      [],
-      subtitle: 'Illustrative data · Active 144, Pending 28, Inactive 14. Approval/status API not available.',
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Court Registration Status',
-          style: palette.text(16, weight: FontWeight.w600),
-        ),
-        const SizedBox(height: 16),
-        LayoutBuilder(
-          builder: (_, box) {
-            final chart = SizedBox.square(
-              dimension: 142,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: DashboardChartReveal(
-                      radial: true,
-                      child: Stack(
+  Widget build(BuildContext context) {
+    final courtList = courts ?? const <DashboardCourtUtilization>[];
+    final int activeCount = live
+        ? courtList.where((c) => c.status.toUpperCase() == 'ACTIVE').length
+        : 144;
+    final int pendingCount = live
+        ? courtList
+              .where((c) => c.status.toUpperCase() == 'MAINTENANCE')
+              .length
+        : 28;
+    final int inactiveCount = live
+        ? courtList
+              .where(
+                (c) =>
+                    c.status.toUpperCase() != 'ACTIVE' &&
+                    c.status.toUpperCase() != 'MAINTENANCE',
+              )
+              .length
+        : 14;
+    final int total = live ? (totalCourts ?? courtList.length) : 186;
+    String pct(int count) =>
+        total > 0 ? '$count (${((count * 100) / total).round()}%)' : '$count (0%)';
+
+    return DashboardCard(
+      palette: palette,
+      onTap: () => dashboardOptions(
+        context,
+        palette,
+        'Court Registration Status',
+        [],
+        subtitle: live
+            ? 'Live court utilization · Active $activeCount, Maintenance $pendingCount, Inactive $inactiveCount.'
+            : 'Illustrative data · Active 144, Pending 28, Inactive 14. Approval/status API not available.',
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Court Registration Status',
+            style: palette.text(16, weight: FontWeight.w600),
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (_, box) {
+              final chart = SizedBox.square(
+                dimension: 142,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: DashboardChartReveal(
+                        radial: true,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: SvgPicture.asset(
+                                dashboardAssets['system.imgSegmentAccent']!,
+                              ),
+                            ),
+                            Positioned(
+                              left: .82,
+                              top: 8.62,
+                              width: 46.43,
+                              height: 54.85,
+                              child: SvgPicture.asset(
+                                dashboardAssets['system.imgSegmentWarning']!,
+                                fit: BoxFit.fill,
+                              ),
+                            ),
+                            Positioned(
+                              left: 38.67,
+                              top: 0,
+                              width: 31.10,
+                              height: 26.75,
+                              child: SvgPicture.asset(
+                                dashboardAssets['system.imgSegmentDanger']!,
+                                fit: BoxFit.fill,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Positioned.fill(
-                            child: SvgPicture.asset(
-                              dashboardAssets['system.imgSegmentAccent']!,
-                            ),
+                          DashboardCount(
+                            '$total',
+                            style: palette.text(28, weight: FontWeight.w700),
                           ),
-                          Positioned(
-                            left: .82,
-                            top: 8.62,
-                            width: 46.43,
-                            height: 54.85,
-                            child: SvgPicture.asset(
-                              dashboardAssets['system.imgSegmentWarning']!,
-                              fit: BoxFit.fill,
-                            ),
-                          ),
-                          Positioned(
-                            left: 38.67,
-                            top: 0,
-                            width: 31.10,
-                            height: 26.75,
-                            child: SvgPicture.asset(
-                              dashboardAssets['system.imgSegmentDanger']!,
-                              fit: BoxFit.fill,
-                            ),
+                          Text(
+                            'Courts',
+                            style: palette.text(12, color: palette.muted),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                  ],
+                ),
+              );
+              final legendValues = live
+                  ? [
+                      pct(activeCount),
+                      pct(pendingCount),
+                      pct(inactiveCount),
+                    ]
+                  : ['144 (77%)', '28 (15%)', '14 (8%)'];
+              final legend = Column(
+                children: List.generate(
+                  3,
+                  (i) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
                       children: [
-                        DashboardCount(
-                          '186',
-                          style: palette.text(28, weight: FontWeight.w700),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: [
+                              palette.accent,
+                              const Color(0xFFF3A838),
+                              const Color(0xFFF46C68),
+                            ][i],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            ['Active', 'Pending', 'Inactive'][i],
+                            style: palette.text(11, weight: FontWeight.w500),
+                          ),
                         ),
                         Text(
-                          'Courts',
-                          style: palette.text(12, color: palette.muted),
+                          legendValues[i],
+                          style: palette.text(10, color: palette.muted),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            );
-            final legend = Column(
-              children: List.generate(
-                3,
-                (i) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: [
-                            palette.accent,
-                            const Color(0xFFF3A838),
-                            const Color(0xFFF46C68),
-                          ][i],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          ['Active', 'Pending', 'Inactive'][i],
-                          style: palette.text(11, weight: FontWeight.w500),
-                        ),
-                      ),
-                      Text(
-                        ['144 (77%)', '28 (15%)', '14 (8%)'][i],
-                        style: palette.text(10, color: palette.muted),
-                      ),
-                    ],
-                  ),
                 ),
-              ),
-            );
-            return box.maxWidth < 280
-                ? Column(children: [chart, legend])
-                : Row(
-                    children: [
-                      chart,
-                      const SizedBox(width: 16),
-                      Expanded(child: legend),
-                    ],
-                  );
-          },
-        ),
-      ],
-    ),
-  );
+              );
+              return box.maxWidth < 280
+                  ? Column(children: [chart, legend])
+                  : Row(
+                      children: [
+                        chart,
+                        const SizedBox(width: 16),
+                        Expanded(child: legend),
+                      ],
+                    );
+            },
+          ),
+        ],
+      ),
+    );
+  }
 }

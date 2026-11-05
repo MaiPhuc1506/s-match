@@ -100,16 +100,31 @@ describe('FastApiClient (HTTP dependency mock; no upstream connection)', () => {
     { matched_users: [{ user_id: '7', match_score: Infinity }], total_candidates_processed: 2 },
     { matched_users: [{ user_id: '7', match_score: 80 }, { user_id: '7', match_score: 80 }], total_candidates_processed: 2 },
     { matched_users: [{ user_id: '7', match_score: 80, breakdown: {} }], total_candidates_processed: 2 },
+    { matched_users: [{ user_id: '7', match_score: 80, breakdown: { skill_score: 80 } }], total_candidates_processed: 2 },
+    { matched_users: [{ user_id: '7', match_score: 80, breakdown: { distance_score: 90, skill_score: 80, fake_score: 50 } }], total_candidates_processed: 2 },
+    { matched_users: [{ user_id: '7', match_score: 80, distance_km: -1, breakdown: { distance_score: 90, skill_score: 80 } }], total_candidates_processed: 2 },
   ])('rejects malformed or inconsistent upstream body: %j', async (data) => {
     http.post.mockResolvedValue({ status: 200, data });
     await expect(client.recommend(candidateData())).rejects.toMatchObject({ status: 502, message: 'Phản hồi dịch vụ matchmaking không hợp lệ' });
   });
-  it('accepts valid optional breakdown without exposing it', async () => {
-    const body = fastApiResponse();
-    Object.assign(body.matched_users[0], { breakdown: { skill_score: 1, time_score: 2, distance_score: 3, style_score: 4, reliability_score: 5 } });
+  it('accepts the real FastAPI SMM-39 breakdown (distance_score & skill_score) and distance_km without exposing them', async () => {
+    const body = {
+      total_candidates_processed: 2,
+      matched_users: [
+        {
+          user_id: '7',
+          match_score: 99.78,
+          distance_km: 0.11,
+          breakdown: { distance_score: 99.12, skill_score: 100.0 },
+        },
+      ],
+    };
     http.post.mockResolvedValue({ status: 200, data: body });
     const result = await client.recommend(candidateData());
-    expect(result.matchedUsers[0]).toEqual({ userId: '7', matchScore: 85 });
+    expect(result).toEqual({
+      matchedUsers: [{ userId: '7', matchScore: 99.78 }],
+      totalCandidatesProcessed: 2,
+    });
   });
   it('returns no-result from FastAPI without fabricating a match', async () => {
     http.post.mockResolvedValue({ status: 200, data: { matched_users: [], total_candidates_processed: 2 } });

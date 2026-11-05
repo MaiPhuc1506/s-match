@@ -30,6 +30,9 @@ export const round = (value: number, digits = 2): number => {
 export const ratio = (used: number, capacity: number): number | null =>
   capacity > 0 ? round(Math.min(1, used / capacity), 4) : null;
 
+export const percentRatio = (used: number, capacity: number): number | null =>
+  capacity > 0 ? round(Math.min(100, (used / capacity) * 100), 2) : null;
+
 const formatLocalDate = (localMs: number): string => new Date(localMs).toISOString().slice(0, 10);
 
 function parseLocalDate(value: string, field: string): number {
@@ -100,6 +103,40 @@ export function weekdayCounts(range: DateRange): number[] {
   return counts;
 }
 
+export function weekdayCountsForUtcInterval(start: Date, end: Date): number[] {
+  const counts = new Array<number>(7).fill(0);
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+  if (endMs <= startMs) return counts;
+
+  const startDayMs = Math.floor(startMs / DAY_MS) * DAY_MS;
+  const endDayMs = Math.floor(endMs / DAY_MS) * DAY_MS;
+
+  if (startDayMs === endDayMs) {
+    counts[new Date(startDayMs).getUTCDay()] = (endMs - startMs) / DAY_MS;
+    return counts;
+  }
+
+  counts[new Date(startDayMs).getUTCDay()] += (startDayMs + DAY_MS - startMs) / DAY_MS;
+  if (endMs > endDayMs) {
+    counts[new Date(endDayMs).getUTCDay()] += (endMs - endDayMs) / DAY_MS;
+  }
+
+  const firstFullDayMs = startDayMs + DAY_MS;
+  const totalFullDays = Math.max(0, Math.round((endDayMs - firstFullDayMs) / DAY_MS));
+  const fullWeeks = Math.floor(totalFullDays / 7);
+  const remainderDays = totalFullDays % 7;
+
+  if (fullWeeks > 0) {
+    for (let d = 0; d < 7; d++) counts[d] += fullWeeks;
+  }
+  const firstWeekday = new Date(firstFullDayMs).getUTCDay();
+  for (let i = 0; i < remainderDays; i++) {
+    counts[(firstWeekday + i) % 7] += 1;
+  }
+  return counts;
+}
+
 export function timeToHours(time: string): number {
   const [hours, minutes] = time.split(':').map(Number);
   return hours + (minutes || 0) / 60;
@@ -122,8 +159,17 @@ export function availableHours(weeklyHours: number[], counts: number[]): number 
   return weeklyHours.reduce((sum, hours, day) => sum + hours * counts[day], 0);
 }
 
-export function bookedHoursInRange(startTime: Date, endTime: Date, range: DateRange): number {
-  const start = Math.max(startTime.getTime(), range.start.getTime());
-  const end = Math.min(endTime.getTime(), range.end.getTime());
+export function bookedHoursInWindow(
+  startTime: Date,
+  endTime: Date,
+  windowStart: Date | null,
+  windowEnd: Date | null,
+): number {
+  const start = windowStart ? Math.max(startTime.getTime(), windowStart.getTime()) : startTime.getTime();
+  const end = windowEnd ? Math.min(endTime.getTime(), windowEnd.getTime()) : endTime.getTime();
   return Math.max(0, end - start) / HOUR_MS;
+}
+
+export function bookedHoursInRange(startTime: Date, endTime: Date, range: DateRange): number {
+  return bookedHoursInWindow(startTime, endTime, range.start, range.end);
 }

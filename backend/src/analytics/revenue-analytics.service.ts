@@ -6,15 +6,24 @@ import { AnalyticsQueryDto, RevenueTrendQueryDto } from './dto/analytics-query.d
 import {
   availableHours,
   bookedHoursInRange,
+  bookedHoursInWindow,
   DateRange,
   enumeratePeriods,
+  percentRatio,
   periodKey,
   ratio,
   resolveDateRange,
   round,
   weekdayCounts,
+  weekdayCountsForUtcInterval,
   weeklyOpenHours,
 } from './analytics.util';
+import {
+  AnalyticsMetricValues,
+  AnalyticsRange,
+  AnalyticsScope,
+  CourtMetricsResult,
+} from './interfaces/analytics-data-provider.interface';
 
 export const REVENUE_STATUSES: BookingStatus[] = [BookingStatus.CONFIRMED, BookingStatus.COMPLETED];
 
@@ -77,6 +86,8 @@ export class RevenueAnalyticsService {
       range: { from: range.fromDate, to: range.toDate, days: range.days, timezone: 'Asia/Ho_Chi_Minh' },
       facilityId: query.facilityId ?? null,
       revenue: round(revenue),
+      grossBookedRevenue: round(revenue),
+      collectedRevenue: null,
       totalBookings,
       confirmedBookings,
       byStatus: statusCounts,
@@ -171,6 +182,122 @@ export class RevenueAnalyticsService {
     };
   }
 
+  async getOverviewForScope(scope: AnalyticsScope, range: AnalyticsRange): Promise<AnalyticsMetricValues> {
+    const caller: AnalyticsCaller = {
+      userId: scope.kind === 'OWNER' ? scope.ownerId : 0,
+      role: scope.kind === 'ADMIN' ? Role.ADMIN : Role.OWNER,
+    };
+    const loadedScope = await this.loadScope(caller, scope.facilityId);
+    const [bookings, statusCounts] = await Promise.all([
+      this.fetchRevenueBookingsInWindow(loadedScope, range.startDate, range.endDate),
+      this.countByStatusInWindow(loadedScope, range.startDate, range.endDate),
+    ]);
+
+    let grossBookedRevenue = 0;
+    let reservedHours = 0;
+    for (const booking of bookings) {
+      grossBookedRevenue += booking.totalPrice;
+      reservedHours += bookedHoursInWindow(booking.startTime, booking.endTime, range.startDate, range.endDate);
+    }
+
+    let reservedOccupancyRatePercent: number | null = null;
+    if (range.startDate && range.endDate) {
+      const counts = weekdayCountsForUtcInterval(range.startDate, range.endDate);
+      const capacity = loadedScope.courts
+        .filter((court) => court.status === CourtStatus.ACTIVE)
+        .reduce((sum, court) => sum + availableHours(court.weeklyHours, counts), 0);
+      reservedOccupancyRatePercent = percentRatio(reservedHours, capacity);
+    }
+
+    const totalBookings = Object.values(statusCounts).reduce((sum, value) => sum + value, 0);
+
+    return {
+      dataStatus: 'READY',
+      totalActiveUsers: null,
+      totalBookings,
+      bookingStatusBreakdown: {
+        pending: statusCounts.PENDING,
+        confirmed: statusCounts.CONFIRMED,
+        cancelled: statusCounts.CANCELLED,
+        completed: statusCounts.COMPLETED,
+      },
+      reservedOccupancyRatePercent,
+      grossBookedRevenue: round(grossBookedRevenue),
+    };
+  }
+
+  async getCourtMetricsForScope(scope: AnalyticsScope, range: AnalyticsRange): Promise<CourtMetricsResult> {
+    const caller: AnalyticsCaller = {
+      userId: scope.kind === 'OWNER' ? scope.ownerId : 0,
+      role: scope.kind === 'ADMIN' ? Role.ADMIN : Role.OWNER,
+    };
+    const loadedScope = await this.loadScope(caller, scope.facilityId);
+    if (!loadedScope.isGlobal && loadedScope.courts.length === 0) {
+      return { dataStatus: 'READY', metrics: [] };
+    }
+
+    const where = this.bookingWindowWhere(loadedScope, range.startDate, range.endDate);
+    const [revenueBookings, groupedByCourtStatus] = await Promise.all([
+      this.fetchRevenueBookingsInWindow(loadedScope, range.startDate, range.endDate),
+      this.prisma.booking.groupBy({
+        by: ['courtId', 'status'],
+        where,
+        _count: { _all: true },
+      }),
+    ]);
+
+    const statusByCourt = new Map<number, Record<BookingStatus, number>>();
+    for (const row of groupedByCourtStatus) {
+      const counts = statusByCourt.get(row.courtId) ?? emptyStatusCounts();
+      counts[row.status] = row._count._all;
+      statusByCourt.set(row.courtId, counts);
+    }
+
+    const revByCourt = new Map<number, { revenue: number; reservedHours: number }>();
+    for (const booking of revenueBookings) {
+      const entry = revByCourt.get(booking.courtId) ?? { revenue: 0, reservedHours: 0 };
+      entry.revenue += booking.totalPrice;
+      entry.reservedHours += bookedHoursInWindow(booking.startTime, booking.endTime, range.startDate, range.endDate);
+      revByCourt.set(booking.courtId, entry);
+    }
+
+    const counts =
+      range.startDate && range.endDate
+        ? weekdayCountsForUtcInterval(range.startDate, range.endDate)
+        : null;
+
+    const metrics = loadedScope.courts.map((court) => {
+      const statusCounts = statusByCourt.get(court.id) ?? emptyStatusCounts();
+      const revStats = revByCourt.get(court.id) ?? { revenue: 0, reservedHours: 0 };
+      const bookingCount =
+        statusCounts.PENDING + statusCounts.CONFIRMED + statusCounts.CANCELLED + statusCounts.COMPLETED;
+      const capacity =
+        counts !== null
+          ? court.status === CourtStatus.ACTIVE
+            ? availableHours(court.weeklyHours, counts)
+            : 0
+          : null;
+
+      return {
+        courtId: court.id,
+        bookingCount,
+        confirmedBookings: statusCounts.CONFIRMED,
+        cancelledBookings: statusCounts.CANCELLED,
+        completedBookings: statusCounts.COMPLETED,
+        reservedHours: round(revStats.reservedHours),
+        availableHours: capacity !== null ? round(capacity) : null,
+        reservedOccupancyRatePercent:
+          capacity !== null ? percentRatio(revStats.reservedHours, capacity) : null,
+        grossBookedRevenue: round(revStats.revenue),
+      };
+    });
+
+    return {
+      dataStatus: 'READY',
+      metrics,
+    };
+  }
+
   private async loadScope(caller: AnalyticsCaller, facilityId?: number): Promise<Scope> {
     const isAdmin = caller.role === Role.ADMIN;
     const where: Prisma.FacilityWhereInput = {
@@ -211,31 +338,54 @@ export class RevenueAnalyticsService {
     };
   }
 
-  private bookingWhere(scope: Scope, range: DateRange): Prisma.BookingWhereInput {
+  private bookingWindowWhere(
+    scope: Scope,
+    start: Date | null,
+    end: Date | null,
+  ): Prisma.BookingWhereInput {
     return {
-      startTime: { gte: range.start, lt: range.end },
+      ...(start || end
+        ? {
+            startTime: {
+              ...(start ? { gte: start } : {}),
+              ...(end ? { lt: end } : {}),
+            },
+          }
+        : {}),
       ...(scope.isGlobal ? {} : { courtId: { in: scope.courts.map((court) => court.id) } }),
     };
   }
 
-  private async fetchRevenueBookings(scope: Scope, range: DateRange) {
+  private bookingWhere(scope: Scope, range: DateRange): Prisma.BookingWhereInput {
+    return this.bookingWindowWhere(scope, range.start, range.end);
+  }
+
+  private async fetchRevenueBookingsInWindow(scope: Scope, start: Date | null, end: Date | null) {
     if (!scope.isGlobal && scope.courts.length === 0) return [];
     return this.prisma.booking.findMany({
-      where: { ...this.bookingWhere(scope, range), status: { in: REVENUE_STATUSES } },
+      where: { ...this.bookingWindowWhere(scope, start, end), status: { in: REVENUE_STATUSES } },
       select: { courtId: true, startTime: true, endTime: true, totalPrice: true },
     });
   }
 
-  private async countByStatus(scope: Scope, range: DateRange) {
+  private async fetchRevenueBookings(scope: Scope, range: DateRange) {
+    return this.fetchRevenueBookingsInWindow(scope, range.start, range.end);
+  }
+
+  private async countByStatusInWindow(scope: Scope, start: Date | null, end: Date | null) {
     const counts = emptyStatusCounts();
     if (!scope.isGlobal && scope.courts.length === 0) return counts;
 
     const grouped = await this.prisma.booking.groupBy({
       by: ['status'],
-      where: this.bookingWhere(scope, range),
+      where: this.bookingWindowWhere(scope, start, end),
       _count: { _all: true },
     });
     for (const row of grouped) counts[row.status] = row._count._all;
     return counts;
+  }
+
+  private async countByStatus(scope: Scope, range: DateRange) {
+    return this.countByStatusInWindow(scope, range.start, range.end);
   }
 }
