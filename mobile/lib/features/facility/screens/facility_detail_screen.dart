@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion_widgets.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -160,7 +162,7 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
+        child: AppStaggeredColumn(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(

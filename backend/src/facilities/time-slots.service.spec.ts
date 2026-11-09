@@ -15,11 +15,12 @@ describe('TimeSlotsService', () => {
       delete: jest.Mock;
     };
     court: { findUnique: jest.Mock };
+    booking: { findMany: jest.Mock };
     facility: { findUnique: jest.Mock };
   };
   let operatingHoursService: { isWithinOperatingHours: jest.Mock };
 
-  const mockCourt = { id: 5, facilityId: 10 };
+  const mockCourt = { id: 5, facilityId: 10, status: 'ACTIVE' };
   const mockFacility = { id: 10, ownerId: 2 };
 
   beforeEach(async () => {
@@ -32,9 +33,10 @@ describe('TimeSlotsService', () => {
         delete: jest.fn(),
       },
       court: { findUnique: jest.fn() },
+      booking: { findMany: jest.fn().mockResolvedValue([]) },
       facility: { findUnique: jest.fn() },
     };
-    operatingHoursService = { isWithinOperatingHours: jest.fn() };
+    operatingHoursService = { isWithinOperatingHours: jest.fn().mockResolvedValue(true) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -114,6 +116,26 @@ describe('TimeSlotsService', () => {
       const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
       expect(result).toHaveLength(1);
     });
+  });
+
+  it('marks overlapping bookings but permits adjacent boundaries in Vietnam time', async () => {
+    prisma.court.findUnique.mockResolvedValue(mockCourt);
+    prisma.timeSlot.findMany.mockResolvedValue([
+      { id: 1, startTime: '06:00', endTime: '07:00', price: 120000 },
+      { id: 2, startTime: '07:00', endTime: '08:00', price: 140000 },
+    ]);
+    prisma.booking.findMany.mockResolvedValue([{ startTime: new Date('2026-10-04T23:00:00Z'), endTime: new Date('2026-10-05T00:00:00Z') }]);
+    const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
+    expect(result.map((s) => [s.price, s.isBooked])).toEqual([[120000, true], [140000, false]]);
+  });
+
+  it.each(['invalid', '2026-02-30', '2026-10-05T00:00:00Z', undefined])('rejects invalid availability date %s', async (date) => {
+    await expect(service.getAvailabilityForDate(10, 5, date as string)).rejects.toThrow(BadRequestException);
+  });
+
+  it('does not offer maintenance courts', async () => {
+    prisma.court.findUnique.mockResolvedValue({ ...mockCourt, status: 'MAINTENANCE' });
+    expect(await service.getAvailabilityForDate(10, 5, '2026-10-05')).toEqual([]);
   });
 
   describe('remove', () => {

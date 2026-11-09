@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -46,7 +47,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   bool _owners = false;
   int _facilityIndex = 0;
   int? _selectedFacilityId;
-  DateTime _date = DateTime(2026, 11, 3);
+  final DateTime _demoDate = DateUtils.dateOnly(DateTime.now());
+  DateTime _date = DateUtils.dateOnly(DateTime.now());
   final _scroll = ScrollController();
   final _search = TextEditingController();
   DashboardPalette get p => DashboardPalette(widget.role);
@@ -73,7 +75,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         if (mounted) _account();
       });
     }
-    if (!widget.preview) _date = DateTime.now();
+
     _data = _fetchData();
   }
 
@@ -84,6 +86,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         preview: widget.preview,
         period: p.admin ? _adminPeriod : _period,
         facilityId: _selectedFacilityId,
+        bookingDate: _date,
       );
 
   @override
@@ -107,6 +110,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       _query = '';
       _search.clear();
     });
+  }
+
+  void _openDemoData() {
+    Navigator.of(context).push(
+      AppMotion.route<void>(
+        DashboardScreen(role: widget.role, preview: true),
+        name: '/${widget.role.name}-dashboard-demo',
+      ),
+    );
   }
 
   void _back() {
@@ -236,8 +248,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
     (m) => '${m[1]},',
   );
-  String get _dateHeading =>
-      '${['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'][_date.weekday - 1]}, ${['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][_date.month - 1]} ${_date.day}';
+  bool get _isToday => DateUtils.isSameDay(_date, DateTime.now());
+  String get _shortDate =>
+      '${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][_date.weekday - 1]}, ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][_date.month - 1]} ${_date.day}';
+  Future<void> _chooseDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (mounted && date != null) {
+      setState(() {
+        _date = date;
+        _data = _fetchData();
+      });
+    }
+  }
+
   String get _title => p.admin
       ? [
           'Platform Overview',
@@ -245,12 +273,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           'Facility Management',
           'System Analytics',
         ][_tab]
-      : [
-          'Good evening, Owner',
-          'Court Map',
-          'Bookings',
-          'Owner Analytics',
-        ][_tab];
+      : ['Your courts today', 'Court Map', 'Bookings', 'Owner Analytics'][_tab];
 
   @override
   Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
@@ -271,6 +294,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ),
           ),
+          if (widget.preview && p.admin)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+              child: Material(
+                color: p.soft,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: p.brand, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Demo data · No real payments',
+                          style: p.text(
+                            12,
+                            weight: FontWeight.w600,
+                            color: p.brand,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           Expanded(
             child: FutureBuilder<DashboardData>(
               future: _data,
@@ -339,12 +389,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   );
 
   Widget _header() => SizedBox(
-    height: _tab == 0 ? 72 : 60,
+    height:
+        (_tab == 0 ? 72.0 : 60.0) *
+        math.max(1.0, MediaQuery.textScalerOf(context).scale(14) / 14),
     child: Padding(
       padding: EdgeInsets.symmetric(horizontal: _tab == 0 ? 20 : 8),
       child: Row(
         children: [
-          if (_tab != 0)
+          if (_tab != 0 || (widget.preview && Navigator.canPop(context)))
             DashboardControl(
               label: 'Back',
               onTap: _back,
@@ -354,7 +406,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 color: p.brand,
               ),
             ),
-          if (_tab != 0) const SizedBox(width: 10),
+          if (_tab != 0 || (widget.preview && Navigator.canPop(context)))
+            const SizedBox(width: 10),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -362,7 +415,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               children: [
                 if (_tab == 0) ...[
                   Text(
-                    p.admin ? 'S-MATCH ADMIN' : _dateHeading,
+                    p.admin ? 'S-MATCH ADMIN' : 'COURT OWNER',
                     style: p
                         .text(10, weight: FontWeight.w600, color: p.muted)
                         .copyWith(letterSpacing: .8),
@@ -375,9 +428,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: p.text(_tab == 0 ? 22 : 20, weight: FontWeight.w600),
                 ),
+                if (widget.preview && !p.admin) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Demo data · No real payments',
+                    style: p.text(10, color: p.muted),
+                  ),
+                ],
               ],
             ),
           ),
+          if (_tab == 0 && !widget.preview && kDebugMode)
+            DashboardControl(
+              label: 'View demo data',
+              onTap: _openDemoData,
+              child: Icon(Icons.preview_outlined, size: 22, color: p.brand),
+            ),
           if (_tab == 0)
             DashboardControl(
               label: 'Notifications',
@@ -515,12 +581,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     required String title,
     String? value,
     required String detail,
+    VoidCallback? onTap,
   }) => Material(
     color: p.brand,
     borderRadius: BorderRadius.circular(16),
     clipBehavior: Clip.antiAlias,
     child: InkWell(
-      onTap: () => _select(3),
+      onTap: onTap ?? () => _select(3),
       child: ConstrainedBox(
         constraints: BoxConstraints(minHeight: p.admin ? 108 : 140),
         child: Stack(
@@ -581,10 +648,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   List<Widget> _ownerOverview(DashboardData data) {
     final analytics = data.analytics;
     final live = !data.preview;
+    final day = data.preview && DateUtils.isSameDay(_date, _demoDate)
+        ? data.ownerDay
+        : null;
+    final upcoming = live
+        ? data.bookings
+              .where(
+                (b) =>
+                    (b.status == 'Confirmed' || b.status == 'Pending') &&
+                    (b.startTime?.isAfter(DateTime.now()) ?? true),
+              )
+              .toList()
+        : day?.upcoming ?? <DashboardBooking>[];
+    final next = upcoming.isNotEmpty ? upcoming.first : null;
     return [
       DashboardSelector(
         data.facilities.isEmpty
             ? 'No facilities'
+            : live && _selectedFacilityId == null
+            ? 'All facilities'
             : data
                   .facilities[_facilityIndex.clamp(
                     0,
@@ -594,12 +676,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         palette: p,
         onTap: () async {
           if (data.facilities.isEmpty) return;
-          final choice = await dashboardOptions(
-            context,
-            p,
-            'Switch Facility',
-            data.facilities.map((f) => f.name).toList(),
-          );
+          final choice = await dashboardOptions(context, p, 'Switch Facility', [
+            if (live) 'All facilities',
+            ...data.facilities.map((f) => f.name),
+          ]);
           if (mounted && choice != null) {
             final idx = data.facilities.indexWhere((f) => f.name == choice);
             setState(() {
@@ -611,11 +691,128 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         },
       ),
       _gap(),
+      Row(
+        children: [
+          SizedBox(
+            width: 84,
+            height: 44,
+            child: FilledButton(
+              onPressed: () => setState(() {
+                _date = DateUtils.dateOnly(DateTime.now());
+                _data = _fetchData();
+              }),
+              style: FilledButton.styleFrom(
+                padding: EdgeInsets.zero,
+                backgroundColor: p.brand,
+                foregroundColor: Colors.white,
+                textStyle: p.text(13, weight: FontWeight.w600),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22),
+                ),
+              ),
+              child: const Text('Today'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DashboardSelector(
+              _shortDate,
+              icon: 'owner.todayCalendar',
+              chevron: 'owner.todayChevron',
+              palette: p,
+              onTap: _chooseDate,
+            ),
+          ),
+        ],
+      ),
+      _gap(),
+      _hero(
+        title: _isToday ? 'Available now' : 'Court availability',
+        value: day == null
+            ? '—'
+            : '${day.availableCourts} / ${day.totalCourts} courts',
+        detail: day == null
+            ? (live
+                  ? 'Current court availability is not available yet.'
+                  : 'No demo snapshot for the selected date.')
+            : '${day.inUseCourts} in use · ${day.maintenanceCourts} under maintenance',
+        onTap: () => _select(1),
+      ),
+      _gap(),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: DashboardMetric(
+              _isToday ? 'Bookings today' : 'Bookings on date',
+              live
+                  ? _number(data.bookings.length)
+                  : day == null
+                  ? '—'
+                  : _number(day.bookingCount),
+              live
+                  ? '${upcoming.length} upcoming'
+                  : day == null
+                  ? 'Not available'
+                  : '${day.upcoming.length} upcoming',
+              palette: p,
+              icon: 'owner.imgIconCalendar',
+              onTap: () => _select(2),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: DashboardMetric(
+              'Next booking',
+              next == null ? '—' : next.time.split('–').first,
+              next?.court ?? 'No upcoming booking available',
+              palette: p,
+              icon: 'owner.imgIconCalendar',
+              onTap: next == null ? null : () => _openBooking(next),
+            ),
+          ),
+        ],
+      ),
+      _gap(),
+      Row(
+        children: [
+          Expanded(
+            child: Text(
+              _isToday ? 'Upcoming today' : 'Upcoming · $_shortDate',
+              style: p.text(16, weight: FontWeight.w600),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _select(2),
+            style: TextButton.styleFrom(
+              foregroundColor: p.brand,
+              minimumSize: const Size(72, 44),
+            ),
+            child: const Text('View all'),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      if (upcoming.isEmpty)
+        _empty(
+          'No upcoming bookings available',
+          live
+              ? 'No bookings for the selected date and facility.'
+              : 'Choose Today to return to the sample day.',
+        )
+      else
+        for (final booking in upcoming.take(2)) ...[
+          _bookingCard(booking, compact: true),
+          const SizedBox(height: 12),
+        ],
+      _gap(),
+      Text('Monthly performance', style: p.text(16, weight: FontWeight.w600)),
+      _gap(),
       _hero(
         title: live ? 'Gross Booked Value' : 'Booking Value',
         value: live
             ? _currency(analytics?.grossBookedRevenue)
-            : '24,850,000đ',
+            : _currency(DashboardFixtures.grossBookedValue),
         detail: live
             ? 'Confirmed & completed booking value · $_period'
             : '↑ 12.8% vs last month · This Month',
@@ -631,7 +828,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ? (analytics?.totalBookings != null
                         ? _number(analytics!.totalBookings!)
                         : '—')
-                  : '326',
+                  : _number(DashboardFixtures.bookingCount),
               live
                   ? '${analytics?.confirmedBookings ?? 0} confirmed · $_period'
                   : '↑ 8.4% this month',
@@ -644,7 +841,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Expanded(
             child: DashboardMetric(
               'Occupancy',
-              live ? _percent(analytics?.occupancyRatePercent) : '76%',
+              live
+                  ? _percent(analytics?.occupancyRatePercent)
+                  : _percent(DashboardFixtures.occupancyPercent),
               'Scheduled court time',
               palette: p,
               icon: 'metric.occupancy',
@@ -665,7 +864,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       _note(
         live
             ? 'Live analytics · gross booked value from confirmed/completed bookings. Collected payment revenue is unavailable.'
-            : 'Demo analytics · booking value, occupancy and trend APIs are not available.',
+            : 'Demo figures · illustrative booking value, occupancy and trends. No real payments processed.',
       ),
     ];
   }
@@ -734,9 +933,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ? _number(analytics!.totalBookings!)
                         : '—')
                   : '2,410',
-              live
-                  ? 'Bookings in $_adminPeriod'
-                  : 'All-time bookings · demo',
+              live ? 'Bookings in $_adminPeriod' : 'All-time bookings · demo',
               palette: p,
               icon: 'owner.imgIconCalendar',
               onTap: () => _select(3),
@@ -767,7 +964,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final live = !data.preview;
     return [
       DashboardSelector(
-        _period == '7 Days' ? 'This Month' : _period,
+        data.preview && _period == '7 Days' ? 'This Month' : _period,
         palette: p,
         onTap: _periodPicker,
       ),
@@ -782,7 +979,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ? (analytics?.totalBookings != null
                         ? _number(analytics!.totalBookings!)
                         : '—')
-                  : '326',
+                  : _number(DashboardFixtures.bookingCount),
               live ? _period : 'This month',
               palette: p,
               icon: 'owner.imgIconCalendar',
@@ -795,7 +992,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               'Value',
               live
                   ? _compactCurrency(analytics?.grossBookedRevenue)
-                  : '24.85Mđ',
+                  : _compactCurrency(DashboardFixtures.grossBookedValue),
               live ? _period : 'This month',
               palette: p,
               icon: 'metric.value',
@@ -806,7 +1003,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Expanded(
             child: DashboardMetric(
               'Occupancy',
-              live ? _percent(analytics?.occupancyRatePercent) : '76%',
+              live
+                  ? _percent(analytics?.occupancyRatePercent)
+                  : _percent(DashboardFixtures.occupancyPercent),
               live ? _period : 'This month',
               palette: p,
               icon: 'metric.occupancy',
@@ -824,16 +1023,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         live: live,
       ),
       _gap(),
-      DashboardPeakChart(
-        palette: p,
-        courts: analytics?.courts,
-        live: live,
-      ),
+      DashboardPeakChart(palette: p, courts: analytics?.courts, live: live),
       _gap(),
       _note(
         live
             ? 'Live analytics · gross booked value, occupancy and court utilization.'
-            : 'Illustrative analytics · no revenue or occupancy API is available.',
+            : 'Demo figures · illustrative booking value and court usage. No real payments processed.',
       ),
     ];
   }
@@ -861,9 +1056,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
       _gap(),
       _note(
-        live
-            ? 'Live analytics · booking trend and court operational status.'
-            : 'Illustrative series · user growth and court approval status are not provided by the current APIs.',
+        live ? 'Live analytics · booking trend and court operational status.' : 'Illustrative series · user growth and court approval status are not provided by the current APIs.',
       ),
     ];
   }
@@ -918,6 +1111,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   List<Widget> _bookings(DashboardData data) {
     final rows = data.bookings.where(
       (b) =>
+          (!data.preview || DateUtils.isSameDay(_date, _demoDate)) &&
           (_bookingFilter == 'All' || b.status == _bookingFilter) &&
           '${b.court} ${b.player}'.toLowerCase().contains(_query),
     );
@@ -930,14 +1124,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         (v) => setState(() => _bookingFilter = v),
       ),
       _gap(),
-      Text('Today · Nov 3', style: p.text(14, weight: FontWeight.w600)),
+      Text(
+        _isToday ? 'Today · $_shortDate' : _shortDate,
+        style: p.text(14, weight: FontWeight.w600),
+      ),
       _gap(),
-      if (!data.preview)
-        _empty(
-          'Owner booking feed unavailable',
-          'The current /bookings/my endpoint returns the signed-in player’s bookings. An Owner booking API is required.',
-        )
-      else if (rows.isEmpty)
+      if (rows.isEmpty)
         _empty(
           'No bookings',
           'No bookings match your search or selected status.',
@@ -953,44 +1145,53 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     ];
   }
 
-  Widget _bookingCard(DashboardBooking b) => DashboardCard(
-    palette: p,
-    padding: const EdgeInsets.all(14),
-    onTap: () => Navigator.push(
-      context,
-      AppMotion.route(OwnerBookingDetailScreen(booking: b)),
-    ),
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 66),
-      child: Row(
-        children: [
-          DashboardAsset('bookings.imgIconCourt', size: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(b.court, style: p.text(14, weight: FontWeight.w600)),
-                _gap(4),
-                Text(
-                  '${b.player} · ${b.time}',
-                  style: p.text(12, color: p.muted),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 6),
-          Column(
+  void _openBooking(DashboardBooking booking) => Navigator.push(
+    context,
+    AppMotion.route(OwnerBookingDetailScreen(booking: booking)),
+  );
+
+  Widget _bookingCard(DashboardBooking b, {bool compact = false}) =>
+      DashboardCard(
+        palette: p,
+        padding: const EdgeInsets.all(14),
+        onTap: () => _openBooking(b),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: compact ? 48 : 66),
+          child: Row(
             children: [
-              DashboardPill(b.status, palette: p, status: true),
-              _gap(4),
-              DashboardAsset('bookings.imgIconRight', size: 16),
+              DashboardAsset('bookings.imgIconCourt', size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      compact ? '${b.court} · ${b.time}' : b.court,
+                      style: p.text(14, weight: FontWeight.w600),
+                    ),
+                    _gap(4),
+                    Text(
+                      compact
+                          ? '${b.player} · ${b.status}'
+                          : '${b.player} · ${b.time}',
+                      style: p.text(12, color: p.muted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Column(
+                children: [
+                  if (!compact)
+                    DashboardPill(b.status, palette: p, status: true),
+                  _gap(4),
+                  DashboardAsset('bookings.imgIconRight', size: 16),
+                ],
+              ),
             ],
           ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 
   List<Widget> _users(DashboardData data) {
     final users = data.people
@@ -1180,26 +1381,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   List<Widget> _schedule(DashboardData data) => [
-    DashboardSelector(
-      '${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][_date.weekday - 1]}, ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][_date.month - 1]} ${_date.day}',
-      palette: p,
-      onTap: () async {
-        final date = await showDatePicker(
-          context: context,
-          initialDate: _date,
-          firstDate: DateTime(2020),
-          lastDate: DateTime(2100),
-        );
-        if (mounted && date != null) setState(() => _date = date);
-      },
-    ),
+    DashboardSelector(_shortDate, palette: p, onTap: _chooseDate),
     _gap(),
-    if (!data.preview)
-      _empty(
-        'Owner schedule unavailable',
-        'Manage Facilities opens the existing court and time-slot management flow. This grid needs a dated Owner booking API.',
-      )
-    else
+    if (!data.preview) ...[
+      if (data.bookings.isEmpty)
+        _empty('No bookings', 'No bookings for this date and facility.'),
+      ...data.bookings.expand((b) => [_bookingCard(b), _gap()]),
+    ] else
       DashboardScheduleGrid(
         palette: p,
         onBooked: () => Navigator.push(

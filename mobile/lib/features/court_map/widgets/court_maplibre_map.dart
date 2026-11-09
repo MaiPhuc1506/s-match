@@ -2,11 +2,16 @@ import 'dart:math' as math;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../exploration_data.dart';
+import 'native_court_layers.dart';
+import 'native_player_layers.dart';
 
 /// Controller interface to programmatically control the CourtMapLibreMap.
 abstract class CourtMapController {
@@ -25,6 +30,9 @@ abstract class CourtMapController {
 /// (pins, accuracy halo, selected bubble, cluster badge).
 class CourtMapLibreMap extends StatefulWidget {
   final List<CourtLocation> courts;
+  final List<NearbyPlayer> players;
+  final bool showPlayers;
+  final ValueChanged<NearbyPlayer>? onPlayerSelected;
   final CourtLocation? selectedCourt;
   final bool showPins;
   final bool showAccuracy;
@@ -42,6 +50,9 @@ class CourtMapLibreMap extends StatefulWidget {
   const CourtMapLibreMap({
     super.key,
     required this.courts,
+    this.players = const [],
+    this.showPlayers = false,
+    this.onPlayerSelected,
     this.selectedCourt,
     this.showPins = true,
     this.showAccuracy = true,
@@ -75,64 +86,23 @@ class CourtMapLibreMap extends StatefulWidget {
 class CourtMapLibreMapState extends State<CourtMapLibreMap>
     implements CourtMapController {
   MapLibreMapController? _mapLibreController;
+  NativeCourtLayers? _nativeLayers;
+  NativePlayerLayers? _nativePlayers;
   late CameraPosition _currentCamera;
-  final Map<int, Offset> _points = {};
-  bool _projecting = false;
-  bool _projectionPending = false;
+  Offset? _selectedOffset;
+  bool _moving = false;
+  bool _syncing = false;
+  bool _syncPending = false;
+  int _projectionGeneration = 0;
   String? _mapError;
   Size? _viewportSize;
-
-  Future<void> _updatePositions() async {
-    if (_mapLibreController == null || !mounted) return;
-    if (_projecting) {
-      _projectionPending = true;
-      return;
-    }
-    _projecting = true;
-    try {
-      do {
-        _projectionPending = false;
-        final courts = widget.courts.where((c) => c.hasCoordinates).toList();
-        final positions = await _mapLibreController!.toScreenLocationBatch([
-          CourtMapLibreMap.userLocation,
-          ...courts.map((c) => LatLng(c.latitude!, c.longitude!)),
-        ]);
-        if (!mounted) return;
-        setState(() {
-          _points.clear();
-          _points[-1] = Offset(
-            positions.first.x.toDouble(),
-            positions.first.y.toDouble(),
-          );
-          for (var i = 0; i < courts.length; i++) {
-            _points[courts[i].id] = Offset(
-              positions[i + 1].x.toDouble(),
-              positions[i + 1].y.toDouble(),
-            );
-          }
-        });
-      } while (_projectionPending && mounted);
-    } catch (_) {
-      if (mounted) {
-        setState(() => _mapError = 'Không cập nhật được bản đồ. Hãy thử lại.');
-      }
-    } finally {
-      _projecting = false;
-    }
-  }
+  double? _trackpadZoom;
+  bool _installingSimulatorPinch = false;
 
   @override
-  void didUpdateWidget(CourtMapLibreMap oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.courts != widget.courts) unawaited(_updatePositions());
-  }
-
+  LatLng get center => _currentCamera.target;
   @override
-  LatLng? get center => _currentCamera.target;
-
-  @override
-  double? get zoom => _currentCamera.zoom;
-
+  double get zoom => _currentCamera.zoom;
   @override
   void initState() {
     super.initState();
@@ -142,88 +112,262 @@ class CourtMapLibreMapState extends State<CourtMapLibreMap>
     );
   }
 
+  @override
+  void didUpdateWidget(CourtMapLibreMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    unawaited(_syncNative());
+    if (oldWidget.selectedCourt != widget.selectedCourt ||
+        oldWidget.showSelection != widget.showSelection) {
+      unawaited(_refreshCallout());
+    }
+  }
+
+  @override
+  void dispose() {
+    _projectionGeneration++;
+    _nativeLayers?.disposed = true;
+    _nativePlayers?.disposed = true;
+    _mapLibreController?.onFeatureTapped.remove(_onFeatureTap);
+    // MapLibreMap owns and disposes its controller.
+    super.dispose();
+  }
+
   void _onMapCreated(MapLibreMapController controller) {
     _mapLibreController = controller;
+    controller.onFeatureTapped.add(_onFeatureTap);
+    unawaited(_installSimulatorPinch());
     widget.onMapReady?.call(this);
-    unawaited(_updatePositions());
+    unawaited(_refreshCallout());
+  }
+
+  Future<void> _installSimulatorPinch() async {
+    if (kIsWeb ||
+        !kDebugMode ||
+        defaultTargetPlatform != TargetPlatform.iOS ||
+        _installingSimulatorPinch) {
+      return;
+    }
+    _installingSimulatorPinch = true;
+    try {
+      // UIKit platform views are attached during composition, after onMapCreated.
+      await WidgetsBinding.instance.endOfFrame;
+      for (var attempt = 0; attempt < 8 && mounted; attempt++) {
+        final installed = await const MethodChannel(
+          'smatch/simulator_map_pinch',
+        ).invokeMethod<int>('install');
+        if (installed != null && installed > 0) {
+          debugPrint(
+            'Simulator pinch: $installed native map view(s) registered',
+          );
+          return;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+      if (mounted) {
+        debugPrint('Simulator pinch: native map view is not attached');
+      }
+    } on MissingPluginException {
+      // Intentionally absent on physical iPhones and non-iOS platforms.
+    } on PlatformException catch (error) {
+      debugPrint('Simulator pinch adapter: ${error.code}');
+    } finally {
+      _installingSimulatorPinch = false;
+    }
+  }
+
+  void _onStyleLoaded() {
+    final controller = _mapLibreController;
+    if (controller == null) return;
+    _nativeLayers?.disposed = true;
+    _nativePlayers?.disposed = true;
+    _nativeLayers = NativeCourtLayers(controller);
+    _nativePlayers = NativePlayerLayers(controller);
+    unawaited(_installSimulatorPinch());
+    unawaited(_syncNative());
+    unawaited(_refreshCallout());
+  }
+
+  Future<void> _syncNative() async {
+    if (_nativeLayers == null || !mounted) return;
+    if (_syncing) {
+      _syncPending = true;
+      return;
+    }
+    _syncing = true;
+    try {
+      do {
+        _syncPending = false;
+        final layers = _nativeLayers;
+        await layers?.sync(
+          widget.courts,
+          showPins: widget.showPins,
+          showCluster: widget.showCluster,
+          showAccuracy: widget.showAccuracy,
+          referenceLocation: CourtMapLibreMap.userLocation,
+        );
+        await _nativePlayers?.sync(widget.players, visible: widget.showPlayers);
+      } while (mounted && _syncPending);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _mapError = 'Could not load map markers. Tap to retry.');
+      }
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  void _onFeatureTap(
+    math.Point<double> point,
+    LatLng coordinates,
+    String id,
+    String layerId,
+    Annotation? annotation,
+  ) {
+    if (layerId == NativePlayerLayers.layer) {
+      if (!widget.showPlayers) return;
+      for (final player in widget.players) {
+        if ('player:${player.id}' == id && player.hasPublicLocation) {
+          widget.onPlayerSelected?.call(player);
+          break;
+        }
+      }
+    } else if (layerId == NativeCourtLayers.clusterCore ||
+        layerId == NativeCourtLayers.clusterCount ||
+        layerId == NativeCourtLayers.clusterHalo) {
+      unawaited(_expandCluster(point));
+    } else if (layerId == NativeCourtLayers.pins ||
+        layerId == NativeCourtLayers.clusteredPins) {
+      for (final court in widget.courts) {
+        if (court.id.toString() == id) {
+          widget.onCourtSelected?.call(court);
+          break;
+        }
+      }
+    }
+  }
+
+  Future<void> _expandCluster(math.Point<double> point) async {
+    try {
+      await _nativeLayers?.expandCluster(point);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _mapError = 'Could not expand this cluster. Tap to retry.',
+        );
+      }
+    }
+  }
+
+  // Only the editable callout uses a screen coordinate, once the camera stops.
+  // Hide it during movement; never paint an asynchronous, stale projection.
+  Future<void> _refreshCallout() async {
+    final request = ++_projectionGeneration;
+    final court = widget.selectedCourt;
+    final controller = _mapLibreController;
+    if (_moving ||
+        controller == null ||
+        court == null ||
+        !court.hasCoordinates) {
+      return;
+    }
+    try {
+      final points = await controller.toScreenLocationBatch([
+        LatLng(court.latitude!, court.longitude!),
+      ]);
+      if (!mounted ||
+          _moving ||
+          request != _projectionGeneration ||
+          widget.selectedCourt?.id != court.id) {
+        return;
+      }
+      setState(
+        () => _selectedOffset = Offset(
+          points.single.x.toDouble(),
+          points.single.y.toDouble(),
+        ),
+      );
+    } catch (_) {
+      if (mounted && request == _projectionGeneration) {
+        setState(() => _selectedOffset = null);
+      }
+    }
+  }
+
+  void _beginCameraMove() {
+    _projectionGeneration++;
+    if (!_moving) {
+      setState(() {
+        _moving = true;
+        _selectedOffset = null;
+      });
+    }
   }
 
   void _onCameraMove(CameraPosition position) {
     _currentCamera = position;
-    unawaited(_updatePositions());
+    _beginCameraMove();
+  }
+
+  void _onCameraIdle() {
+    _moving = false;
+    unawaited(_refreshCallout());
   }
 
   @override
-  Future<void> recenter() async {
-    final target = CourtMapLibreMap.userLocation;
-
-    if (_mapLibreController != null) {
-      await _mapLibreController!.animateCamera(
-        CameraUpdate.newLatLngZoom(target, 14.0),
-      );
-    }
-  }
-
+  Future<void> recenter() async => _mapLibreController?.animateCamera(
+    CameraUpdate.newLatLngZoom(CourtMapLibreMap.userLocation, 14),
+  );
   @override
   Future<void> moveToCourt(CourtLocation court) async {
     if (!court.hasCoordinates) return;
-    final target = LatLng(court.latitude!, court.longitude!);
-    if (_mapLibreController != null) {
-      await _mapLibreController!.animateCamera(
-        CameraUpdate.newLatLngZoom(target, 15.0),
-      );
-    }
+    await _mapLibreController?.animateCamera(
+      CameraUpdate.newLatLngZoom(LatLng(court.latitude!, court.longitude!), 15),
+    );
   }
 
   @override
   Future<void> zoomIn() async {
-    if (_mapLibreController != null) {
-      await _mapLibreController!.animateCamera(CameraUpdate.zoomIn());
-    }
+    await _mapLibreController?.animateCamera(CameraUpdate.zoomIn());
   }
 
   @override
   Future<void> zoomOut() async {
-    if (_mapLibreController != null) {
-      await _mapLibreController!.animateCamera(CameraUpdate.zoomOut());
-    }
+    await _mapLibreController?.animateCamera(CameraUpdate.zoomOut());
   }
 
   @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = Size(constraints.maxWidth, constraints.maxHeight);
-        if (_viewportSize != size) {
-          _viewportSize = size;
-          WidgetsBinding.instance.addPostFrameCallback(
-            (_) => unawaited(_updatePositions()),
-          );
-        }
-
-        final userOffset = _points[-1];
-        final groups = <List<CourtLocation>>[];
-        for (final court in widget.courts.where(
-          (c) => _points.containsKey(c.id),
-        )) {
-          List<CourtLocation>? group;
-          if (widget.showCluster) {
-            for (final candidate in groups) {
-              if ((_points[candidate.first.id]! - _points[court.id]!).distance <
-                  60) {
-                group = candidate;
-                break;
-              }
-            }
-          }
-          (group ?? (groups..add(<CourtLocation>[])).last).add(court);
-        }
-        final singles = groups.where((g) => g.length == 1).map((g) => g.first);
-        return Stack(
-          clipBehavior: Clip.hardEdge,
-          children: [
-            // 1. MapLibre GL Interactive vector map layer
-            Positioned.fill(
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final size = Size(constraints.maxWidth, constraints.maxHeight);
+      if (_viewportSize != size) {
+        _viewportSize = size;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_refreshCallout());
+        });
+      }
+      return Stack(
+        clipBehavior: Clip.hardEdge,
+        children: [
+          Positioned.fill(
+            child: Listener(
+              // Forward trackpad pan/zoom events when the host sends them to Flutter.
+              // Physical two-finger touch gestures remain owned by the native map.
+              onPointerPanZoomStart: (_) => _trackpadZoom = _currentCamera.zoom,
+              onPointerPanZoomUpdate: (event) {
+                final start = _trackpadZoom;
+                if (start == null || event.scale <= 0) return;
+                unawaited(
+                  _mapLibreController?.moveCamera(
+                    CameraUpdate.newLatLngZoom(
+                      _currentCamera.target,
+                      (start + math.log(event.scale) / math.ln2)
+                          .clamp(0, 20)
+                          .toDouble(),
+                    ),
+                  ),
+                );
+              },
+              onPointerPanZoomEnd: (_) => _trackpadZoom = null,
               child: MapLibreMap(
                 styleString: widget.styleString,
                 initialCameraPosition: CameraPosition(
@@ -233,156 +377,65 @@ class CourtMapLibreMapState extends State<CourtMapLibreMap>
                 trackCameraPosition: true,
                 compassEnabled: false,
                 myLocationEnabled: false,
+                zoomGesturesEnabled: true,
+                scrollGesturesEnabled: true,
+                rotateGesturesEnabled: true,
+                tiltGesturesEnabled: true,
+                gestureRecognizers: {
+                  Factory<OneSequenceGestureRecognizer>(
+                    EagerGestureRecognizer.new,
+                  ),
+                },
+                annotationOrder: const [],
+                symbolPlacementTransitionsEnabled: false,
                 attributionButtonPosition: AttributionButtonPosition.topLeft,
                 attributionButtonMargins: const math.Point(8, 240),
-                onStyleLoadedCallback: () => unawaited(_updatePositions()),
                 onMapCreated: _onMapCreated,
+                onStyleLoadedCallback: _onStyleLoaded,
+                onCameraMoveStarted: (_) => _beginCameraMove(),
                 onCameraMove: _onCameraMove,
-                onCameraIdle: () => unawaited(_updatePositions()),
-                onMapClick: (point, coordinates) {
-                  widget.onBackgroundTap?.call();
-                },
+                onCameraIdle: _onCameraIdle,
+                onMapClick: (_, _) => widget.onBackgroundTap?.call(),
               ),
             ),
-
-            // 2. User Location Halo & Dot (Figma Frame 469:1027 visual spec)
-            if (widget.showAccuracy && userOffset != null)
-              Positioned(
-                left: userOffset.dx - 44,
-                top: userOffset.dy - 44,
-                width: 88,
-                height: 88,
-                child: IgnorePointer(child: _buildUserLocationHalo()),
+          ),
+          if (!_moving &&
+              widget.showSelection &&
+              widget.showPins &&
+              widget.selectedCourt != null &&
+              _selectedOffset != null)
+            Positioned(
+              left: (_selectedOffset!.dx - 78).clamp(
+                0.0,
+                math.max(0.0, size.width - 156),
               ),
-
-            // 3. Court Pins (when cluster is off and pins are visible)
-            if (widget.showPins)
-              for (final court in singles) ...[
-                () {
-                  final pinOffset = _points[court.id]!;
-                  return Positioned(
-                    left: pinOffset.dx - 13,
-                    top: pinOffset.dy - 30,
-                    width: 26,
-                    height: 30,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        widget.onCourtSelected?.call(court);
-                      },
-                      child: SvgPicture.asset(
-                        'assets/sprint6/find_courts/court_pin.svg',
-                        width: 26,
-                        height: 30,
-                      ),
-                    ),
-                  );
-                }(),
-              ],
-
-            // 4. Selected Court Callout Bubble (Figma Frame 469:1027 spec)
-            if (widget.showSelection &&
-                widget.showPins &&
-                widget.selectedCourt != null &&
-                _points.containsKey(widget.selectedCourt!.id)) ...[
-              () {
-                final selectedOffset = _points[widget.selectedCourt!.id]!;
-                return Positioned(
-                  left: (selectedOffset.dx - 78).clamp(
-                    0.0,
-                    math.max(0.0, size.width - 156),
-                  ),
-                  top: (selectedOffset.dy - 90).clamp(
-                    0.0,
-                    math.max(0.0, size.height - 52),
-                  ),
-                  width: 156,
-                  height: 52,
-                  child: _buildSelectedCalloutBubble(widget.selectedCourt!),
-                );
-              }(),
-            ],
-
-            if (widget.showPins && widget.showCluster)
-              for (final group in groups.where((g) => g.length > 1))
-                Positioned(
-                  left: _points[group.first.id]!.dx - 28,
-                  top: _points[group.first.id]!.dy - 28,
-                  width: 56,
-                  height: 56,
-                  child: GestureDetector(
-                    onTap: () async {
-                      final controller = _mapLibreController;
-                      if (controller != null) {
-                        await controller.animateCamera(
-                          CameraUpdate.newLatLngZoom(
-                            LatLng(
-                              group.first.latitude!,
-                              group.first.longitude!,
-                            ),
-                            (_currentCamera.zoom + 2).clamp(0, 20).toDouble(),
-                          ),
-                        );
-                      }
-                    },
-                    child: _buildClusterBadge(group.length),
-                  ),
-                ),
-            if (_mapError != null)
-              Positioned(
-                bottom: 140,
-                left: 16,
-                right: 16,
-                child: Material(
-                  child: TextButton(
-                    onPressed: () {
-                      setState(() => _mapError = null);
-                      unawaited(_updatePositions());
-                    },
-                    child: Text(_mapError!),
-                  ),
+              top: (_selectedOffset!.dy - 90).clamp(
+                0.0,
+                math.max(0.0, size.height - 52),
+              ),
+              width: 156,
+              height: 52,
+              child: _buildSelectedCalloutBubble(widget.selectedCourt!),
+            ),
+          if (_mapError != null)
+            Positioned(
+              bottom: 140,
+              left: 16,
+              right: 16,
+              child: Material(
+                child: TextButton(
+                  onPressed: () {
+                    setState(() => _mapError = null);
+                    unawaited(_syncNative());
+                  },
+                  child: Text(_mapError!),
                 ),
               ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildUserLocationHalo() {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // Accuracy halo: 88 × 88, #2996F5 at 15% opacity
-        Container(
-          width: 88,
-          height: 88,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: Color(0x262996F5),
-          ),
-        ),
-        // Center dot: 20 × 20, #1689FA, white border 3, S3 shadow
-        Container(
-          width: 20,
-          height: 20,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFF1689FA),
-            border: Border.all(color: Colors.white, width: 3),
-            boxShadow: const [
-              BoxShadow(
-                color: Color.fromRGBO(19, 60, 49, 0.08),
-                blurRadius: 12,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
+            ),
+        ],
+      );
+    },
+  );
   Widget _buildSelectedCalloutBubble(CourtLocation court) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -455,50 +508,6 @@ class CourtMapLibreMapState extends State<CourtMapLibreMap>
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildClusterBadge(int count) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // Green halo: 56 × 56, #05644F at 12% opacity
-        Container(
-          width: 56,
-          height: 56,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: Color(0x1F05644F),
-          ),
-        ),
-        // Green core: 40 × 40, white border 2, S4 shadow
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFF05644F),
-            border: Border.all(color: Colors.white, width: 2),
-            boxShadow: const [
-              BoxShadow(
-                color: Color.fromRGBO(19, 60, 49, 0.10),
-                blurRadius: 12,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            '$count',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              height: 21 / 15,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

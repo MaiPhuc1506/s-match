@@ -1,4 +1,5 @@
 import 'package:maplibre_gl/maplibre_gl.dart';
+import 'package:mobile/features/court_map/widgets/court_maplibre_map.dart';
 
 import 'support/fake_court_map_platform.dart';
 
@@ -160,14 +161,41 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Map layers'), findsNothing);
-    expect(find.text('3'), findsOneWidget);
-
-    // Tap cluster to ungroup
-    await tester.tap(find.text('3'));
+    expect(
+      tester
+          .widget<CourtMapLibreMap>(find.byType(CourtMapLibreMap))
+          .showCluster,
+      isTrue,
+    );
+    // Counts and expansion are rendered natively; test switching the UI mode here.
+    await tester.tap(find.byKey(const Key('find_courts_layers_button')));
     await tester.pumpAndSettle();
-    expect(find.text('3'), findsNothing);
+    await tester.tap(find.text('Standard'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<CourtMapLibreMap>(find.byType(CourtMapLibreMap))
+          .showCluster,
+      isFalse,
+    );
   });
 
+  testWidgets('Mouse zoom controls update the existing native camera', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+    final state = tester.state<CourtMapLibreMapState>(
+      find.byType(CourtMapLibreMap),
+    );
+    final before = state.zoom;
+    await tester.tap(find.byTooltip('Zoom in'));
+    await tester.pumpAndSettle();
+    expect(state.zoom, before + 1);
+    await tester.tap(find.byTooltip('Zoom out'));
+    await tester.pumpAndSettle();
+    expect(state.zoom, before);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'Nearby courts sheet expands to half-expanded and collapse button returns to collapsed',
     (tester) async {

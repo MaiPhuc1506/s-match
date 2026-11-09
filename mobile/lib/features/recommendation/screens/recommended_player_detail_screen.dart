@@ -60,68 +60,71 @@ class RecommendedPlayerDetailScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Compatibility',
-                                style: recommendationText(
-                                  18,
-                                  weight: FontWeight.w600,
+                    if (player.score != null) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Compatibility',
+                                  style: recommendationText(
+                                    18,
+                                    weight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
+                                Text(
+                                  'Based on your preferences',
+                                  style: recommendationText(
+                                    11,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          CompatibilityScore(player.score, large: true),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        "Why you're a match",
+                        style: recommendationText(16, weight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.socialPressed,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (player.reasons.isEmpty)
                               Text(
-                                'Based on your preferences',
+                                'Compatibility reasons are not available yet.',
                                 style: recommendationText(
-                                  11,
+                                  12,
                                   color: AppColors.textSecondary,
                                 ),
                               ),
-                            ],
-                          ),
+                            for (final (index, reason)
+                                in _detailReasons.indexed)
+                              Padding(
+                                padding: EdgeInsets.only(
+                                  top: index == 0 ? 0 : 10,
+                                ),
+                                child: CompatibilityReason(reason),
+                              ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        CompatibilityScore(player.score, large: true),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      "Why you're a match",
-                      style: recommendationText(16, weight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.socialPressed,
-                        borderRadius: BorderRadius.circular(14),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (player.reasons.isEmpty)
-                            Text(
-                              'Compatibility reasons are not available yet.',
-                              style: recommendationText(
-                                12,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          for (final (index, reason) in _detailReasons.indexed)
-                            Padding(
-                              padding: EdgeInsets.only(
-                                top: index == 0 ? 0 : 10,
-                              ),
-                              child: CompatibilityReason(reason),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
+                    ],
                     _stats(),
                     const SizedBox(height: 16),
                     Text(

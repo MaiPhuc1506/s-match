@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion_widgets.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -5,6 +7,7 @@ import '../booking_theme.dart';
 
 class BookingDetailScreen extends StatelessWidget {
   final bool readOnly;
+  final String? photoAsset;
   final String bookingId;
   final String facilityName;
   final String courtName;
@@ -20,6 +23,7 @@ class BookingDetailScreen extends StatelessWidget {
   const BookingDetailScreen({
     super.key,
     this.readOnly = false,
+    this.photoAsset,
     this.bookingId = '#SM20260920001',
     this.facilityName = 'Sunrise Badminton Club',
     this.courtName = 'Sân 3 · Indoor Badminton Court',
@@ -40,7 +44,7 @@ class BookingDetailScreen extends StatelessWidget {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          child: Column(
+          child: AppStaggeredColumn(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(context),
@@ -169,12 +173,19 @@ class BookingDetailScreen extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: SvgPicture.asset(
-              BookingIcons.courtThumbnail,
-              width: 92,
-              height: 62,
-              fit: BoxFit.cover,
-            ),
+            child: photoAsset != null
+                ? Image.asset(
+                    photoAsset!,
+                    width: 92,
+                    height: 62,
+                    fit: BoxFit.cover,
+                  )
+                : SvgPicture.asset(
+                    BookingIcons.courtThumbnail,
+                    width: 92,
+                    height: 62,
+                    fit: BoxFit.cover,
+                  ),
           ),
           const SizedBox(width: 12),
           Expanded(

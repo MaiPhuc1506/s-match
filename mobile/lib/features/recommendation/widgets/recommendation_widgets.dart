@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion_widgets.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -150,58 +152,62 @@ class RecommendationAvatar extends StatelessWidget {
 
 class CompatibilityScore extends StatelessWidget {
   const CompatibilityScore(this.score, {super.key, this.large = false});
-  final double score;
+  final double? score;
   final bool large;
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: 'Compatibility ${score.toStringAsFixed(0)} percent',
-    child: SizedBox.square(
-      dimension: large ? 80 : 52,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned.fill(
-            child: CircularProgressIndicator(
-              value: score / 100,
-              strokeWidth: large ? 5 : 3,
-              strokeAlign: -1,
-              backgroundColor: AppColors.socialPressed,
-              color: AppColors.primary,
+  Widget build(BuildContext context) {
+    final score = this.score;
+    if (score == null) return const SizedBox.shrink();
+    return Semantics(
+      label: 'Compatibility ${score.toStringAsFixed(0)} percent',
+      child: SizedBox.square(
+        dimension: large ? 80 : 52,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Positioned.fill(
+              child: CircularProgressIndicator(
+                value: score / 100,
+                strokeWidth: large ? 5 : 3,
+                strokeAlign: -1,
+                backgroundColor: AppColors.socialPressed,
+                color: AppColors.primary,
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(5),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '${score.toStringAsFixed(0)}%',
-                    maxLines: 1,
-                    softWrap: false,
-                    style: recommendationText(
-                      large ? 22 : 14,
-                      weight: FontWeight.w700,
-                      color: AppColors.iconPrimary,
-                    ),
-                  ),
-                  if (large)
+            Padding(
+              padding: const EdgeInsets.all(5),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Text(
-                      'Match',
+                      '${score.toStringAsFixed(0)}%',
+                      maxLines: 1,
+                      softWrap: false,
                       style: recommendationText(
-                        11,
+                        large ? 22 : 14,
+                        weight: FontWeight.w700,
                         color: AppColors.iconPrimary,
                       ),
                     ),
-                ],
+                    if (large)
+                      Text(
+                        'Match',
+                        style: recommendationText(
+                          11,
+                          color: AppColors.iconPrimary,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class CompatibilityReason extends StatelessWidget {
@@ -243,99 +249,105 @@ class RecommendationCard extends StatelessWidget {
   final RecommendedPlayer player;
   final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    child: Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 164),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
+  Widget build(BuildContext context) => AppReveal(
+    key: ValueKey('recommended-${player.id}'),
+    id: 'recommended-${player.id}',
+    child: AppPressFeedback(
+      child: Semantics(
+        button: true,
+        child: Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: onTap,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.socialPressed),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 164),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.socialPressed),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  RecommendationAvatar(player),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          player.displayName,
-                          style: recommendationText(
-                            14,
-                            weight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          crossAxisAlignment: WrapCrossAlignment.center,
+                  Row(
+                    children: [
+                      RecommendationAvatar(player),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (player.level != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 7,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.socialPressed,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  player.level!,
-                                  style: recommendationText(
-                                    10,
-                                    weight: FontWeight.w500,
-                                    color: AppColors.iconPrimary,
+                            Text(
+                              player.displayName,
+                              style: recommendationText(
+                                14,
+                                weight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                if (player.level != null)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 7,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.socialPressed,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      player.level!,
+                                      style: recommendationText(
+                                        10,
+                                        weight: FontWeight.w500,
+                                        color: AppColors.iconPrimary,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            if (player.distanceKm != null)
-                              Text(
-                                '${player.distanceKm!.toStringAsFixed(1)} km',
-                                style: recommendationText(
-                                  10,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
+                                if (player.distanceKm != null)
+                                  Text(
+                                    '${player.distanceKm!.toStringAsFixed(1)} km',
+                                    style: recommendationText(
+                                      10,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      CompatibilityScore(player.score),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  CompatibilityScore(player.score),
+                  const SizedBox(height: 6),
+                  if (player.reasons.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        'Compatibility reasons are not available yet.',
+                        style: recommendationText(
+                          12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  for (final (index, reason) in player.reasons.take(3).indexed)
+                    Padding(
+                      padding: EdgeInsets.only(top: index == 0 ? 0 : 6),
+                      child: CompatibilityReason(reason),
+                    ),
                 ],
               ),
-              const SizedBox(height: 6),
-              if (player.reasons.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    'Compatibility reasons are not available yet.',
-                    style: recommendationText(
-                      12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              for (final (index, reason) in player.reasons.take(3).indexed)
-                Padding(
-                  padding: EdgeInsets.only(top: index == 0 ? 0 : 6),
-                  child: CompatibilityReason(reason),
-                ),
-            ],
+            ),
           ),
         ),
       ),

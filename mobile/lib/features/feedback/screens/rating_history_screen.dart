@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
@@ -42,10 +43,23 @@ class _RatingHistoryScreenState extends State<RatingHistoryScreen> {
         title: 'Rating history',
         subtitle: repo.live
             ? 'Your growth, one match at a time'
-            : 'Your growth, one match at a time · UI preview',
+            : 'Demo feedback · Not saved to server',
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           children: [
+            if (repo.live && kDebugMode)
+              TextButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  AppMotion.route<void>(
+                    RatingHistoryScreen(
+                      repository: FeedbackRepository.instance,
+                    ),
+                    name: '/demo-player-feedback',
+                  ),
+                ),
+                icon: const Icon(Icons.preview_outlined),
+                label: const Text('View demo feedback'),
+              ),
             if (repo.loading) const LinearProgressIndicator(),
             if (repo.error != null) ...[
               Text(repo.error!, style: feedbackText(13)),
@@ -107,7 +121,7 @@ class _RatingHistoryScreenState extends State<RatingHistoryScreen> {
                           repo.live
                               ? repo.summary?.label ?? '—'
                               : repo.withSamples
-                              ? '4.8'
+                              ? repo.previewAverageLabel
                               : '—',
                           style: feedbackText(
                             48,
@@ -137,7 +151,7 @@ class _RatingHistoryScreenState extends State<RatingHistoryScreen> {
                               repo.live
                                   ? '${repo.summary?.count ?? 0} ratings'
                                   : repo.withSamples
-                                  ? '24 ratings · 12 matches'
+                                  ? '${repo.received.length} ratings · ${repo.previewMatchCount} matches'
                                   : '0 ratings · 0 matches',
                               style: feedbackText(
                                 12,
@@ -290,6 +304,16 @@ class FeedbackReviewCard extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         FeedbackStars(value: entry.stars),
+        if (entry.tags.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final tag in entry.tags) FeedbackTag(tag, selected: true),
+            ],
+          ),
+        ],
         if (entry.review.isNotEmpty) ...[
           const SizedBox(height: 10),
           Text(entry.review, style: feedbackText(14)),

@@ -22,7 +22,13 @@ import 'find_players_map_screen.dart';
 /// - Bottom navigation matching S-Match visual system with Map selected.
 class FindCourtsMapScreen extends ConsumerStatefulWidget {
   final VoidCallback? onFindPlayers;
+  final bool startWithPlayers;
+  final VoidCallback? onSwitchToCourts;
+  final ValueChanged<NearbyPlayer>? onPlayerDetail;
+  final double initialMapZoom;
+  final bool centerOnFirstCourt;
   final VoidCallback? onCourtPreview;
+  final ValueChanged<CourtLocation>? onSelectCourtPreview;
   final VoidCallback? onNavigateHome;
   final VoidCallback? onNavigateProfile;
   final VoidCallback? onNavigateMatch;
@@ -31,7 +37,13 @@ class FindCourtsMapScreen extends ConsumerStatefulWidget {
   const FindCourtsMapScreen({
     super.key,
     this.onFindPlayers,
+    this.startWithPlayers = false,
+    this.onSwitchToCourts,
+    this.onPlayerDetail,
+    this.initialMapZoom = 14,
+    this.centerOnFirstCourt = true,
     this.onCourtPreview,
+    this.onSelectCourtPreview,
     this.onNavigateHome,
     this.onNavigateProfile,
     this.onNavigateMatch,
@@ -46,6 +58,10 @@ class FindCourtsMapScreen extends ConsumerStatefulWidget {
 enum _SheetSnapState { collapsed, halfExpanded, expanded }
 
 class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
+  late bool _playersMode = widget.startWithPlayers;
+  late bool _playersOpened = widget.startWithPlayers;
+  final _playersKey = GlobalKey<PlayerDiscoveryOverlayState>();
+  List<NearbyPlayer> _visiblePlayers = const [];
   // --- UI States (Initial prototype values from Figma collection) ---
   bool _selection = true; // Sky Badminton bubble selected by default
   CourtLocation? _selectedCourt;
@@ -103,7 +119,9 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
   bool _hasCentered = false;
   void _centerOnFirstCourt() {
     final court = _currentCourt;
-    if (_hasCentered ||
+    if (_playersMode ||
+        !widget.centerOnFirstCourt ||
+        _hasCentered ||
         _courtMapController == null ||
         court == null ||
         !court.hasCoordinates) {
@@ -138,7 +156,9 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
 
   void _openCourtPreview() {
     if (_currentCourt == null) return;
-    if (widget.onCourtPreview != null) {
+    if (widget.onSelectCourtPreview != null) {
+      widget.onSelectCourtPreview!(_currentCourt!);
+    } else if (widget.onCourtPreview != null) {
       widget.onCourtPreview!();
     } else {
       Navigator.of(context)
@@ -155,16 +175,29 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
   }
 
   void _openPlayers() {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (widget.onFindPlayers != null) {
       widget.onFindPlayers!();
-    } else {
-      Navigator.of(context).push(
-        explorationRoute<void>(const FindPlayersMapScreen(), '/find-players'),
-      );
+      return;
     }
+    setState(() {
+      _playersMode = true;
+      _playersOpened = true;
+      _hasCentered = true;
+    });
+  }
+
+  void _showCourts() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (widget.onSwitchToCourts != null) {
+      widget.onSwitchToCourts!();
+      return;
+    }
+    setState(() => _playersMode = false);
   }
 
   void _dismissOverlays() {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (_selection || _searchOpen || _filtersOpen || _layersOpen) {
       setState(() {
         _selection = false;
@@ -192,6 +225,7 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
       if (next.hasValue) _centerOnFirstCourt();
     });
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: const Color(0xFFFAFBF9),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -232,16 +266,32 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
                 child: _buildMapViewport(screenWidth, mapHeight),
               ),
 
+              if (_playersOpened)
+                Positioned.fill(
+                  child: Offstage(
+                    offstage: !_playersMode,
+                    child: PlayerDiscoveryOverlay(
+                      key: _playersKey,
+                      onFindCourts: _showCourts,
+                      onPlayerDetail: widget.onPlayerDetail,
+                      onRecenter: () => _courtMapController?.recenter(),
+                      onVisiblePlayersChanged: (players) {
+                        if (mounted) setState(() => _visiblePlayers = players);
+                      },
+                    ),
+                  ),
+                ),
               // LAYER 2: FLOATING HEADER (Segmented control, Search, Quick filters)
-              Positioned(
-                left: 0,
-                top: 0,
-                width: screenWidth,
-                child: _buildFloatingHeader(screenWidth),
-              ),
+              if (!_playersMode)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  width: screenWidth,
+                  child: _buildFloatingHeader(screenWidth),
+                ),
 
               // LAYER 3A: MAP CONTROLS (Location & Layers buttons)
-              if (_sheetState != _SheetSnapState.expanded)
+              if (!_playersMode && _sheetState != _SheetSnapState.expanded)
                 Positioned(
                   right: 16,
                   bottom: navHeight + sheetHeight + 16,
@@ -249,13 +299,14 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
                 ),
 
               // LAYER 3B: NEARBY COURTS BOTTOM SHEET
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: navHeight,
-                height: sheetHeight,
-                child: _buildNearbyCourtsSheet(screenWidth, sheetHeight),
-              ),
+              if (!_playersMode)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: navHeight,
+                  height: sheetHeight,
+                  child: _buildNearbyCourtsSheet(screenWidth, sheetHeight),
+                ),
 
               // LAYER 4: FIXED BOTTOM NAVIGATION (0, screenHeight - 84, width, 84)
               Positioned(
@@ -273,7 +324,7 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
               ),
 
               // LAYER 5: CONDITIONAL PANELS
-              if (_searchOpen)
+              if (!_playersMode && _searchOpen)
                 Positioned(
                   left: (screenWidth - 353) / 2,
                   top: 220,
@@ -281,7 +332,7 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
                   child: _buildSearchPanel(),
                 ),
 
-              if (_filtersOpen)
+              if (!_playersMode && _filtersOpen)
                 Positioned(
                   left: (screenWidth - 353) / 2,
                   top: 220,
@@ -289,7 +340,7 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
                   child: _buildFiltersPanel(),
                 ),
 
-              if (_layersOpen)
+              if (!_playersMode && _layersOpen)
                 Positioned(
                   right: 20,
                   top: 360,
@@ -311,12 +362,21 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
       width: viewportWidth,
       height: viewportHeight,
       child: CourtMapLibreMap(
+        initialZoom: widget.initialMapZoom,
         courts: _courts,
+        players: _visiblePlayers,
+        showPlayers: _playersMode,
+        onPlayerSelected: (player) =>
+            _playersKey.currentState?.showPlayerPreview(player),
         selectedCourt: _currentCourt,
-        showPins: _pins,
-        showAccuracy: _accuracy && _courts.any((court) => court.demo),
+        showPins: _pins && !_playersMode,
+        showAccuracy:
+            _accuracy &&
+            (_playersMode
+                ? _visiblePlayers.any((p) => p.demo)
+                : _courts.any((court) => court.demo)),
         showCluster: _cluster,
-        showSelection: _selection,
+        showSelection: _selection && !_playersMode,
         onMapReady: (controller) {
           _courtMapController = controller;
           _centerOnFirstCourt();
@@ -608,7 +668,30 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
   Widget _buildMapControls() {
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
+        if (_sheetState == _SheetSnapState.collapsed) ...[
+          Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Zoom in',
+                  onPressed: () => _courtMapController?.zoomIn(),
+                  icon: const Icon(Icons.add, color: Color(0xFF05644F)),
+                ),
+                IconButton(
+                  tooltip: 'Zoom out',
+                  onPressed: () => _courtMapController?.zoomOut(),
+                  icon: const Icon(Icons.remove, color: Color(0xFF05644F)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
         // Current location button
         GestureDetector(
           key: const Key('find_courts_location_button'),

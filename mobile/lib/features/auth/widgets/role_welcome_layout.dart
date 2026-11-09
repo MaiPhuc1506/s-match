@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion_widgets.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -153,12 +155,27 @@ class RoleWelcomeLayout extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _buildHero(context, width, headerHeight, heroScale),
+                      AppReveal(
+                        id: 'welcome-hero',
+                        down: true,
+                        child: _buildHero(
+                          context,
+                          width,
+                          headerHeight,
+                          heroScale,
+                        ),
+                      ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: Column(
                           children: [
-                            _IconBadge(asset: _roleIcon, diameter: 64),
+                            _IconBadge(
+                              asset: _roleIcon,
+                              diameter: 64,
+                              background: role == WelcomeRole.player
+                                  ? const Color(0xFFEAF6EF)
+                                  : AppColors.roleSelectedCard,
+                            ),
                             const SizedBox(height: 3),
                             Text(
                               _title,
@@ -190,7 +207,11 @@ class RoleWelcomeLayout extends StatelessWidget {
                           children: [
                             for (var i = 0; i < _features.length; i++) ...[
                               if (i > 0) const SizedBox(height: 8),
-                              _buildFeature(_features[i]),
+                              AppReveal(
+                                id: 'welcome-feature-$i',
+                                delay: 90 * (i + 1),
+                                child: _buildFeature(_features[i]),
+                              ),
                             ],
                           ],
                         ),
@@ -210,7 +231,7 @@ class RoleWelcomeLayout extends StatelessWidget {
                           24,
                           0,
                           24,
-                          math.max(28, media.padding.bottom),
+                          math.max(28.0, media.padding.bottom - 6),
                         ),
                         child: PrimaryButton(
                           text: 'Continue',
@@ -336,7 +357,13 @@ class RoleWelcomeLayout extends StatelessWidget {
   Widget _buildFeature(_WelcomeFeature feature) => Row(
     crossAxisAlignment: CrossAxisAlignment.center,
     children: [
-      _IconBadge(asset: feature.asset, diameter: 44),
+      _IconBadge(
+        asset: feature.asset,
+        diameter: 44,
+        background: role == WelcomeRole.player
+            ? const Color(0xFFEAF6EF)
+            : AppColors.roleSelectedCard,
+      ),
       const SizedBox(width: 12),
       Expanded(
         child: ConstrainedBox(
@@ -363,18 +390,20 @@ class RoleWelcomeLayout extends StatelessWidget {
 }
 
 class _IconBadge extends StatelessWidget {
-  const _IconBadge({required this.asset, required this.diameter});
+  const _IconBadge({
+    required this.asset,
+    required this.diameter,
+    this.background = AppColors.roleSelectedCard,
+  });
   final String asset;
   final double diameter;
+  final Color background;
 
   @override
   Widget build(BuildContext context) => Container(
     width: diameter,
     height: diameter,
-    decoration: const BoxDecoration(
-      color: AppColors.roleSelectedCard,
-      shape: BoxShape.circle,
-    ),
+    decoration: BoxDecoration(color: background, shape: BoxShape.circle),
     child: Center(child: SvgPicture.asset(asset, excludeFromSemantics: true)),
   );
 }

@@ -1,3 +1,4 @@
+import '../../../core/theme/app_motion_widgets.dart';
 import '../../../core/theme/app_motion.dart';
 
 import 'package:flutter/material.dart';
@@ -281,7 +282,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
 
   Widget _buildProfileContent(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 24),
-    child: Column(
+    child: AppStaggeredColumn(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildProfileHeader(context),

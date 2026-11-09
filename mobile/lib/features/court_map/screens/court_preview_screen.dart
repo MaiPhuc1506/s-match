@@ -42,6 +42,16 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
       widget.onViewCourts!();
       return;
     }
+    if (widget.location?.demo == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Sân minh họa không thể đặt qua API thật. Hãy chọn cơ sở đã đăng ký trên Map.',
+          ),
+        ),
+      );
+      return;
+    }
     if (widget.location != null) {
       Navigator.of(context).push(
         explorationRoute<void>(

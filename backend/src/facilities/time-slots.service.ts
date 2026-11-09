@@ -4,7 +4,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { vietnamDay } from '../bookings/booking-time';
+import { BookingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OperatingHoursService } from './operating-hours.service';
 import { CreateTimeSlotDto, UpdateTimeSlotDto } from './dto/time-slot.dto';
@@ -33,21 +34,30 @@ export class TimeSlotsService {
     );
   }
 
-  /**
-   * Trả về các khung giờ (kèm giá) của sân cho một ngày cụ thể, dựa trên
-   * dayOfWeek suy ra từ `date`. CHƯA đối chiếu với bảng Booking (SMM-18 chưa
-   * tồn tại tại thời điểm ticket này được làm) — SMM-18 nên mở rộng hàm này
-   * (hoặc gọi thêm) để đánh dấu `isBooked` cho từng slot khi Booking model
-   * đã có.
-   */
+  // Prices are weekly templates; occupancy is resolved for Vietnam's calendar day.
   async getAvailabilityForDate(facilityId: number, courtId: number, date: string) {
-    await this.assertCourtBelongsToFacility(facilityId, courtId);
-
-    const dayOfWeek = new Date(date).getUTCDay();
-    return this.prisma.timeSlot.findMany({
-      where: { courtId, dayOfWeek, isActive: true },
-      orderBy: { startTime: 'asc' },
-    });
+    const day = vietnamDay(date);
+    const court = await this.assertCourtBelongsToFacility(facilityId, courtId);
+    if (court.status !== 'ACTIVE') return [];
+    const [slots, bookings] = await Promise.all([
+      this.prisma.timeSlot.findMany({
+        where: { courtId, dayOfWeek: day.dayOfWeek, isActive: true },
+        orderBy: { startTime: 'asc' },
+      }),
+      this.prisma.booking.findMany({
+        where: { courtId, status: { in: [BookingStatus.PENDING, BookingStatus.CONFIRMED] },
+          startTime: { lt: day.end }, endTime: { gt: day.start } },
+        select: { startTime: true, endTime: true },
+      }),
+    ]);
+    const result = [];
+    for (const slot of slots) {
+      if (!await this.operatingHoursService.isWithinOperatingHours(facilityId, day.dayOfWeek, slot.startTime, slot.endTime)) continue;
+      const start = new Date(`${date}T${slot.startTime}:00+07:00`);
+      const end = new Date(`${date}T${slot.endTime}:00+07:00`);
+      result.push({ ...slot, isBooked: bookings.some((b) => b.startTime < end && b.endTime > start) });
+    }
+    return result;
   }
 
   async create(ownerId: number, facilityId: number, courtId: number, dto: CreateTimeSlotDto) {

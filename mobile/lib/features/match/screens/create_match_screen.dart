@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion_widgets.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -72,7 +74,7 @@ class _CreateMatchScreenState extends State<CreateMatchScreen> {
                   horizontal: 24,
                   vertical: _isOpenMatch ? 12 : 24,
                 ),
-                child: Column(
+                child: AppStaggeredColumn(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // 2.1 Open / Private Match Selector (345 × 34)

@@ -1,3 +1,7 @@
+import '../../features/player_experience/screens/player_home_screen.dart';
+import '../../features/player_experience/screens/courts_screens.dart';
+import '../../features/player_experience/screens/learning_screens.dart';
+import '../../features/player_experience/screens/shop_screens.dart';
 import '../../features/feedback/screens/match_completed_screen.dart';
 import '../../features/feedback/screens/feedback_form_screen.dart';
 import '../../features/feedback/screens/rating_history_screen.dart';
@@ -83,6 +87,49 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
   String _selectedCategory = 'Tất cả';
 
   late final List<_DevScreenItem> _allScreens = [
+    _DevScreenItem(
+      title: 'Player Home',
+      category: 'Sprint 10',
+      description: 'Shared demo catalogue and existing Player navigation',
+      builder: (_) => const PlayerHomeScreen(),
+    ),
+    _DevScreenItem(
+      title: 'Explore Courts',
+      category: 'Sprint 10',
+      description: '10 demo facilities',
+      builder: (_) => const ExploreCourtsScreen(),
+    ),
+    _DevScreenItem(
+      title: 'Registered Courts Map',
+      category: 'Sprint 10',
+      description: 'MapLibre · registered S-Match facilities',
+      builder: (_) => const DemoCourtsMapScreen(),
+    ),
+    _DevScreenItem(
+      title: 'Court Detail',
+      category: 'Sprint 10',
+      description: 'Info, pricing, images, reviews and rules',
+      builder: (_) => const DemoCourtDetailScreen(facilityId: -1001),
+    ),
+    _DevScreenItem(
+      title: 'Coaching & Courses',
+      category: 'Sprint 10',
+      description: 'Coach and course details',
+      builder: (_) => const LearningScreen(),
+    ),
+    _DevScreenItem(
+      title: 'Tips & Tricks',
+      category: 'Sprint 10',
+      description: 'Practice guides; videos deferred',
+      builder: (_) => const LearningScreen(tips: true),
+    ),
+    _DevScreenItem(
+      title: 'Shop Directory',
+      category: 'Sprint 10',
+      description: 'Contact directory; no checkout',
+      builder: (_) => const ShopDirectoryScreen(),
+    ),
+
     for (final role in DashboardRole.values)
       for (var tab = 0; tab < 4; tab++)
         _DevScreenItem(

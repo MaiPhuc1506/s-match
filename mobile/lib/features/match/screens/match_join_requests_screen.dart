@@ -1,4 +1,6 @@
+import '../../../core/theme/app_motion_widgets.dart';
 import '../../../core/theme/app_motion.dart';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -109,7 +111,7 @@ class MatchJoinRequestsScreen extends StatelessWidget {
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
-                child: Column(
+                child: AppStaggeredColumn(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(

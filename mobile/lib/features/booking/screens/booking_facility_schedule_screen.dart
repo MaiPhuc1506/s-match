@@ -12,11 +12,13 @@ enum SlotStatus { available, booked, locked, event }
 class BookingFacilityScheduleScreen extends StatefulWidget {
   final VoidCallback? onContinue;
   final int? facilityId;
+  final int? courtId;
 
   const BookingFacilityScheduleScreen({
     super.key,
     this.onContinue,
     this.facilityId,
+    this.courtId,
   });
 
   @override
@@ -158,7 +160,10 @@ class _BookingFacilityScheduleScreenState
   @override
   Widget build(BuildContext context) {
     if (widget.facilityId != null) {
-      return LiveFacilitySchedule(facilityId: widget.facilityId!);
+      return LiveFacilitySchedule(
+        facilityId: widget.facilityId!,
+        initialCourtId: widget.courtId,
+      );
     }
     return Scaffold(
       backgroundColor: BookingColors.background,
@@ -169,6 +174,7 @@ class _BookingFacilityScheduleScreenState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildTopBar(context),
+              const Text('UI preview · No real court is reserved.'),
               const SizedBox(height: 16),
               _buildHeroSection(),
               const SizedBox(height: 14),
@@ -833,6 +839,7 @@ class _BookingFacilityScheduleScreenState
             Navigator.of(context).push(
               AppMotion.route(
                 BookingSummaryScreen(
+                  demo: true,
                   courtName: _courts[_selectedCourtIndex],
                   timeRange:
                       '${_timeSlots[_selectedSlotIndex]} – ${_timeSlots[_selectedSlotIndex + 1 < _timeSlots.length ? _selectedSlotIndex + 1 : _selectedSlotIndex]}',

@@ -8,7 +8,9 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { OperatingHoursService } from '../facilities/operating-hours.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
-import { BookingStatus } from '@prisma/client';
+import { GetAnalyticsQueryDto } from '../analytics/dto/get-analytics-query.dto';
+import { vietnamTime } from './booking-time';
+import { BookingStatus, Prisma } from '@prisma/client';
 
 export const DEFAULT_HOURLY_PRICE = 80000;
 
@@ -16,17 +18,6 @@ export function calculateBookingPrice(start: Date, end: Date, hourlyPrice = DEFA
   const durationMs = end.getTime() - start.getTime();
   const durationHours = durationMs / (1000 * 60 * 60);
   return Math.round(durationHours * hourlyPrice);
-}
-
-function extractTimeAndDay(isoString: string, date: Date): { dayOfWeek: number; timeStr: string } {
-  const tIndex = isoString.indexOf('T');
-  if (tIndex !== -1) {
-    const timePart = isoString.substring(tIndex + 1, tIndex + 6);
-    return { dayOfWeek: date.getUTCDay(), timeStr: timePart };
-  }
-  const hours = date.getUTCHours().toString().padStart(2, '0');
-  const minutes = date.getUTCMinutes().toString().padStart(2, '0');
-  return { dayOfWeek: date.getUTCDay(), timeStr: `${hours}:${minutes}` };
 }
 
 @Injectable()
@@ -59,14 +50,18 @@ export class BookingsService {
     }
 
     // Đơn đặt sân phải nằm trong cùng 1 ngày
-    if (start.toISOString().slice(0, 10) !== end.toISOString().slice(0, 10)) {
+    if (vietnamTime(start).date !== vietnamTime(end).date) {
       throw new BadRequestException('Đơn đặt sân phải diễn ra trong cùng một ngày');
+    }
+
+    if (start.getUTCSeconds() || end.getUTCSeconds() || start.getUTCMilliseconds() || end.getUTCMilliseconds()) {
+      throw new BadRequestException('Thời gian đặt sân phải theo phút tròn');
     }
 
     // 2. Sử dụng Prisma Transaction có Row Lock (pessimistic lock) để đảm bảo an toàn đồng thời
     return this.prisma.$transaction(async (tx) => {
       // Khóa bản ghi Court để tuần tự hóa các request đặt cùng sân này
-      await tx.$executeRaw`SELECT id FROM "Court" WHERE id = ${dto.courtId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM "Court" WHERE id = ${dto.courtId} FOR UPDATE`;
 
       // Kiểm tra sân có tồn tại và đang hoạt động không
       const court = await tx.court.findUnique({
@@ -76,19 +71,23 @@ export class BookingsService {
       if (!court) {
         throw new NotFoundException(`Không tìm thấy sân với ID ${dto.courtId}`);
       }
+      if (dto.facilityId !== undefined && court.facilityId !== dto.facilityId) {
+        throw new BadRequestException('Sân không thuộc cơ sở đã chọn');
+      }
       if (court.status !== 'ACTIVE') {
         throw new BadRequestException('Sân hiện đang bảo trì hoặc ngừng hoạt động');
       }
 
       // 3. Kiểm tra giờ hoạt động của cơ sở
-      const startInfo = extractTimeAndDay(dto.startTime, start);
-      const endInfo = extractTimeAndDay(dto.endTime, end);
+      const startInfo = vietnamTime(start);
+      const endInfo = vietnamTime(end);
 
       const isWithinHours = await this.operatingHoursService.isWithinOperatingHours(
         court.facilityId,
         startInfo.dayOfWeek,
-        startInfo.timeStr,
-        endInfo.timeStr,
+        startInfo.time,
+        endInfo.time,
+        tx,
       );
 
       if (!isWithinHours) {
@@ -112,7 +111,23 @@ export class BookingsService {
       }
 
       // 5. Giá được tính toán an toàn phía server
-      const totalPrice = calculateBookingPrice(start, end);
+      const configured = await tx.timeSlot.findMany({
+        where: { courtId: dto.courtId, dayOfWeek: startInfo.dayOfWeek, isActive: true,
+          startTime: { gte: startInfo.time }, endTime: { lte: endInfo.time } },
+        orderBy: { startTime: 'asc' },
+      });
+      let cursor = startInfo.time;
+      let totalPrice = 0;
+      for (const slot of configured) {
+        if (slot.startTime !== cursor || slot.endTime <= cursor || !Number.isFinite(slot.price) || slot.price < 0) {
+          throw new BadRequestException('Khung giờ đặt sân chưa có giá hợp lệ');
+        }
+        totalPrice += slot.price; // TimeSlot.price is the price of the entire slot.
+        cursor = slot.endTime;
+      }
+      if (!configured.length || cursor !== endInfo.time) {
+        throw new BadRequestException('Khung giờ chưa được cấu hình hoặc đã ngừng nhận đặt');
+      }
 
       // 6. Tạo Booking
       return tx.booking.create({
@@ -133,7 +148,7 @@ export class BookingsService {
           },
         },
       });
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
   }
 
   async findMyBookings(userId: number) {
@@ -146,6 +161,29 @@ export class BookingsService {
             facility: true,
           },
         },
+      },
+    });
+  }
+
+  async findOwnerBookings(ownerId: number, query: GetAnalyticsQueryDto) {
+    const start = query.startDate ? new Date(query.startDate) : undefined;
+    const end = query.endDate ? new Date(query.endDate) : undefined;
+    if (start && end && start >= end) throw new BadRequestException('Khoảng thời gian không hợp lệ');
+    if (query.facilityId !== undefined) {
+      const facility = await this.prisma.facility.findUnique({ where: { id: query.facilityId } });
+      if (!facility) throw new NotFoundException('Không tìm thấy cơ sở');
+      if (facility.ownerId !== ownerId) throw new ForbiddenException('Cơ sở không thuộc quyền quản lý của bạn');
+    }
+    return this.prisma.booking.findMany({
+      where: {
+        court: { facility: { ownerId, ...(query.facilityId !== undefined && { id: query.facilityId }) } },
+        ...(start && { endTime: { gt: start } }),
+        ...(end && { startTime: { lt: end } }),
+      },
+      orderBy: { startTime: 'asc' },
+      include: {
+        court: { include: { facility: true } },
+        user: { select: { id: true, fullName: true } },
       },
     });
   }

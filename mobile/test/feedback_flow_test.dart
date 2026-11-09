@@ -46,6 +46,62 @@ void main() {
     expect(() => repo.submit('other', [entries.first]), throwsArgumentError);
   });
 
+  test('demo comments have distinct content, dates and a consistent rating summary', () {
+    final repo = FeedbackRepository();
+    expect(repo.received.length, 3);
+    expect(repo.given.length, 3);
+    expect(repo.received.map((e) => e.review).toSet().length, 3);
+    expect(repo.given.map((e) => e.review).toSet().length, 3);
+    expect(repo.received.map((e) => e.stars).toSet(), {4, 5});
+    expect(
+      repo.received.every(
+        (e) => e.createdAt != null && e.matchTitle != null && e.tags.isNotEmpty,
+      ),
+      true,
+    );
+    expect(repo.previewAverageLabel, '4.7');
+    expect(repo.previewMatchCount, 2);
+    expect(FeedbackRepository(withSamples: false).given, isEmpty);
+    expect(FeedbackRepository(withSamples: false).received, isEmpty);
+  });
+
+  testWidgets('Received and Given show labelled sample feedback and metadata', (
+    tester,
+  ) async {
+    final repo = FeedbackRepository();
+    await mount(tester, RatingHistoryScreen(repository: repo));
+    expect(find.text('Demo feedback · Not saved to server'), findsOneWidget);
+    expect(find.text('4.7'), findsOneWidget);
+    expect(find.text('3 ratings · 2 matches'), findsOneWidget);
+    expect(find.text(repo.received.first.review), findsOneWidget);
+    expect(find.text('Saturday Rally · 31/10'), findsOneWidget);
+    await tester.tap(find.text('Given'));
+    await tester.pumpAndSettle();
+    expect(find.text('To Minh'), findsOneWidget);
+    expect(find.text(repo.given.first.review), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'Live Feedback opens demo explicitly and Back preserves the empty live history',
+    (tester) async {
+      final live = _EmptyLiveFeedback();
+      await mount(tester, RatingHistoryScreen(repository: live));
+      expect(find.text('Demo feedback · Not saved to server'), findsNothing);
+      expect(live.received, isEmpty);
+      await tester.tap(find.text('View demo feedback'));
+      await tester.pumpAndSettle();
+      expect(find.text('Demo feedback · Not saved to server'), findsOneWidget);
+      expect(find.text('4.7'), findsOneWidget);
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      expect(find.text('View demo feedback'), findsOneWidget);
+      expect(find.text('Demo feedback · Not saved to server'), findsNothing);
+      expect(live.received, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'completed -> form, requires all ratings, sends once and shows history',
     (tester) async {
@@ -143,4 +199,10 @@ void main() {
       },
     );
   }
+}
+
+class _EmptyLiveFeedback extends FeedbackRepository {
+  _EmptyLiveFeedback() : super(withSamples: false);
+  @override
+  bool get live => true;
 }
