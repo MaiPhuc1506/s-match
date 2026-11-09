@@ -1,0 +1,139 @@
+path	classification	logical_commit_group	review_reason
+README.md	C	2	Portable entry to baseline handoff; corrects plain-PostgreSQL Compose description.
+backend/.dockerignore	B	2	Excludes local environment variants and private-key file patterns from Docker context.
+backend/.gitignore	B	2	Retains both ignore-rule sets while removing committed conflict markers.
+backend/.nvmrc	B	2	Pins the supported Node major for developer onboarding.
+backend/Dockerfile	B	2	Node 24 build/runtime and correct dist/src/main.js entrypoint; keep with package script.
+backend/package.json	B	2	Corrects production start command only; no dependency upgrade or backend lock change.
+backend/src/bookings/booking-time.ts	A	1	Required new helper for Vietnam business-day/time consistency in Booking and availability.
+backend/src/bookings/bookings.controller.ts	A	1	P0.1 scoped booking/availability implementation or paired regression tests; requires booking-time helper and server-owned pricing/identity.
+backend/src/bookings/bookings.integration.live.spec.ts	A+F	1	Opt-in real-DB regression coverage; can write/delete its test fixtures when enabled, so never run as ordinary baseline tests.
+backend/src/bookings/bookings.service.spec.ts	A	1	P0.1 scoped booking/availability implementation or paired regression tests; requires booking-time helper and server-owned pricing/identity.
+backend/src/bookings/bookings.service.ts	A	1	P0.1 scoped booking/availability implementation or paired regression tests; requires booking-time helper and server-owned pricing/identity.
+backend/src/bookings/dto/create-booking.dto.ts	A	1	P0.1 scoped booking/availability implementation or paired regression tests; requires booking-time helper and server-owned pricing/identity.
+backend/src/facilities/operating-hours.service.ts	A	1	P0.1 scoped booking/availability implementation or paired regression tests; requires booking-time helper and server-owned pricing/identity.
+backend/src/facilities/time-slots.service.spec.ts	A	1	P0.1 scoped booking/availability implementation or paired regression tests; requires booking-time helper and server-owned pricing/identity.
+backend/src/facilities/time-slots.service.ts	A	1	P0.1 scoped booking/availability implementation or paired regression tests; requires booking-time helper and server-owned pricing/identity.
+backend/test/jest-e2e.json	B	2	Relative .js-to-TypeScript source mapping; discovery only was checked without DB E2E.
+docs/audits/FINAL-SPRINT-COMPLETION-SCORECARD.md	C+F	2	Historical audit/backlog snapshot: some test counts, machine-local links and contract claims need contextual lead review; not proof of current completion.
+docs/audits/FINAL-SPRINT-EXECUTION-BACKLOG.md	C+F	2	Historical audit/backlog snapshot: some test counts, machine-local links and contract claims need contextual lead review; not proof of current completion.
+docs/audits/FINAL-SPRINT-REQUIREMENT-MATRIX.md	C+F	2	Historical audit/backlog snapshot: some test counts, machine-local links and contract claims need contextual lead review; not proof of current completion.
+docs/audits/P0.1-BOOKING-INTEGRATION.md	C	2	Handoff/review evidence or exact path manifest; no executable implementation.
+docs/audits/S-MATCH-FINAL-SPRINT-BACKLOG.md	C+F	2	Historical audit/backlog snapshot: some test counts, machine-local links and contract claims need contextual lead review; not proof of current completion.
+docs/audits/S-MATCH-FINAL-SPRINT-READINESS.md	C+F	2	Historical audit/backlog snapshot: some test counts, machine-local links and contract claims need contextual lead review; not proof of current completion.
+docs/audits/S-MATCH-VERIFICATION-REPORT.md	C+F	2	Historical audit/backlog snapshot: some test counts, machine-local links and contract claims need contextual lead review; not proof of current completion.
+docs/baseline/COMMIT-GROUP-1-IMPLEMENTATION.txt	C	2	Handoff/review evidence or exact path manifest; no executable implementation.
+docs/baseline/COMMIT-GROUP-2-SETUP-DOCS.txt	C	2	Handoff/review evidence or exact path manifest; no executable implementation.
+docs/baseline/FINAL-PRECOMMIT-REVIEW.md	C	2	Handoff/review evidence or exact path manifest; no executable implementation.
+docs/baseline/PRECOMMIT-CLASSIFICATION.tsv	C	2	Handoff/review evidence or exact path manifest; no executable implementation.
+docs/baseline/SHARED-FINAL-SPRINT-BASELINE.md	C	2	Handoff/review evidence or exact path manifest; no executable implementation.
+docs/baseline/WORKTREE-PRESERVATION.md	C	2	Handoff/review evidence or exact path manifest; no executable implementation.
+matchmaking/.dockerignore	B	2	Excludes local environment variants and private-key file patterns from Docker context.
+mobile/assets/icons/welcome_player_progress.svg	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/courts/an_hai.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/courts/an_khe.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/courts/cam_le.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/courts/hai_chau.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/courts/hoa_cuong.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/courts/hoa_khanh.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/courts/hoa_xuan.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/courts/ngu_hanh_son.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/courts/son_tra.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/courts/thanh_khe.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/icons/bag.svg	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/icons/bell.svg	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/icons/book.svg	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/icons/cap.svg	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/icons/pin.svg	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/icons/search.svg	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/icons/shuttle.svg	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/icons/users.svg	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/learning/badminton_shoes.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/learning/coach_lan.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/learning/coach_minh.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/learning/footwork_training.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/learning/net_play.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/learning/replacement_grips.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/learning/shuttlecocks.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/learning/smash_technique.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/learning/training_course.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint10/learning/training_racket.png	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint9/owner_today_calendar.svg	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/assets/sprint9/owner_today_chevron.svg	A	1	Source UI asset: PNG decoded/visually checked or SVG XML checked; required by registered assets/catalog, not generated build output.
+mobile/ios/Runner.xcodeproj/project.pbxproj	B	2	MapLibre requires target-level iOS 15.5; prerequisite for native build, apply setup group first.
+mobile/ios/Runner/AppDelegate.swift	A+F	1	Simulator-only native pinch bridge; native build verified previously; manual gesture QA remains with Member 1.
+mobile/lib/core/theme/app_motion_widgets.dart	A	1	Required shared route/viewport reveal and pointer feedback widgets; reduced-motion behavior has tests.
+mobile/lib/dev/presentation/dev_screen_explorer.dart	A+F	1	Registers explicit Sprint 10 demo screens; requires new player_experience modules; not proof of live feature completion.
+mobile/lib/dev/presentation/dev_testing_hub.dart	A+F	1	Changes Player quick-login destination to welcome/Home; lead must accept demo Home as baseline landing.
+mobile/lib/features/auth/screens/create_account_screen.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/auth/screens/forgot_password_screen.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/auth/screens/login_screen.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/auth/screens/player_profile_screen.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/auth/screens/player_welcome_screen.dart	A+F	1	Player Continue now opens new demo Home; coupled to Home source, navigation, assets and tests.
+mobile/lib/features/auth/widgets/auth_header.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/auth/widgets/primary_button.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/auth/widgets/role_welcome_layout.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/auth/widgets/social_button.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/auth/widgets/sprint2_presentation.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/booking/screens/booking_detail_screen.dart	A	1	Coherent P0.1 live booking plus explicit preview/session-only paths and shared motion; include all paired screens/services/tests.
+mobile/lib/features/booking/screens/booking_facility_schedule_screen.dart	A	1	Coherent P0.1 live booking plus explicit preview/session-only paths and shared motion; include all paired screens/services/tests.
+mobile/lib/features/booking/screens/booking_flow_screen.dart	A	1	Coherent P0.1 live booking plus explicit preview/session-only paths and shared motion; include all paired screens/services/tests.
+mobile/lib/features/booking/screens/booking_history_screen.dart	A	1	Coherent P0.1 live booking plus explicit preview/session-only paths and shared motion; include all paired screens/services/tests.
+mobile/lib/features/booking/screens/booking_success_screen.dart	A	1	Coherent P0.1 live booking plus explicit preview/session-only paths and shared motion; include all paired screens/services/tests.
+mobile/lib/features/booking/screens/booking_summary_screen.dart	A	1	Coherent P0.1 live booking plus explicit preview/session-only paths and shared motion; include all paired screens/services/tests.
+mobile/lib/features/booking/services/live_booking_service.dart	A	1	Coherent P0.1 live booking plus explicit preview/session-only paths and shared motion; include all paired screens/services/tests.
+mobile/lib/features/booking/widgets/live_facility_schedule.dart	A	1	Coherent P0.1 live booking plus explicit preview/session-only paths and shared motion; include all paired screens/services/tests.
+mobile/lib/features/court_map/exploration_data.dart	A+F	1	Real facility/discovery adapters and explicit public-area fixture model; backend consent/availableNow contracts remain backlog.
+mobile/lib/features/court_map/screens/court_preview_screen.dart	A	1	Blocks demo locations from live booking while preserving selected facility identity.
+mobile/lib/features/court_map/screens/find_courts_map_screen.dart	A+F	1	Registered facility Map and shared Players overlay; real Home catalogue sync and device E2E remain incomplete.
+mobile/lib/features/court_map/screens/find_players_map_screen.dart	A+F	1	Real nearby-player list, filters and honest scoreless preview; real markers need permitted public-area API data.
+mobile/lib/features/court_map/widgets/court_maplibre_map.dart	A+F	1	Native layer/camera/gesture integration depends on both new native-layer helpers and native QA.
+mobile/lib/features/court_map/widgets/native_court_layers.dart	A	1	New non-draggable native facility pins/clusters; required by changed map widget and tests.
+mobile/lib/features/court_map/widgets/native_player_layers.dart	A+F	1	Only emits permitted public-area features; live adapter currently supplies no such coordinates, intentionally leaving real markers absent.
+mobile/lib/features/dashboard/data/dashboard_repository.dart	A	1	Adds dated Owner booking feed; existing analytics/session checks and explicit preview fixtures preserved.
+mobile/lib/features/dashboard/screens/dashboard_screen.dart	A+F	1	Live Owner cards/feed work; detail still displays labelled preview date/contact, and live 2D grid is incomplete.
+mobile/lib/features/dashboard/widgets/dashboard_assets.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/dashboard/widgets/dashboard_widgets.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/facility/screens/add_edit_court_screen.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/facility/screens/facility_detail_screen.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/facility/screens/operating_hours_screen.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/facility/widgets/facility_card.dart	A	1	Reviewed UI/motion styling or supporting asset mapping; requires shared motion helper; no new API behavior.
+mobile/lib/features/feedback/data/feedback_repository.dart	A+F	1	Completed labelled sample-feedback UI changes; shared DB migrations and live feedback E2E remain incomplete.
+mobile/lib/features/feedback/screens/rating_history_screen.dart	A+F	1	Completed labelled sample-feedback UI changes; shared DB migrations and live feedback E2E remain incomplete.
+mobile/lib/features/feedback/widgets/feedback_widgets.dart	A+F	1	Completed labelled sample-feedback UI changes; shared DB migrations and live feedback E2E remain incomplete.
+mobile/lib/features/match/screens/create_match_screen.dart	A+F	1	Motion/layout changes to existing Match UI; existing mock/live workflow gaps remain assigned to Final Sprint.
+mobile/lib/features/match/screens/match_detail_open_screen.dart	A+F	1	Motion/layout changes to existing Match UI; existing mock/live workflow gaps remain assigned to Final Sprint.
+mobile/lib/features/match/screens/match_invitations_screen.dart	A+F	1	Motion/layout changes to existing Match UI; existing mock/live workflow gaps remain assigned to Final Sprint.
+mobile/lib/features/match/screens/match_join_requests_screen.dart	A+F	1	Motion/layout changes to existing Match UI; existing mock/live workflow gaps remain assigned to Final Sprint.
+mobile/lib/features/match/screens/match_participant_list_screen.dart	A+F	1	Motion/layout changes to existing Match UI; existing mock/live workflow gaps remain assigned to Final Sprint.
+mobile/lib/features/match/widgets/match_card.dart	A+F	1	Motion/layout changes to existing Match UI; existing mock/live workflow gaps remain assigned to Final Sprint.
+mobile/lib/features/navigation/player_bottom_navigation.dart	A+F	1	Home tab now opens PlayerHomeScreen; do not omit new Home modules.
+mobile/lib/features/player_experience/data/demo_booking_service.dart	A+F	1	Explicit session-only demo/catalog UI; coherent baseline scaffold, not completed live Home/Catalog/AI functionality; lead acceptance required.
+mobile/lib/features/player_experience/data/demo_catalog.dart	A+F	1	Explicit session-only demo/catalog UI; coherent baseline scaffold, not completed live Home/Catalog/AI functionality; lead acceptance required.
+mobile/lib/features/player_experience/screens/courts_screens.dart	A+F	1	Explicit session-only demo/catalog UI; coherent baseline scaffold, not completed live Home/Catalog/AI functionality; lead acceptance required.
+mobile/lib/features/player_experience/screens/learning_screens.dart	A+F	1	Explicit session-only demo/catalog UI; coherent baseline scaffold, not completed live Home/Catalog/AI functionality; lead acceptance required.
+mobile/lib/features/player_experience/screens/player_home_screen.dart	A+F	1	Explicit session-only demo/catalog UI; coherent baseline scaffold, not completed live Home/Catalog/AI functionality; lead acceptance required.
+mobile/lib/features/player_experience/screens/shop_screens.dart	A+F	1	Explicit session-only demo/catalog UI; coherent baseline scaffold, not completed live Home/Catalog/AI functionality; lead acceptance required.
+mobile/lib/features/player_experience/widgets/experience_widgets.dart	A+F	1	Explicit session-only demo/catalog UI; coherent baseline scaffold, not completed live Home/Catalog/AI functionality; lead acceptance required.
+mobile/lib/features/player_experience/widgets/smash_scot.dart	A+F	1	Explicit session-only demo/catalog UI; coherent baseline scaffold, not completed live Home/Catalog/AI functionality; lead acceptance required.
+mobile/lib/features/recommendation/data/recommendation_repository.dart	A	1	Declares Riverpod dependency needed for scoped repository overrides; no algorithm change.
+mobile/lib/features/recommendation/models/recommended_player.dart	A	1	Nullable score permits honest discovery previews without invented compatibility scores; co-commit widget changes.
+mobile/lib/features/recommendation/screens/recommended_player_detail_screen.dart	A+F	1	Hides compatibility section for unknown score; direct recommended-player invitation remains incomplete.
+mobile/lib/features/recommendation/widgets/recommendation_widgets.dart	A	1	Nullable-score rendering plus shared reveal/press wrappers; coupled to model and motion helper.
+mobile/pubspec.lock	A	1	Versioned application dependency lock; includes url_launcher platform packages, not a disposable generated artifact.
+mobile/pubspec.yaml	A	1	Declares url_launcher and Sprint 10 asset directories; co-commit lock, source and all declared assets.
+mobile/test/app_motion_widgets_test.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.
+mobile/test/booking_map_integration_test.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.
+mobile/test/court_maplibre_test.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.
+mobile/test/dashboard_flow_test.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.
+mobile/test/feedback_flow_test.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.
+mobile/test/find_courts_map_screen_test.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.
+mobile/test/live_booking_test.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.
+mobile/test/map_exploration_flow_test.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.
+mobile/test/match_screens_test.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.
+mobile/test/player_bottom_navigation_test.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.
+mobile/test/player_discovery_test.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.
+mobile/test/recommendation_flow_test.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.
+mobile/test/role_welcome_screen_test.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.
+mobile/test/sprint10_experience_test.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.
+mobile/test/support/fake_court_map_platform.dart	A	1	Regression/widget test or fake native-platform adapter aligned with candidate source; does not certify real-device end-to-end behavior.

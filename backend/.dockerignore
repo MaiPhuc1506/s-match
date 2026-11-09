@@ -2,3 +2,12 @@ node_modules
 dist
 *.tsbuildinfo
 .env
+
+# Keep local secrets and credentials out of build contexts.
+.env*
+!.env.example
+**/*.pem
+**/*.key
+**/*.p12
+**/*.jks
+**/*.keystore
