@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion_widgets.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -380,7 +382,7 @@ class _RecoveryLayout extends StatelessWidget {
                   SizedBox(height: title == 'Create New Password' ? 50 : 58),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
+                    child: AppStaggeredColumn(
                       children: [
                         Container(
                           width: 88,

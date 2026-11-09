@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion_widgets.dart';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
@@ -113,13 +115,18 @@ class FeedbackCard extends StatelessWidget {
   final double padding;
   final VoidCallback? onTap;
   @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(16),
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(padding: EdgeInsets.all(padding), child: child),
+  Widget build(BuildContext context) => AppReveal(
+    child: AppPressFeedback(
+      enabled: onTap != null,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(padding: EdgeInsets.all(padding), child: child),
+        ),
+      ),
     ),
   );
 }

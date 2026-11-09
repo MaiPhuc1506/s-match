@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../features/auth/screens/admin_welcome_screen.dart';
 import '../../features/auth/screens/court_owner_welcome_screen.dart';
-import '../../features/auth/screens/player_profile_screen.dart';
+import '../../features/auth/screens/player_welcome_screen.dart';
 import '../../features/auth/services/auth_service.dart';
 import '../data/dev_saved_accounts_repository.dart';
 import 'dev_account_selector.dart';
@@ -49,7 +50,9 @@ class _DevTestingHubState extends State<DevTestingHub> {
       final res = await _client.dio.get('/');
       if (mounted) {
         setState(() {
-          _backendPingStatus = res.statusCode == 200 ? 'Online (200)' : 'Status ${res.statusCode}';
+          _backendPingStatus = res.statusCode == 200
+              ? 'Online (200)'
+              : 'Status ${res.statusCode}';
         });
       }
     } catch (e) {
@@ -86,7 +89,9 @@ class _DevTestingHubState extends State<DevTestingHub> {
       }
 
       // Đánh dấu tài khoản vừa được dùng
-      final matched = _accounts.where((a) => a.email.toLowerCase() == email.toLowerCase());
+      final matched = _accounts.where(
+        (a) => a.email.toLowerCase() == email.toLowerCase(),
+      );
       if (matched.isNotEmpty) {
         await _repo.markAccountUsed(matched.first.id);
         await _loadAccounts();
@@ -117,8 +122,8 @@ class _DevTestingHubState extends State<DevTestingHub> {
     } else if (role == 'ADMIN') {
       targetScreen = const AdminWelcomeScreen();
     } else {
-      // Player: Chuyển thẳng sang PlayerProfileScreen để test thông tin & nút Đăng xuất
-      targetScreen = const PlayerProfileScreen();
+      // Keep quick login consistent with the normal Player login flow.
+      targetScreen = const PlayerWelcomeScreen();
     }
 
     Navigator.push(
@@ -147,8 +152,8 @@ class _DevTestingHubState extends State<DevTestingHub> {
         email: role == 'COURT_OWNER'
             ? 'owner@smatch.dev'
             : role == 'ADMIN'
-                ? 'admin@smatch.dev'
-                : 'player@smatch.dev',
+            ? 'admin@smatch.dev'
+            : 'player@smatch.dev',
         role: role,
       ),
     );
@@ -168,73 +173,79 @@ class _DevTestingHubState extends State<DevTestingHub> {
         child: RefreshIndicator(
           color: AppColors.primary,
           onRefresh: () async {
-                  await _loadAccounts();
-                  await _checkBackendHealth();
-                },
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // --- HEADER ---
-                      _buildHeader(currentEmail, currentRole, currentToken),
-                      const SizedBox(height: 24),
+            await _loadAccounts();
+            await _checkBackendHealth();
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- HEADER ---
+                _buildHeader(currentEmail, currentRole, currentToken),
+                const SizedBox(height: 24),
 
-                      // --- SECTION 1: QUICK LOGIN ---
-                      _buildSectionTitle('1. Quick Login (Đăng nhập theo vai trò)'),
-                      const SizedBox(height: 12),
-                      _buildRoleCards(),
-                      const SizedBox(height: 24),
+                // --- SECTION 1: QUICK LOGIN ---
+                _buildSectionTitle('1. Quick Login (Đăng nhập theo vai trò)'),
+                const SizedBox(height: 12),
+                _buildRoleCards(),
+                const SizedBox(height: 24),
 
-                      // --- SECTION 2: SAVED ACCOUNTS ---
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _buildSectionTitle('2. Saved Test Accounts'),
-                          TextButton.icon(
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              visualDensity: VisualDensity.compact,
-                            ),
-                            icon: const Icon(Icons.add_rounded, size: 18),
-                            label: const Text('Thêm tài khoản'),
-                            onPressed: () {
-                              DevAccountSelector.showAddEditAccountDialog(
-                                context: context,
-                                onSave: (acc) async {
-                                  await _repo.saveAccount(acc);
-                                  await _loadAccounts();
-                                },
-                              );
-                            },
-                          ),
-                        ],
+                // --- SECTION 2: SAVED ACCOUNTS ---
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildSectionTitle('2. Saved Test Accounts'),
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        visualDensity: VisualDensity.compact,
                       ),
-                      const SizedBox(height: 8),
-                      _buildSavedAccountsList(currentEmail),
-                      const SizedBox(height: 24),
-
-                      // --- SECTION 3: SCREEN EXPLORER ENTRY ---
-                      _buildSectionTitle('3. Screen Explorer (Khám phá toàn bộ màn hình)'),
-                      const SizedBox(height: 12),
-                      _buildScreenExplorerCard(),
-                      const SizedBox(height: 24),
-
-                      // --- SECTION 4: TEST SETTINGS & UTILITIES ---
-                      _buildSectionTitle('4. Test Settings & Utilities'),
-                      const SizedBox(height: 12),
-                      _buildTestSettings(currentToken),
-                      const SizedBox(height: 32),
-                    ],
-                  ),
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text('Thêm tài khoản'),
+                      onPressed: () {
+                        DevAccountSelector.showAddEditAccountDialog(
+                          context: context,
+                          onSave: (acc) async {
+                            await _repo.saveAccount(acc);
+                            await _loadAccounts();
+                          },
+                        );
+                      },
+                    ),
+                  ],
                 ),
-              ),
+                const SizedBox(height: 8),
+                _buildSavedAccountsList(currentEmail),
+                const SizedBox(height: 24),
+
+                // --- SECTION 3: SCREEN EXPLORER ENTRY ---
+                _buildSectionTitle(
+                  '3. Screen Explorer (Khám phá toàn bộ màn hình)',
+                ),
+                const SizedBox(height: 12),
+                _buildScreenExplorerCard(),
+                const SizedBox(height: 24),
+
+                // --- SECTION 4: TEST SETTINGS & UTILITIES ---
+                _buildSectionTitle('4. Test Settings & Utilities'),
+                const SizedBox(height: 12),
+                _buildTestSettings(currentToken),
+                const SizedBox(height: 32),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildHeader(String? currentEmail, String? currentRole, String? currentToken) {
+  Widget _buildHeader(
+    String? currentEmail,
+    String? currentRole,
+    String? currentToken,
+  ) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -300,7 +311,8 @@ class _DevTestingHubState extends State<DevTestingHub> {
                 height: 8,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _backendPingStatus != null &&
+                  color:
+                      _backendPingStatus != null &&
                           _backendPingStatus!.contains('Online')
                       ? Colors.green
                       : Colors.orange,
@@ -492,7 +504,8 @@ class _DevTestingHubState extends State<DevTestingHub> {
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final acc = _accounts[index];
-        final isActive = currentEmail != null &&
+        final isActive =
+            currentEmail != null &&
             currentEmail.toLowerCase() == acc.email.toLowerCase();
 
         return Card(
@@ -613,12 +626,19 @@ class _DevTestingHubState extends State<DevTestingHub> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.flash_on_rounded, color: AppColors.primary),
+                      icon: const Icon(
+                        Icons.flash_on_rounded,
+                        color: AppColors.primary,
+                      ),
                       tooltip: 'Đăng nhập',
                       onPressed: () => _triggerLoginForAccount(acc),
                     ),
                     PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey),
+                      icon: const Icon(
+                        Icons.more_vert_rounded,
+                        size: 20,
+                        color: Colors.grey,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -658,9 +678,16 @@ class _DevTestingHubState extends State<DevTestingHub> {
                           value: 'delete',
                           child: Row(
                             children: [
-                              Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                              Icon(
+                                Icons.delete_outline_rounded,
+                                size: 18,
+                                color: Colors.red,
+                              ),
                               SizedBox(width: 8),
-                              Text('Xóa tài khoản', style: TextStyle(color: Colors.red)),
+                              Text(
+                                'Xóa tài khoản',
+                                style: TextStyle(color: Colors.red),
+                              ),
                             ],
                           ),
                         ),
@@ -756,7 +783,10 @@ class _DevTestingHubState extends State<DevTestingHub> {
         children: [
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.refresh_rounded, color: AppColors.primary),
+            leading: const Icon(
+              Icons.refresh_rounded,
+              color: AppColors.primary,
+            ),
             title: const Text('Kiểm tra kết nối Backend (Ping)'),
             subtitle: Text('Status: ${_backendPingStatus ?? "Chưa kiểm tra"}'),
             trailing: IconButton(
@@ -784,7 +814,9 @@ class _DevTestingHubState extends State<DevTestingHub> {
                       setState(() {});
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Đã xóa sạch phiên hiện tại')),
+                          const SnackBar(
+                            content: Text('Đã xóa sạch phiên hiện tại'),
+                          ),
                         );
                       }
                     },
@@ -796,14 +828,18 @@ class _DevTestingHubState extends State<DevTestingHub> {
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.restore_rounded, color: Colors.blueGrey),
             title: const Text('Khôi phục danh sách seed mặc định'),
-            subtitle: const Text('Phục hồi 4 tài khoản mẫu: Player 1, 2, Owner, Admin'),
+            subtitle: const Text(
+              'Phục hồi 4 tài khoản mẫu: Player 1, 2, Owner, Admin',
+            ),
             trailing: TextButton(
               onPressed: () async {
                 await _repo.resetToDefaults();
                 await _loadAccounts();
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Đã khôi phục danh sách tài khoản seed')),
+                    const SnackBar(
+                      content: Text('Đã khôi phục danh sách tài khoản seed'),
+                    ),
                   );
                 }
               },
@@ -827,4 +863,3 @@ class _DevTestingHubState extends State<DevTestingHub> {
     }
   }
 }
-

@@ -45,9 +45,29 @@ class DashboardBooking {
     this.player,
     this.time,
     this.status,
-    this.total,
-  );
+    this.total, {
+    this.startTime,
+  });
+  final DateTime? startTime;
   final String court, player, time, status, total;
+}
+
+/// Optional daily operational snapshot; absent until a live Owner feed exists.
+class OwnerDaySnapshot {
+  const OwnerDaySnapshot({
+    required this.totalCourts,
+    required this.availableCourts,
+    required this.inUseCourts,
+    required this.maintenanceCourts,
+    required this.bookingCount,
+    required this.upcoming,
+  });
+  final int totalCourts,
+      availableCourts,
+      inUseCourts,
+      maintenanceCourts,
+      bookingCount;
+  final List<DashboardBooking> upcoming;
 }
 
 class DashboardTrendPoint {
@@ -104,8 +124,12 @@ class DashboardCourtUtilization {
       facilityName: json['facilityName']?.toString() ?? '',
       status: json['status']?.toString() ?? 'ACTIVE',
       bookingCount: (json['bookingCount'] as num?)?.toInt() ?? 0,
-      revenue: (json['revenue'] as num?) ?? (json['grossBookedRevenue'] as num?) ?? 0,
-      bookedHours: (json['bookedHours'] as num?) ?? (json['reservedHours'] as num?) ?? 0,
+      revenue:
+          (json['revenue'] as num?) ??
+          (json['grossBookedRevenue'] as num?) ??
+          0,
+      bookedHours:
+          (json['bookedHours'] as num?) ?? (json['reservedHours'] as num?) ?? 0,
       availableHours: (json['availableHours'] as num?) ?? 0,
       utilizationRate: (json['utilizationRate'] as num?)?.toDouble(),
     );
@@ -220,12 +244,14 @@ class DashboardData {
     required this.preview,
     this.analytics,
     this.bookings = const [],
+    this.ownerDay,
   });
   final List<DashboardPerson> people;
   final List<DashboardFacility> facilities;
   final bool preview;
   final DashboardAnalytics? analytics;
   final List<DashboardBooking> bookings;
+  final OwnerDaySnapshot? ownerDay;
 
   int get playerCount =>
       preview ? 1284 : people.where((p) => p.role == 'PLAYER').length;
@@ -240,6 +266,9 @@ class DashboardData {
 
 /// Design fixtures are explicit and never substituted for a failed API request.
 abstract final class DashboardFixtures {
+  static const grossBookedValue = 24850000;
+  static const bookingCount = 326;
+  static const occupancyPercent = 76.0;
   static const bookings = [
     DashboardBooking(
       'Court 01',
@@ -263,6 +292,30 @@ abstract final class DashboardFixtures {
       '120,000đ',
     ),
   ];
+  // The approved Owner daily example is a six-court facility. Keep Admin's
+  // independent platform fixtures and every live API response unchanged.
+  static const ownerData = DashboardData(
+    preview: true,
+    people: [],
+    facilities: [
+      DashboardFacility(
+        1,
+        'Sky Badminton Center',
+        6,
+        address: 'Da Nang, Vietnam',
+        status: 'Active',
+      ),
+    ],
+    bookings: bookings,
+    ownerDay: OwnerDaySnapshot(
+      totalCourts: 6,
+      availableCourts: 4,
+      inUseCourts: 1,
+      maintenanceCourts: 1,
+      bookingCount: 12,
+      upcoming: bookings,
+    ),
+  );
   static const data = DashboardData(
     preview: true,
     people: [
@@ -350,8 +403,13 @@ class DashboardRepository {
     String? period,
     int? facilityId,
     DateTime? now,
+    DateTime? bookingDate,
   }) async {
-    if (preview) return DashboardFixtures.data;
+    if (preview) {
+      return role == DashboardRole.owner
+          ? DashboardFixtures.ownerData
+          : DashboardFixtures.data;
+    }
     final token = _token();
     final expected = role == DashboardRole.admin ? 'ADMIN' : 'COURT_OWNER';
     if (token == null || _role() != expected) {
@@ -379,6 +437,12 @@ class DashboardRepository {
       'facilityId': ?facilityId,
     };
 
+    final day = bookingDate ?? now ?? DateTime.now();
+    final dayStart = DateTime.utc(
+      day.year,
+      day.month,
+      day.day,
+    ).subtract(const Duration(hours: 7));
     final results = await Future.wait([
       _dio.get(
         role == DashboardRole.admin ? '/facilities' : '/facilities/my',
@@ -407,6 +471,16 @@ class DashboardRepository {
         queryParameters: revenueQuery,
         options: options,
       ),
+      if (role == DashboardRole.owner)
+        _dio.get(
+          '/bookings/owner',
+          queryParameters: {
+            'startDate': dayStart.toIso8601String(),
+            'endDate': dayStart.add(const Duration(days: 1)).toIso8601String(),
+            'facilityId': ?facilityId,
+          },
+          options: options,
+        ),
     ]);
     if (_token() != token || _role() != expected) {
       throw const DashboardSessionException();
@@ -462,6 +536,30 @@ class DashboardRepository {
       facilities: facilities,
       preview: false,
       analytics: analytics,
+      bookings: role == DashboardRole.owner
+          ? (results.last.data as List)
+                .map((raw) {
+                  final b = Map<String, dynamic>.from(raw as Map);
+                  final start = DateTime.parse(b['startTime'] as String)
+                      .toUtc()
+                      .add(const Duration(hours: 7));
+                  final end = DateTime.parse(b['endTime'] as String)
+                      .toUtc()
+                      .add(const Duration(hours: 7));
+                  String time(DateTime d) =>
+                      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+                  final status = b['status'].toString().toLowerCase();
+                  return DashboardBooking(
+                    (b['court'] as Map)['name'].toString(),
+                    (b['user'] as Map?)?['fullName']?.toString() ?? 'Player',
+                    '${time(start)}–${time(end)}',
+                    '${status[0].toUpperCase()}${status.substring(1)}',
+                    '${b['totalPrice']} VND',
+                    startTime: DateTime.parse(b['startTime'] as String),
+                  );
+                })
+                .toList(growable: false)
+          : const [],
     );
   }
 
@@ -510,8 +608,8 @@ class DashboardRepository {
 
     double? occupancyRatePercent;
     if (summaryMap['reservedOccupancyRatePercent'] is num) {
-      occupancyRatePercent =
-          (summaryMap['reservedOccupancyRatePercent'] as num).toDouble();
+      occupancyRatePercent = (summaryMap['reservedOccupancyRatePercent'] as num)
+          .toDouble();
     } else if (revMap['occupancyRate'] is num) {
       occupancyRatePercent =
           ((revMap['occupancyRate'] as num).toDouble() * 10000).round() / 100;

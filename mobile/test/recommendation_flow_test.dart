@@ -11,6 +11,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile/dev/presentation/dev_screen_explorer.dart';
 import 'package:mobile/features/auth/widgets/profile_skill_radar.dart';
 import 'package:mobile/features/court_map/screens/find_players_map_screen.dart';
+import 'package:mobile/features/court_map/exploration_data.dart';
 import 'package:mobile/features/navigation/player_bottom_navigation.dart';
 import 'package:mobile/features/recommendation/data/recommendation_fixtures.dart';
 import 'package:mobile/features/recommendation/data/recommendation_repository.dart';
@@ -43,6 +44,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          // Explicit test fixtures; production discovery always uses the API.
+          nearbyPlayersProvider.overrideWith((ref) async => demoPlayers),
           recommendationRepositoryProvider.overrideWithValue(
             repository ?? const FixtureRecommendationRepository(),
           ),

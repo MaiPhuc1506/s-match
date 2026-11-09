@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion_widgets.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -94,7 +96,7 @@ class Sprint2FormBody extends StatelessWidget {
           child: IntrinsicHeight(
             child: Padding(
               padding: EdgeInsets.fromLTRB(24, 16, 24, bottom),
-              child: Column(
+              child: AppStaggeredColumn(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   for (var i = 0; i < children.length; i++) ...[

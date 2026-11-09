@@ -61,38 +61,70 @@ class FeedbackRepository extends ChangeNotifier {
   bool get submitting => _submitting;
   final Map<String, List<TeammateFeedback>> _given = {};
   bool submitted(String matchId) => _given.containsKey(matchId);
+  static final _demoGiven = List<TeammateFeedback>.unmodifiable([
+    TeammateFeedback(
+      player: feedbackTeammates[0],
+      stars: 5,
+      tags: const {'Great teamwork', 'Communication'},
+      review: 'Great communication and smart shot selection. Easy to coordinate with in doubles.',
+      matchTitle: 'Saturday Rally',
+      createdAt: DateTime(2026, 10, 31, 20),
+    ),
+    TeammateFeedback(
+      player: feedbackTeammates[1],
+      stars: 4,
+      tags: const {'Fair play', 'Net play'},
+      review: 'Good net play and a positive attitude. Calling shots earlier would help our rotations.',
+      matchTitle: 'Saturday Rally',
+      createdAt: DateTime(2026, 10, 31, 20),
+    ),
+    TeammateFeedback(
+      player: feedbackTeammates[2],
+      stars: 5,
+      tags: const {'Consistent defense', 'On time'},
+      review: 'Consistent defense, punctual and respectful throughout the match. Would play together again.',
+      matchTitle: 'Saturday Rally',
+      createdAt: DateTime(2026, 10, 31, 20),
+    ),
+  ]);
+  static final _demoReceived = List<TeammateFeedback>.unmodifiable([
+    TeammateFeedback(
+      player: feedbackTeammates[0],
+      stars: 5,
+      tags: const {'Great teamwork', 'Communication'},
+      review: 'Reliable doubles partner. Covered the back court well and communicated clearly.',
+      matchTitle: 'Saturday Rally',
+      createdAt: DateTime(2026, 10, 31, 20),
+    ),
+    TeammateFeedback(
+      player: feedbackTeammates[1],
+      stars: 4,
+      tags: const {'Fair play', 'Positive attitude'},
+      review: 'Friendly and fair player. Good rallies; faster recovery after attacking shots would help.',
+      matchTitle: 'Evening Doubles',
+      createdAt: DateTime(2026, 11, 3, 21),
+    ),
+    TeammateFeedback(
+      player: feedbackTeammates[2],
+      stars: 5,
+      tags: const {'On time', 'Team player'},
+      review: 'Arrived on time, encouraged the team and kept the game competitive and enjoyable.',
+      matchTitle: 'Evening Doubles',
+      createdAt: DateTime(2026, 11, 3, 21),
+    ),
+  ]);
   List<TeammateFeedback> get given => _given.isNotEmpty
       ? _given.values.expand((v) => v).toList()
       : withSamples
-      ? feedbackTeammates
-            .map(
-              (p) => TeammateFeedback(
-                player: p,
-                stars: 5,
-                review: 'Great teamwork and positive energy. Would play together again!',
-              ),
-            )
-            .toList()
-      : [];
-  List<TeammateFeedback> get received => !withSamples
-      ? []
-      : [
-          TeammateFeedback(
-            player: feedbackTeammates[0],
-            stars: 5,
-            review: 'A thoughtful teammate. Great communication and fair play!',
-          ),
-          TeammateFeedback(
-            player: feedbackTeammates[1],
-            stars: 5,
-            review: 'Fun rallies and always encouraging the team.',
-          ),
-          TeammateFeedback(
-            player: feedbackTeammates[2],
-            stars: 5,
-            review: 'On time, friendly and a great doubles partner.',
-          ),
-        ];
+      ? _demoGiven
+      : const [];
+  List<TeammateFeedback> get received => withSamples ? _demoReceived : const [];
+  String get previewAverageLabel => received.isEmpty
+      ? '—'
+      : (received.fold<int>(0, (sum, e) => sum + e.stars) / received.length)
+            .toStringAsFixed(1);
+  int get previewMatchCount =>
+      received.map((e) => e.matchTitle).whereType<String>().toSet().length;
   Future<void> submit(String matchId, List<TeammateFeedback> entries) async {
     if (_submitting) throw StateError('Feedback is already being sent.');
     if (submitted(matchId)) throw StateError('Feedback has already been sent.');

@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion_widgets.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -85,7 +87,7 @@ class _AddEditCourtScreenState extends State<AddEditCourtScreen> {
           SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
+            child: AppStaggeredColumn(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 12),

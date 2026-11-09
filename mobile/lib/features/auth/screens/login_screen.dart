@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion_widgets.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -108,7 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
             // 2. Nội dung Form đăng nhập (Padding 24px hai bên)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
+              child: AppStaggeredColumn(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   // Tiêu đề Welcome Back

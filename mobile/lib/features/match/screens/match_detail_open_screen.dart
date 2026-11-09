@@ -1,4 +1,6 @@
+import '../../../core/theme/app_motion_widgets.dart';
 import '../../../core/theme/app_motion.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -58,7 +60,9 @@ class MatchDetailOpenScreen extends StatelessWidget {
     }
     if (item.isHost && draft?.isPrivate == true) {
       final currentUser = AuthService.instance.currentUser;
-      final currentEmail = currentUser?['email']?.toString().toLowerCase() ?? 'player@smatch.dev';
+      final currentEmail =
+          currentUser?['email']?.toString().toLowerCase() ??
+          'player@smatch.dev';
       final currentName = currentUser?['fullName'] ?? 'Demo Player';
 
       final candidates = [
@@ -79,7 +83,8 @@ class MatchDetailOpenScreen extends StatelessWidget {
           builder: (sheetCtx, _) => SafeArea(
             child: SingleChildScrollView(
               padding: EdgeInsets.only(
-                top: 12, bottom: 12 + MediaQuery.viewInsetsOf(sheetCtx).bottom,
+                top: 12,
+                bottom: 12 + MediaQuery.viewInsetsOf(sheetCtx).bottom,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -89,14 +94,19 @@ class MatchDetailOpenScreen extends StatelessWidget {
                     padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     child: Text(
                       'Mời người chơi tham gia trận',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const Divider(),
                   for (final c in candidates) ...[
                     ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: MatchColors.primaryGreen.withOpacity(0.12),
+                        backgroundColor: MatchColors.primaryGreen.withOpacity(
+                          0.12,
+                        ),
                         child: Text(
                           c['name']![0],
                           style: const TextStyle(
@@ -109,10 +119,16 @@ class MatchDetailOpenScreen extends StatelessWidget {
                       subtitle: Text(c['email']!),
                       trailing: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _store.sentInvitations.contains('${item.id}:${c['email']}')
+                          backgroundColor:
+                              _store.sentInvitations.contains(
+                                '${item.id}:${c['email']}',
+                              )
                               ? Colors.grey.shade200
                               : MatchColors.primaryGreen,
-                          foregroundColor: _store.sentInvitations.contains('${item.id}:${c['email']}')
+                          foregroundColor:
+                              _store.sentInvitations.contains(
+                                '${item.id}:${c['email']}',
+                              )
                               ? Colors.grey.shade700
                               : Colors.white,
                           elevation: 0,
@@ -120,7 +136,10 @@ class MatchDetailOpenScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        onPressed: _store.sentInvitations.contains('${item.id}:${c['email']}')
+                        onPressed:
+                            _store.sentInvitations.contains(
+                              '${item.id}:${c['email']}',
+                            )
                             ? null
                             : () {
                                 _store.sendInvitation(
@@ -131,7 +150,9 @@ class MatchDetailOpenScreen extends StatelessWidget {
                                 );
                               },
                         child: Text(
-                          _store.sentInvitations.contains('${item.id}:${c['email']}')
+                          _store.sentInvitations.contains(
+                                '${item.id}:${c['email']}',
+                              )
                               ? 'Đã mời'
                               : 'Mời ngay',
                         ),
@@ -221,7 +242,7 @@ class MatchDetailOpenScreen extends StatelessWidget {
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
-                child: Column(
+                child: AppStaggeredColumn(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ClipRRect(

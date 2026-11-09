@@ -1,8 +1,9 @@
 import '../../../core/theme/app_motion.dart';
+
 import 'package:flutter/material.dart';
 
 import '../widgets/role_welcome_layout.dart';
-import 'player_profile_screen.dart';
+import '../../player_experience/screens/player_home_screen.dart';
 
 class PlayerWelcomeScreen extends StatelessWidget {
   const PlayerWelcomeScreen({super.key});
@@ -13,10 +14,10 @@ class PlayerWelcomeScreen extends StatelessWidget {
     onContinue: () {
       Navigator.of(context).push(
         PageRouteBuilder(
-          settings: const RouteSettings(name: '/player-profile'),
+          settings: const RouteSettings(name: '/player-home'),
           transitionDuration: AppMotion.duration(context, 250),
           pageBuilder: (context, animation, secondaryAnimation) =>
-              const PlayerProfileScreen(),
+              const PlayerHomeScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) =>
               FadeTransition(
                 opacity: CurvedAnimation(

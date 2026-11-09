@@ -6,12 +6,16 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   Request,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import { Roles } from '../auth/roles.decorator';
+import { Role } from '../auth/roles.enum';
+import { GetAnalyticsQueryDto } from '../analytics/dto/get-analytics-query.dto';
 import { RolesGuard } from '../auth/roles.guard';
 
 @ApiTags('Bookings')
@@ -48,6 +52,13 @@ export class BookingsController {
   async findMyBookings(@Request() req: any) {
     const userId = this.extractUserId(req);
     return this.bookingsService.findMyBookings(userId);
+  }
+
+  @Get('owner')
+  @Roles(Role.OWNER)
+  @ApiOperation({ summary: 'Danh sách booking tại các cơ sở thuộc chủ sân đang đăng nhập' })
+  findOwnerBookings(@Request() req: any, @Query() query: GetAnalyticsQueryDto) {
+    return this.bookingsService.findOwnerBookings(this.extractUserId(req), query);
   }
 
   @Get(':id')

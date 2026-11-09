@@ -12,6 +12,8 @@ import 'package:mobile/features/court_map/exploration_data.dart';
 import 'package:mobile/features/court_map/screens/court_preview_screen.dart';
 import 'package:mobile/features/court_map/screens/find_courts_map_screen.dart';
 import 'package:mobile/features/court_map/screens/find_players_map_screen.dart';
+import 'package:mobile/features/court_map/widgets/court_maplibre_map.dart';
+import 'package:mobile/features/recommendation/screens/recommended_player_detail_screen.dart';
 
 void main() {
   final originalPlatform = MapLibrePlatform.createInstance;
@@ -32,6 +34,8 @@ void main() {
       ProviderScope(
         overrides: [
           nearbyCourtsProvider.overrideWith((ref) async => mockCourts),
+          // Explicit test fixtures; production discovery always uses the API.
+          nearbyPlayersProvider.overrideWith((ref) async => demoPlayers),
           ...overrides,
         ],
         child: MaterialApp(
@@ -130,6 +134,8 @@ void main() {
     (tester) async {
       await pump(tester, const FindPlayersMapScreen());
       expect(find.text('Minh Quân'), findsOneWidget);
+      await tester.dragFrom(const Offset(195, 610), const Offset(0, -200));
+      await tester.pumpAndSettle();
       expect(find.text('Thảo Vy'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.enterText(find.byType(TextField), 'missing');
@@ -164,6 +170,27 @@ void main() {
     expect(find.text('Player preview'), findsNothing);
   });
 
+  testWidgets(
+    'Discovery preview opens the selected public profile without a fake score',
+    (tester) async {
+      await pump(tester, const FindPlayersMapScreen());
+      await tester.tap(find.byKey(const ValueKey('player_minh')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('View profile'));
+      await tester.pumpAndSettle();
+      final detail = tester.widget<RecommendedPlayerDetailScreen>(
+        find.byType(RecommendedPlayerDetailScreen),
+      );
+      expect(detail.player.id, 'minh');
+      expect(detail.player.score, isNull);
+      expect(find.text("Why you're a match"), findsNothing);
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      expect(find.byType(FindPlayersMapScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Players sheet expands and zoomed camera recenters', (
     tester,
   ) async {
@@ -197,16 +224,15 @@ void main() {
     );
     expect(find.text('Find Matching Players'), findsOneWidget);
     expect(tester.takeException(), isNull);
-    final map = tester.widget<InteractiveViewer>(
-      find.byKey(const Key('players_map')),
+    final map = tester.state<CourtMapLibreMapState>(
+      find.byType(CourtMapLibreMap),
     );
-    map.transformationController!.value = Matrix4.diagonal3Values(2, 2, 1);
+    await map.moveToCourt(mockCourts[1]);
+    await tester.pumpAndSettle();
     await tester.tap(find.bySemanticsLabel('Recenter'));
     await tester.pumpAndSettle();
-    expect(
-      map.transformationController!.value.getMaxScaleOnAxis(),
-      closeTo(1, .001),
-    );
+    expect(map.zoom, 14);
+    expect(map.center, CourtMapLibreMap.userLocation);
     await tester.binding.setSurfaceSize(const Size(360, 640));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
@@ -219,7 +245,7 @@ void main() {
       final originalState = tester.state(find.byType(FindCourtsMapScreen));
       await tester.tap(find.text('Find Players'));
       await tester.pumpAndSettle();
-      expect(find.byType(FindPlayersMapScreen), findsOneWidget);
+      expect(find.byType(PlayerDiscoveryOverlay), findsOneWidget);
       await tester.tap(find.text('Find Courts').last);
       await tester.pumpAndSettle();
       expect(
@@ -269,22 +295,22 @@ void main() {
     tester,
   ) async {
     await pump(tester, const FindPlayersMapScreen());
-    final map = tester.widget<InteractiveViewer>(
-      find.byKey(const Key('players_map')),
+    final map = tester.state<CourtMapLibreMapState>(
+      find.byType(CourtMapLibreMap),
     );
-    map.transformationController!.value = Matrix4.diagonal3Values(2, 2, 1);
-    map.onInteractionEnd!(ScaleEndDetails());
+    await map.moveToCourt(mockCourts[1]);
+    await tester.pumpAndSettle();
+    final center = map.center, zoom = map.zoom;
     await tester.tap(find.text('Find Courts'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Find Players'));
     await tester.pumpAndSettle();
-    final restored = tester.widget<InteractiveViewer>(
-      find.byKey(const Key('players_map')),
+    final restored = tester.state<CourtMapLibreMapState>(
+      find.byType(CourtMapLibreMap),
     );
-    expect(
-      restored.transformationController!.value.getMaxScaleOnAxis(),
-      closeTo(2, .001),
-    );
+    expect(identical(restored, map), true);
+    expect(restored.center, center);
+    expect(restored.zoom, zoom);
   });
 
   testWidgets(

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/features/navigation/player_bottom_navigation.dart';
 import 'package:mobile/features/feedback/screens/rating_history_screen.dart';
 import 'package:mobile/features/auth/screens/player_profile_screen.dart';
+import 'package:mobile/features/player_experience/screens/player_home_screen.dart';
 import 'package:mobile/features/match/screens/match_list_screen.dart';
 import 'package:mobile/features/court_map/exploration_data.dart';
 import 'package:mobile/features/court_map/screens/find_courts_map_screen.dart';
@@ -117,32 +118,35 @@ void main() {
       },
     );
 
-    testWidgets('Home reuses Profile and Feedback opens Sprint 8 history', (
-      tester,
-    ) async {
-      await setPhoneViewport(tester);
+    testWidgets(
+      'Home opens Sprint 10 and Feedback preserves Sprint 8 history',
+      (tester) async {
+        await setPhoneViewport(tester);
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: Center(child: Text('Content')),
-            bottomNavigationBar: PlayerBottomNavigation(
-              currentTab: PlayerNavTab.map,
+        await tester.pumpWidget(
+          const ProviderScope(
+            child: MaterialApp(
+              home: Scaffold(
+                body: Center(child: Text('Content')),
+                bottomNavigationBar: PlayerBottomNavigation(
+                  currentTab: PlayerNavTab.map,
+                ),
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      // Tap Home
-      await tester.tap(find.text('Home'));
-      await tester.pumpAndSettle();
-      expect(find.byType(PlayerProfileScreen), findsOneWidget);
+        // Tap Home
+        await tester.tap(find.text('Home'));
+        await tester.pumpAndSettle();
+        expect(find.byType(PlayerHomeScreen), findsOneWidget);
 
-      // Tap Feedback
-      await tester.tap(find.text('Feedback'));
-      await tester.pumpAndSettle();
-      expect(find.byType(RatingHistoryScreen), findsOneWidget);
-    });
+        // Tap Feedback
+        await tester.tap(find.text('Feedback'));
+        await tester.pumpAndSettle();
+        expect(find.byType(RatingHistoryScreen), findsOneWidget);
+      },
+    );
 
     testWidgets('renders cleanly without overflow on narrow width 320', (
       tester,

@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   BulkUpsertOperatingHoursDto,
@@ -80,8 +81,9 @@ export class OperatingHoursService {
     dayOfWeek: number,
     startTime: string,
     endTime: string,
+    db: Pick<Prisma.TransactionClient, 'operatingHours'> = this.prisma,
   ): Promise<boolean> {
-    const hours = await this.prisma.operatingHours.findUnique({
+    const hours = await db.operatingHours.findUnique({
       where: { facilityId_dayOfWeek: { facilityId, dayOfWeek } },
     });
     if (!hours) return false;

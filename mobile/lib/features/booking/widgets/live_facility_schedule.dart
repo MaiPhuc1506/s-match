@@ -13,10 +13,18 @@ class LiveFacilitySchedule extends StatefulWidget {
   const LiveFacilitySchedule({
     super.key,
     required this.facilityId,
+    this.initialCourtId,
     this.service,
     this.now,
+    this.demo = false,
+    this.onViewBookings,
+    this.onBackHome,
   });
   final int facilityId;
+  final int? initialCourtId;
+  final bool demo;
+  final VoidCallback? onViewBookings;
+  final VoidCallback? onBackHome;
   final LiveBookingService? service;
   final DateTime Function()? now;
   @override
@@ -46,6 +54,7 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
   @override
   void initState() {
     super.initState();
+    courtId = widget.initialCourtId;
     date = now.toUtc().add(const Duration(hours: 7));
     load();
   }
@@ -58,12 +67,20 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
       selected = null;
     });
     try {
+      if (widget.demo != service.isDemo) {
+        throw StateError(
+          'Demo và API thật phải dùng đúng booking service tương ứng.',
+        );
+      }
       final f = await service.facility(widget.facilityId);
       if (!mounted || request != generation) return;
       final available = (f['courts'] as List? ?? [])
           .map((c) => Map<String, dynamic>.from(c as Map))
           .where((c) => c['status'] == 'ACTIVE')
           .toList();
+      if (courtId != null && !available.any((c) => c['id'] == courtId)) {
+        throw StateError('Sân đã chọn không còn hoạt động tại cơ sở này.');
+      }
       final id = available.any((c) => c['id'] == courtId)
           ? courtId
           : available.isEmpty
@@ -112,6 +129,7 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
     final day = dateKey;
     var submitting = false;
     String? submitError;
+    var conflicted = false;
     await Navigator.of(context).push(
       AppMotion.route<void>(
         StatefulBuilder(
@@ -130,6 +148,8 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                 ),
               Expanded(
                 child: BookingSummaryScreen(
+                  demo: widget.demo,
+                  photoAsset: widget.demo ? f['photoAsset'] as String? : null,
                   facilityName: f['name'].toString(),
                   courtName: court['name'].toString(),
                   address: f['address']?.toString() ?? '—',
@@ -138,16 +158,18 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                   durationText:
                       '${DateTime.parse(end).difference(DateTime.parse(start)).inMinutes} minutes',
                   courtType: court['courtType']?.toString() ?? '—',
-                  priceText: 'Giá do hệ thống xác nhận',
+                  priceText: '${slot['price']} VND',
                   isSubmitting: submitting,
+                  canConfirm: !conflicted,
                   onConfirm: () async {
-                    if (submitting) return;
+                    if (submitting || conflicted) return;
                     update(() {
                       submitting = true;
                       submitError = null;
                     });
                     try {
                       final booking = await service.book(
+                        facilityId: widget.facilityId,
                         courtId: id,
                         startTime: start,
                         endTime: end,
@@ -156,6 +178,10 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                       Navigator.of(summaryContext).pushReplacement(
                         AppMotion.route<void>(
                           BookingSuccessScreen(
+                            demo: widget.demo,
+                            photoAsset: widget.demo
+                                ? f['photoAsset'] as String?
+                                : null,
                             bookingId: booking['id'].toString(),
                             facilityName: f['name'].toString(),
                             courtName: court['name'].toString(),
@@ -164,13 +190,19 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                                 '$day · ${slot['startTime']}–${slot['endTime']}',
                             totalPrice: '${booking['totalPrice']} VND',
                             onViewBookings: () {
+                              if (widget.onViewBookings != null) {
+                                widget.onViewBookings!();
+                                return;
+                              }
                               Navigator.of(context).pushReplacement(
                                 AppMotion.route<void>(
                                   const BookingHistoryScreen(live: true),
                                 ),
                               );
                             },
-                            onBackHome: () => Navigator.of(context).pop(),
+                            onBackHome:
+                                widget.onBackHome ??
+                                () => Navigator.of(context).pop(),
                           ),
                         ),
                       );
@@ -178,7 +210,12 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                       if (!summaryContext.mounted) return;
                       String message = 'Không đặt được sân. Vui lòng thử lại.';
                       if (e is StateError) message = e.message.toString();
+                      if (e is DioException && e.response == null) {
+                        message = 'Chưa nhận được xác nhận từ máy chủ. Hãy kiểm tra lịch sử đặt sân trước khi thử lại.';
+                      }
                       if (e is DioException && e.response?.statusCode == 409) {
+                        conflicted = true;
+                        selected = null;
                         message = 'Khung giờ vừa có người đặt. Vui lòng quay lại chọn giờ khác.';
                       } else if (e is DioException && e.response?.data is Map) {
                         final detail = (e.response!.data as Map)['message'];
@@ -205,7 +242,11 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: BookingColors.background,
     appBar: AppBar(
-      title: Text(facility?['name']?.toString() ?? 'Court Schedule'),
+      title: Text(
+        widget.demo
+            ? 'Demo Court Schedule'
+            : facility?['name']?.toString() ?? 'Court Schedule',
+      ),
     ),
     bottomNavigationBar: SafeArea(
       child: Padding(
@@ -253,20 +294,30 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                       .toList(),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Chọn khung giờ · Giờ Việt Nam (UTC+7)',
+                Text(
+                  widget.demo
+                      ? 'Choose a slot · Vietnam time (UTC+7)'
+                      : 'Chọn khung giờ · Giờ Việt Nam (UTC+7)',
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Hệ thống kiểm tra trùng lịch và tính giá khi bạn xác nhận đặt sân.',
+                Text(
+                  widget.demo
+                      ? 'Demo only. This booking is stored in this app session and does not reserve a real court.'
+                      : 'Hệ thống kiểm tra trùng lịch và tính giá khi bạn xác nhận đặt sân.',
                 ),
                 const SizedBox(height: 16),
                 if (courts.isEmpty)
-                  const Text('Cơ sở chưa có sân đang hoạt động.')
+                  Text(
+                    widget.demo
+                        ? 'No active demo courts.'
+                        : 'Cơ sở chưa có sân đang hoạt động.',
+                  )
                 else if (slots.isEmpty)
-                  const Text(
-                    'Chưa có khung giờ cấu hình cho ngày này. Hãy chọn ngày hoặc sân khác.',
+                  Text(
+                    widget.demo
+                        ? 'No slots remain today. Choose another day or court.'
+                        : 'Chưa có khung giờ cấu hình cho ngày này. Hãy chọn ngày hoặc sân khác.',
                   ),
                 ...slots.map(
                   (s) => Card(
@@ -278,7 +329,13 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                               color: BookingColors.primary,
                             )
                           : const Icon(Icons.circle_outlined),
-                      onTap: () => setState(() => selected = s),
+                      subtitle: Text(
+                        s['isBooked'] == true ? 'Đã đặt' : '${s['price']} VND',
+                      ),
+                      enabled: s['isBooked'] != true && s['price'] is num,
+                      onTap: s['isBooked'] == true || s['price'] is! num
+                          ? null
+                          : () => setState(() => selected = s),
                     ),
                   ),
                 ),

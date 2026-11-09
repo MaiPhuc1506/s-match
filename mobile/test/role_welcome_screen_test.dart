@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile/features/auth/screens/player_welcome_screen.dart';
 import 'package:mobile/features/auth/screens/court_owner_welcome_screen.dart';
 import 'package:mobile/features/auth/screens/admin_welcome_screen.dart';
-import 'package:mobile/features/auth/screens/player_profile_screen.dart';
+import 'package:mobile/features/player_experience/screens/player_home_screen.dart';
 import 'package:mobile/features/auth/widgets/role_welcome_layout.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/features/dashboard/data/dashboard_repository.dart';
@@ -60,16 +60,18 @@ void main() {
     );
   }
 
-  testWidgets('Player Continue opens the existing profile and Back returns', (
+  testWidgets('Player Continue opens Sprint 10 Home and Back returns', (
     tester,
   ) async {
     await size(tester, const Size(393, 852));
-    await tester.pumpWidget(const MaterialApp(home: PlayerWelcomeScreen()));
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: PlayerWelcomeScreen())),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
-    expect(find.byType(PlayerProfileScreen), findsOneWidget);
-    Navigator.of(tester.element(find.byType(PlayerProfileScreen))).pop();
+    expect(find.byType(PlayerHomeScreen), findsOneWidget);
+    Navigator.of(tester.element(find.byType(PlayerHomeScreen))).pop();
     await tester.pumpAndSettle();
     expect(find.byType(PlayerWelcomeScreen), findsOneWidget);
     expect(tester.takeException(), isNull);

@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:mobile/features/court_map/screens/find_courts_map_screen.dart';
+import '../player_experience/screens/player_home_screen.dart';
+import '../court_map/screens/find_courts_map_screen.dart';
+
 import 'package:mobile/features/match/screens/match_list_screen.dart';
 import 'package:mobile/features/auth/screens/player_profile_screen.dart';
 
@@ -133,8 +135,8 @@ class PlayerBottomNavigation extends StatelessWidget {
         } else {
           navigateTo(
             context,
-            const PlayerProfileScreen(),
-            routeName: '/player-profile',
+            const PlayerHomeScreen(),
+            routeName: '/player-home',
           );
         }
         break;

@@ -20,14 +20,22 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(home: CreateMatchScreen(initiallyPrivate: isPrivate)),
       );
+      await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, 'Friday Practice');
       await tester.enterText(find.byType(TextField).last, 'Practice net play');
       await tester.ensureVisible(find.text('Singles'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Singles'));
       await tester.ensureVisible(find.text('Advanced'));
+      // Allow the scroll-triggered stagger delay, then the entrance animation.
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Advanced'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Advanced'));
       final submit = find.widgetWithText(ElevatedButton, 'Create Match');
       await tester.ensureVisible(submit);
+      await tester.pumpAndSettle();
       await tester.tap(submit);
       await tester.pumpAndSettle();
       expect(find.byType(MatchDetailOpenScreen), findsOneWidget);

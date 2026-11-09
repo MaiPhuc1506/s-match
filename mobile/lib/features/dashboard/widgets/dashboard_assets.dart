@@ -1,5 +1,7 @@
 // Original discrete Figma assets; identical existing assets are reused.
 const dashboardAssets = <String, String>{
+  'owner.todayCalendar': 'assets/sprint9/owner_today_calendar.svg',
+  'owner.todayChevron': 'assets/sprint9/owner_today_chevron.svg',
   'metric.occupancy': 'assets/sprint9/metric_occupancy.svg',
   'metric.value': 'assets/sprint9/metric_value.svg',
   'owner.imgIconCalendar': 'assets/sprint9/owner_icon_calendar.svg',

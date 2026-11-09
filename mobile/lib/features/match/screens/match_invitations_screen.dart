@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion_widgets.dart';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -47,14 +49,18 @@ class MatchInvitationsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentUser = AuthService.instance.currentUser;
-    final currentEmail = currentUser?['email']?.toString().toLowerCase() ?? 'player2@smatch.dev';
+    final currentEmail =
+        currentUser?['email']?.toString().toLowerCase() ?? 'player2@smatch.dev';
     final currentName = currentUser?['fullName'] ?? 'Demo Player 2';
 
     return ListenableBuilder(
       listenable: MatchUiStore.instance,
       builder: (context, _) {
-        final dynamicInvitations = MatchUiStore.instance.invitationsFor(currentEmail);
-        final legacyCount = 2 - MatchUiStore.instance.resolvedInvitations.length;
+        final dynamicInvitations = MatchUiStore.instance.invitationsFor(
+          currentEmail,
+        );
+        final legacyCount =
+            2 - MatchUiStore.instance.resolvedInvitations.length;
         final totalCount = dynamicInvitations.length + legacyCount;
 
         return Scaffold(
@@ -75,7 +81,11 @@ class MatchInvitationsScreen extends StatelessWidget {
                           textAlign: TextAlign.center,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: _text(17, FontWeight.w700, MatchColors.darkText),
+                          style: _text(
+                            17,
+                            FontWeight.w700,
+                            MatchColors.darkText,
+                          ),
                         ),
                       ),
                       Positioned(
@@ -104,7 +114,7 @@ class MatchInvitationsScreen extends StatelessWidget {
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(24),
-                    child: Column(
+                    child: AppStaggeredColumn(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         SizedBox(
@@ -164,7 +174,11 @@ class MatchInvitationsScreen extends StatelessWidget {
                           height: 16,
                           child: Text(
                             'Invitations ($totalCount)',
-                            style: _text(13, FontWeight.w700, MatchColors.darkText),
+                            style: _text(
+                              13,
+                              FontWeight.w700,
+                              MatchColors.darkText,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -178,18 +192,25 @@ class MatchInvitationsScreen extends StatelessWidget {
                           const SizedBox(height: 12),
                         ],
                         // Các lời mời mẫu từ Figma ban đầu (nếu chưa giải quyết)
-                        if (!MatchUiStore.instance.resolvedInvitations.contains(0))
+                        if (!MatchUiStore.instance.resolvedInvitations.contains(
+                          0,
+                        ))
                           _invitationCard(
                             context: context,
                             index: 0,
                             inviter: 'Lê Thị D',
                             initials: 'LD',
-                            portrait: 'assets/images/match/invitation_le_thi_d.png',
+                            portrait:
+                                'assets/images/match/invitation_le_thi_d.png',
                             title: 'Team Practice',
                           ),
-                        if (!MatchUiStore.instance.resolvedInvitations.contains(0))
+                        if (!MatchUiStore.instance.resolvedInvitations.contains(
+                          0,
+                        ))
                           const SizedBox(height: 12),
-                        if (!MatchUiStore.instance.resolvedInvitations.contains(1))
+                        if (!MatchUiStore.instance.resolvedInvitations.contains(
+                          1,
+                        ))
                           _invitationCard(
                             context: context,
                             index: 1,
@@ -237,7 +258,9 @@ class MatchInvitationsScreen extends StatelessWidget {
               radius: 17,
               backgroundColor: MatchColors.lightGreen,
               child: Text(
-                inv.inviterName.isNotEmpty ? inv.inviterName[0].toUpperCase() : 'P',
+                inv.inviterName.isNotEmpty
+                    ? inv.inviterName[0].toUpperCase()
+                    : 'P',
                 style: _text(13, FontWeight.w700, MatchColors.primaryGreen),
               ),
             ),
@@ -313,7 +336,9 @@ class MatchInvitationsScreen extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: _red,
                     side: const BorderSide(color: _red),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   onPressed: () {
                     MatchUiStore.instance.declineInvitation(inv);
@@ -334,12 +359,18 @@ class MatchInvitationsScreen extends StatelessWidget {
                     backgroundColor: MatchColors.primaryGreen,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   onPressed: () {
                     MatchUiStore.instance.acceptInvitation(inv, currentName);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Đã chấp nhận lời mời từ ${inv.inviterName}!')),
+                      SnackBar(
+                        content: Text(
+                          'Đã chấp nhận lời mời từ ${inv.inviterName}!',
+                        ),
+                      ),
                     );
                   },
                   child: const Text('Chấp nhận'),

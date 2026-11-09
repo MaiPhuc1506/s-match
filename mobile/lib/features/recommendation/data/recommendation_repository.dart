@@ -158,4 +158,5 @@ final recommendationRepositoryProvider = Provider<RecommendationRepository>((
 final recommendationsProvider = FutureProvider.autoDispose
     .family<List<RecommendedPlayer>, RecommendationQuery>(
       (ref, query) => ref.watch(recommendationRepositoryProvider).search(query),
+      dependencies: [recommendationRepositoryProvider],
     );

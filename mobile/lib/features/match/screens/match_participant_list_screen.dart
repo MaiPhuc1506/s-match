@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion_widgets.dart';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -148,7 +150,7 @@ class MatchParticipantListScreen extends StatelessWidget {
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
-                child: Column(
+                child: AppStaggeredColumn(
                   children: [
                     for (var i = 0; i < _participants.length; i++) ...[
                       _participantRow(context, _participants[i], i),

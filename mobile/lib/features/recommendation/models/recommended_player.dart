@@ -20,7 +20,7 @@ class RecommendedPlayer {
     this.hasReferenceRadar = false,
   });
   final String id;
-  final double score;
+  final double? score;
   final String? name, level, avatarAsset, avatarUrl, bio, location;
   final String? mode, playStyle, availability;
   final double? distanceKm, rating;

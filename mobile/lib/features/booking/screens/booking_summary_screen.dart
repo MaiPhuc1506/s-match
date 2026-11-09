@@ -1,3 +1,4 @@
+import '../../../core/theme/app_motion_widgets.dart';
 import '../../../core/theme/app_motion.dart';
 import 'booking_success_screen.dart';
 
@@ -17,6 +18,9 @@ class BookingSummaryScreen extends StatelessWidget {
   final String priceText;
   final VoidCallback? onConfirm;
   final bool isSubmitting;
+  final bool canConfirm;
+  final bool demo;
+  final String? photoAsset;
 
   const BookingSummaryScreen({
     super.key,
@@ -30,6 +34,9 @@ class BookingSummaryScreen extends StatelessWidget {
     this.priceText = '100,000 VND',
     this.onConfirm,
     this.isSubmitting = false,
+    this.canConfirm = true,
+    this.demo = false,
+    this.photoAsset,
   });
 
   @override
@@ -47,7 +54,7 @@ class BookingSummaryScreen extends StatelessWidget {
         bottom: false,
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
+          child: AppStaggeredColumn(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(context),
@@ -110,12 +117,19 @@ class BookingSummaryScreen extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: SvgPicture.asset(
-              BookingIcons.courtThumbnail,
-              width: 86,
-              height: 58,
-              fit: BoxFit.cover,
-            ),
+            child: photoAsset != null
+                ? Image.asset(
+                    photoAsset!,
+                    width: 86,
+                    height: 58,
+                    fit: BoxFit.cover,
+                  )
+                : SvgPicture.asset(
+                    BookingIcons.courtThumbnail,
+                    width: 86,
+                    height: 58,
+                    fit: BoxFit.cover,
+                  ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -422,7 +436,7 @@ class BookingSummaryScreen extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
           ),
         ),
-        onPressed: isSubmitting
+        onPressed: isSubmitting || !canConfirm
             ? null
             : () {
                 if (onConfirm != null) {
@@ -442,7 +456,11 @@ class BookingSummaryScreen extends StatelessWidget {
                 }
               },
         child: Text(
-          isSubmitting ? 'Confirming…' : 'Confirm Booking',
+          isSubmitting
+              ? 'Confirming…'
+              : demo
+              ? 'Confirm Demo Booking'
+              : 'Confirm Booking',
           style: BookingTypography.inter(
             fontSize: 15,
             fontWeight: FontWeight.w600,

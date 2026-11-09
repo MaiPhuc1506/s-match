@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion_widgets.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -161,7 +163,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               24,
               media.padding.bottom + 24,
             ),
-            child: Column(
+            child: AppStaggeredColumn(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Create Account', style: AppTextStyles.titleBold),

@@ -11,6 +11,8 @@ import '../booking_theme.dart';
 
 class BookingSuccessScreen extends StatefulWidget {
   final String bookingId;
+  final bool demo;
+  final String? photoAsset;
   final String facilityName;
   final String courtName;
   final String address;
@@ -21,6 +23,8 @@ class BookingSuccessScreen extends StatefulWidget {
 
   const BookingSuccessScreen({
     super.key,
+    this.demo = false,
+    this.photoAsset,
     this.bookingId = '#SM20260920001',
     this.facilityName = 'Sunrise Badminton Club',
     this.courtName = 'Sân 3 · Indoor Badminton Court',
@@ -122,11 +126,18 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
         width: 180,
         height: 110,
         child: Center(
-          child: SvgPicture.asset(
-            BookingIcons.successBadge,
-            width: 90,
-            height: 90,
-          ),
+          child: widget.photoAsset != null
+              ? Image.asset(
+                  widget.photoAsset!,
+                  width: 86,
+                  height: 58,
+                  fit: BoxFit.cover,
+                )
+              : SvgPicture.asset(
+                  BookingIcons.successBadge,
+                  width: 90,
+                  height: 90,
+                ),
         ),
       );
     }
@@ -161,7 +172,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
     return Column(
       children: [
         Text(
-          'Booking Confirmed!',
+          widget.demo ? 'Demo Booking Confirmed!' : 'Booking Confirmed!',
           style: BookingTypography.inter(
             fontSize: 22,
             fontWeight: FontWeight.w700,
@@ -171,7 +182,9 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
         ),
         const SizedBox(height: 8),
         Text(
-          'Your court has been successfully reserved',
+          widget.demo
+              ? 'Saved for this session. No real court has been reserved.'
+              : 'Your court has been successfully reserved',
           style: BookingTypography.inter(
             fontSize: 13,
             fontWeight: FontWeight.w400,

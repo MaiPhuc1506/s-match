@@ -40,6 +40,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   share_plus: ^11.1.0
   maplibre_gl: ^0.28.0
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:
@@ -71,6 +72,9 @@ flutter:
     - assets/sprint8/
     - assets/sprint9/
     - assets/map/
+    - assets/sprint10/courts/
+    - assets/sprint10/learning/
+    - assets/sprint10/icons/
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

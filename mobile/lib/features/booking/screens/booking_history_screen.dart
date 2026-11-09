@@ -1,3 +1,5 @@
+import '../../../core/theme/app_motion_widgets.dart';
+
 import 'package:dio/dio.dart';
 
 import '../../../core/network/api_client.dart';
@@ -35,6 +37,7 @@ class BookingHistoryItem {
 
 class BookingHistoryScreen extends StatefulWidget {
   final bool live;
+  final List<BookingHistoryItem>? demoBookings;
   final PlayerNavTab originTab;
   final ValueChanged<BookingHistoryItem>? onSelectBooking;
   final VoidCallback? onNavigateHome;
@@ -46,6 +49,7 @@ class BookingHistoryScreen extends StatefulWidget {
   const BookingHistoryScreen({
     super.key,
     this.live = false,
+    this.demoBookings,
     this.originTab = PlayerNavTab.map,
     this.onSelectBooking,
     this.onNavigateHome,
@@ -99,12 +103,12 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   ];
 
   String _date(String raw) {
-    final d = DateTime.parse(raw).toLocal();
+    final d = DateTime.parse(raw).toUtc().add(const Duration(hours: 7));
     return '${d.day}/${d.month}/${d.year}';
   }
 
   String _time(String raw) {
-    final d = DateTime.parse(raw).toLocal();
+    final d = DateTime.parse(raw).toUtc().add(const Duration(hours: 7));
     return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }
 
@@ -113,7 +117,9 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.live) {
+    if (widget.demoBookings != null) {
+      _allBookings = List.of(widget.demoBookings!);
+    } else if (widget.live) {
       _allBookings = [];
       _loadBookings();
     }
@@ -203,9 +209,17 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                 children: [
                   if (Navigator.canPop(context))
                     BackButton(onPressed: () => Navigator.pop(context)),
+                  if (widget.live)
+                    IconButton(
+                      tooltip: 'Refresh bookings',
+                      onPressed: _loading ? null : _loadBookings,
+                      icon: const Icon(Icons.refresh),
+                    ),
                   Expanded(
                     child: Text(
-                      'My Bookings',
+                      !widget.live || widget.demoBookings != null
+                          ? 'Demo Bookings'
+                          : 'My Bookings',
                       style: BookingTypography.inter(
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
@@ -246,7 +260,14 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                       separatorBuilder: (_, _) => const SizedBox(height: 12),
                       itemBuilder: (context, index) {
                         final booking = _displayedBookings[index];
-                        return _buildBookingCard(booking);
+                        return AppReveal(
+                          key: ValueKey(booking.id),
+                          id: 'booking-${booking.id}',
+                          delay: index.clamp(0, 3) * 90,
+                          child: AppPressFeedback(
+                            child: _buildBookingCard(booking),
+                          ),
+                        );
                       },
                     ),
             ),
@@ -291,7 +312,9 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
     return InkWell(
       onTap: () => setState(() => _activeTabIndex = index),
       borderRadius: BorderRadius.circular(13),
-      child: Container(
+      child: AnimatedContainer(
+        duration: AppMotion.duration(context, 180),
+        curve: Curves.easeOutCubic,
         height: 26,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         alignment: Alignment.center,
@@ -325,6 +348,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
             AppMotion.route(
               BookingDetailScreen(
                 bookingId: booking.id,
+                photoAsset: booking.source?['photoAsset'] as String?,
                 facilityName: booking.facilityName,
                 courtName: booking.courtName,
                 priceText: booking.priceText,
@@ -346,7 +370,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                 statusText:
                     booking.source?['status']?.toString() ??
                     booking.status.name,
-                readOnly: widget.live,
+                readOnly: widget.live || widget.demoBookings != null,
               ),
               name: '/booking-detail-preview',
             ),

@@ -172,8 +172,11 @@ class DashboardSelector extends StatelessWidget {
     super.key,
     required this.palette,
     required this.onTap,
+    this.icon = 'owner.imgIconCalendar',
+    this.chevron = 'owner.imgFrame4',
   });
   final String label;
+  final String icon, chevron;
   final DashboardPalette palette;
   final VoidCallback onTap;
   @override
@@ -185,11 +188,7 @@ class DashboardSelector extends StatelessWidget {
       height: 44,
       child: Row(
         children: [
-          DashboardAsset(
-            'owner.imgIconCalendar',
-            size: 18,
-            color: palette.brand,
-          ),
+          DashboardAsset(icon, size: 18, color: palette.brand),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -199,7 +198,7 @@ class DashboardSelector extends StatelessWidget {
               style: palette.text(13, weight: FontWeight.w600),
             ),
           ),
-          DashboardAsset('owner.imgFrame4', size: 16, color: palette.muted),
+          DashboardAsset(chevron, size: 16, color: palette.muted),
         ],
       ),
     ),
@@ -252,11 +251,22 @@ class DashboardMetric extends StatelessWidget {
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: DashboardCount(
-              value,
-              key: ValueKey(label),
-              style: palette.text(compact ? 22 : 24, weight: FontWeight.w700),
-            ),
+            child: value.contains(':')
+                ? Text(
+                    value,
+                    style: palette.text(
+                      compact ? 22 : 24,
+                      weight: FontWeight.w700,
+                    ),
+                  )
+                : DashboardCount(
+                    value,
+                    key: ValueKey(label),
+                    style: palette.text(
+                      compact ? 22 : 24,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
           ),
           const SizedBox(height: 4),
           Text(

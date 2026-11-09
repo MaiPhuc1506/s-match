@@ -30,10 +30,12 @@ describe('BookingsService', () => {
   beforeEach(async () => {
     prisma = {
       $transaction: jest.fn(async (cb) => cb(prisma)),
-      $executeRaw: jest.fn().mockResolvedValue(1),
+      $queryRaw: jest.fn().mockResolvedValue(1),
       court: {
         findUnique: jest.fn(),
       },
+      facility: { findUnique: jest.fn() },
+      timeSlot: { findMany: jest.fn().mockResolvedValue([{ startTime: '15:00', endTime: '17:00', price: 160000 }]) },
       booking: {
         create: jest.fn(),
         findFirst: jest.fn(),
@@ -114,8 +116,8 @@ describe('BookingsService', () => {
       await expect(
         service.create(1, {
           courtId: 1,
-          startTime: `${dateStr}T23:00:00.000Z`,
-          endTime: `${nextDateStr}T01:00:00.000Z`,
+          startTime: `${dateStr}T23:00:00+07:00`,
+          endTime: `${nextDateStr}T01:00:00+07:00`,
         }),
       ).rejects.toThrow(BadRequestException);
     });
@@ -216,6 +218,38 @@ describe('BookingsService', () => {
       expect(result).toEqual(createdBooking);
     });
 
+    it('uses configured whole-slot prices instead of the default hourly rate', async () => {
+      prisma.court.findUnique.mockResolvedValue(mockCourt);
+      prisma.timeSlot.findMany.mockResolvedValue([
+        { startTime: '15:00', endTime: '16:00', price: 125000 },
+        { startTime: '16:00', endTime: '17:00', price: 150000 },
+      ]);
+      await service.create(1, { courtId: 1, facilityId: 10, startTime: validStartTime, endTime: validEndTime });
+      expect(prisma.booking.create.mock.calls[0][0].data.totalPrice).toBe(275000);
+    });
+
+    it('rejects a court outside the selected facility', async () => {
+      prisma.court.findUnique.mockResolvedValue(mockCourt);
+      await expect(service.create(1, { courtId: 1, facilityId: 99, startTime: validStartTime, endTime: validEndTime })).rejects.toThrow(BadRequestException);
+      expect(prisma.booking.create).not.toHaveBeenCalled();
+    });
+
+    it.each([{ slots: [] }, { slots: [{ startTime: '16:00', endTime: '17:00', price: 100000 }] }])('rejects missing or discontinuous pricing %j', async ({ slots }) => {
+      prisma.court.findUnique.mockResolvedValue(mockCourt);
+      prisma.timeSlot.findMany.mockResolvedValue(slots);
+      await expect(service.create(1, { courtId: 1, startTime: validStartTime, endTime: validEndTime })).rejects.toThrow(BadRequestException);
+      expect(prisma.booking.create).not.toHaveBeenCalled();
+    });
+
+    it('treats equivalent offsets as the same Vietnam business date and time', async () => {
+      prisma.court.findUnique.mockResolvedValue(mockCourt);
+      prisma.timeSlot.findMany.mockResolvedValue([{ startTime: '06:00', endTime: '08:00', price: 210000 }]);
+      const tomorrow = new Date(futureDate.getTime() + 86400000).toISOString().slice(0, 10);
+      await service.create(1, { courtId: 1, startTime: `${dateStr}T23:00:00Z`, endTime: `${tomorrow}T01:00:00Z` });
+      expect(operatingHoursService.isWithinOperatingHours).toHaveBeenCalledWith(10, new Date(`${tomorrow}T00:00:00Z`).getUTCDay(), '06:00', '08:00', prisma);
+      expect(prisma.booking.create.mock.calls[0][0].data.totalPrice).toBe(210000);
+    });
+
     it('should handle concurrent requests: only one succeeds and the other fails with ConflictException', async () => {
       prisma.court.findUnique.mockResolvedValue(mockCourt);
       operatingHoursService.isWithinOperatingHours.mockResolvedValue(true);
@@ -233,8 +267,9 @@ describe('BookingsService', () => {
         await previousLock;
         try {
           return await cb({
-            $executeRaw: jest.fn().mockResolvedValue(1),
+            $queryRaw: jest.fn().mockResolvedValue(1),
             court: { findUnique: jest.fn().mockResolvedValue(mockCourt) },
+            timeSlot: { findMany: jest.fn().mockResolvedValue([{ startTime: '15:00', endTime: '17:00', price: 160000 }]) },
             booking: {
               findFirst: jest.fn().mockImplementation(async () => existingBooking),
               create: jest.fn().mockImplementation(async (args: any) => {
@@ -283,6 +318,19 @@ describe('BookingsService', () => {
         expect.objectContaining({ where: { userId: 5 } }),
       );
       expect(result).toEqual(mockList);
+    });
+  });
+
+  describe('findOwnerBookings', () => {
+    it('always restricts the query to facilities owned by the requester', async () => {
+      prisma.booking.findMany.mockResolvedValue([]);
+      await service.findOwnerBookings(2, {});
+      expect(prisma.booking.findMany.mock.calls[0][0].where.court.facility.ownerId).toBe(2);
+    });
+    it('rejects a facility owned by someone else', async () => {
+      prisma.facility.findUnique.mockResolvedValue({ ownerId: 99 });
+      await expect(service.findOwnerBookings(2, { facilityId: 10 })).rejects.toThrow(ForbiddenException);
+      expect(prisma.booking.findMany).not.toHaveBeenCalled();
     });
   });
 

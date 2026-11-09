@@ -25,12 +25,14 @@ class BookingFlowScreen extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (_) => BookingSummaryScreen(
+              demo: true,
               // Màn 02 -> Màn 03 (Booking Success)
               onConfirm: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => BookingSuccessScreen(
+                      demo: true,
                       // Màn 03 -> Màn 04 (Booking History)
                       onViewBookings: () {
                         Navigator.push(
