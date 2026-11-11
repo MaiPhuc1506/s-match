@@ -18,6 +18,7 @@ class UserProfile(BaseModel):
     skill: Optional[Union[List[float], Dict[str, Any]]] = None
     skills: Optional[List[float]] = None
     available_time_slots: List[str] = []
+    available_hours: Optional[List[int]] = []
     location: Optional[Point] = None
     lat: Optional[float] = None
     lon: Optional[float] = None
@@ -80,7 +81,6 @@ def api_calculate_distance(payload: DistanceRequestPayload):
 
 REQUIRED_SKILL_KEYS = ("smash", "defense", "net_play", "stamina", "footwork", "serve")
 
-
 def extract_skill_vector(
     skills: Optional[List[float]],
     skill: Optional[Union[List[float], Dict[str, Any]]],
@@ -96,6 +96,24 @@ def extract_skill_vector(
         return [float(skill.get(k, 3.0)) for k in REQUIRED_SKILL_KEYS]
     return None
 
+def compute_time_overlap(u_hours: List[int], c_hours: List[int], u_slots: List[str], c_slots: List[str]) -> float:
+    if u_hours and c_hours:
+        set_u, set_c = set(u_hours), set(c_hours)
+        intersection = set_u.intersection(set_c)
+        union = set_u.union(set_c)
+        return float(len(intersection) / len(union)) if union else 1.0
+    if u_slots and c_slots:
+        set_u, set_c = set(u_slots), set(c_slots)
+        intersection = set_u.intersection(set_c)
+        union = set_u.union(set_c)
+        return float(len(intersection) / len(union)) if union else 1.0
+    return 1.0
+
+def compute_style_similarity(u_style: List[str], c_style: List[str]) -> float:
+    if not u_style or not c_style:
+        return 0.8
+    set_u, set_c = set(u_style), set(c_style)
+    return 1.0 if set_u.intersection(set_c) else 0.5
 
 @app.post("/api/v1/match")
 @app.post("/match")
@@ -109,7 +127,6 @@ def finalize_matchmaking(payload: MatchRequestPayload):
 
     skills_list = extract_skill_vector(user.skills, user.skill, strict=True)
 
-    # Kiểm tra nghiêm ngặt: Nếu không đủ đúng 6 phần tử sẽ báo lỗi 400
     if not skills_list or len(skills_list) != 6:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -148,21 +165,49 @@ def finalize_matchmaking(payload: MatchRequestPayload):
 
         cand_skills_arr = np.array(cand_skills)
 
+        # 1. Skill Score (30%)
         skill_similarity = max(0.0, 1.0 - (np.linalg.norm(user_skills_arr - cand_skills_arr) / 10.0))
+        skill_score = skill_similarity * 100.0
+
+        # 2. Distance Score (25%)
         if max_allowed_dist > 0:
             distance_score = max(0.0, 1.0 - (dist / max_allowed_dist)) * 100.0
         else:
             distance_score = 100.0 if dist == 0 else 0.0
-        
-        total_score = float((skill_similarity * 0.3 + (distance_score / 100.0) * 0.25 + 0.45) * 100)
+
+        # 3. Time Score (20%)
+        time_overlap = compute_time_overlap(
+            user.available_hours or [], cand.available_hours or [],
+            user.available_time_slots or [], cand.available_time_slots or []
+        )
+        time_score = time_overlap * 100.0
+
+        # 4. Reliability Score (15%)
+        rel_score = min(100.0, max(0.0, (cand.reliability_score / 5.0) * 100.0))
+
+        # 5. Style Score (10%)
+        style_sim = compute_style_similarity(user.playing_style, cand.playing_style)
+        style_score = style_sim * 100.0
+
+        # Tính tổng điểm 5 yếu tố chuẩn (không còn hằng số +0.45)
+        total_score = (
+            (skill_score * 0.30) +
+            (distance_score * 0.25) +
+            (time_score * 0.20) +
+            (rel_score * 0.15) +
+            (style_score * 0.10)
+        )
 
         matched_users.append({
             "user_id": cand.user_id,
             "match_score": round(total_score, 2),
             "distance_km": round(dist, 2),
             "breakdown": {
+                "skill_score": round(skill_score, 2),
                 "distance_score": round(distance_score, 2),
-                "skill_score": round(skill_similarity * 100, 2)
+                "time_score": round(time_score, 2),
+                "reliability_score": round(rel_score, 2),
+                "style_score": round(style_score, 2)
             }
         })
 
