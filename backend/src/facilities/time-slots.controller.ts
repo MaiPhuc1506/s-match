@@ -66,7 +66,7 @@ export class TimeSlotsController {
     @Body() dto: CreateTimeSlotDto,
   ) {
     const ownerId = Number(req.user.sub);
-    return this.timeSlotsService.create(ownerId, facilityId, courtId, dto);
+    return this.timeSlotsService.create(ownerId, facilityId, courtId, dto, req.user.role);
   }
 
   @Patch(':slotId')
@@ -84,7 +84,7 @@ export class TimeSlotsController {
     @Body() dto: UpdateTimeSlotDto,
   ) {
     const ownerId = Number(req.user.sub);
-    return this.timeSlotsService.update(ownerId, facilityId, courtId, slotId, dto);
+    return this.timeSlotsService.update(ownerId, facilityId, courtId, slotId, dto, req.user.role);
   }
 
   @Delete(':slotId')
@@ -101,6 +101,6 @@ export class TimeSlotsController {
     @Param('slotId', ParseIntPipe) slotId: number,
   ) {
     const ownerId = Number(req.user.sub);
-    return this.timeSlotsService.remove(ownerId, facilityId, courtId, slotId);
+    return this.timeSlotsService.remove(ownerId, facilityId, courtId, slotId, req.user.role);
   }
 }

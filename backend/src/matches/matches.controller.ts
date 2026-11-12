@@ -60,6 +60,10 @@ export class MatchesController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Cập nhật thông tin trận đấu (Chỉ Host)' })
+  @ApiResponse({ status: 200, description: 'Cập nhật trận đấu thành công.' })
+  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ.' })
+  @ApiResponse({ status: 403, description: 'Chỉ Host mới có quyền chỉnh sửa trận đấu.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy trận đấu.' })
   async updateMatch(
     @Param('id', ParseIntPipe) id: number,
     @Request() req: any,
@@ -71,6 +75,9 @@ export class MatchesController {
 
   @Patch(':id/cancel')
   @ApiOperation({ summary: 'Hủy trận đấu (Chỉ Host)' })
+  @ApiResponse({ status: 200, description: 'Hủy trận đấu thành công.' })
+  @ApiResponse({ status: 403, description: 'Chỉ Host mới có quyền hủy trận đấu.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy trận đấu.' })
   async cancelMatch(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
     const userId = this.extractUserId(req);
     return this.matchesService.cancelMatch(id, userId);
@@ -104,6 +111,10 @@ export class MatchesController {
   // --- INVITATIONS & JOIN REQUESTS ---
   @Post(':id/invite')
   @ApiOperation({ summary: 'Host gửi lời mời một người chơi tham gia trận' })
+  @ApiResponse({ status: 201, description: 'Đã gửi lời mời tham gia trận.' })
+  @ApiResponse({ status: 400, description: 'Người chơi đã tham gia hoặc trận đã đầy.' })
+  @ApiResponse({ status: 403, description: 'Chỉ Host mới có quyền mời.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy trận đấu hoặc người chơi.' })
   async inviteUser(
     @Param('id', ParseIntPipe) id: number,
     @Request() req: any,
@@ -115,6 +126,9 @@ export class MatchesController {
 
   @Post(':id/join-request')
   @ApiOperation({ summary: 'Người chơi gửi yêu cầu xin tham gia Open Match' })
+  @ApiResponse({ status: 201, description: 'Gửi yêu cầu tham gia thành công.' })
+  @ApiResponse({ status: 400, description: 'Trận không nhận thêm yêu cầu hoặc đã đủ người.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy trận đấu.' })
   async requestToJoin(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
     const userId = this.extractUserId(req);
     return this.matchesService.requestToJoin(id, userId);
@@ -122,6 +136,9 @@ export class MatchesController {
 
   @Patch(':id/invitations/accept')
   @ApiOperation({ summary: 'Người chơi chấp nhận lời mời từ Host' })
+  @ApiResponse({ status: 200, description: 'Chấp nhận lời mời thành công.' })
+  @ApiResponse({ status: 403, description: 'Bạn không có lời mời tham gia trận này.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy trận đấu.' })
   async acceptInvitation(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
     const userId = this.extractUserId(req);
     return this.matchesService.acceptInvitation(id, userId);
@@ -129,6 +146,9 @@ export class MatchesController {
 
   @Patch(':id/invitations/reject')
   @ApiOperation({ summary: 'Người chơi từ chối lời mời từ Host' })
+  @ApiResponse({ status: 200, description: 'Đã từ chối lời mời.' })
+  @ApiResponse({ status: 403, description: 'Bạn không có lời mời tham gia trận này.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy trận đấu.' })
   async rejectInvitation(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
     const userId = this.extractUserId(req);
     return this.matchesService.rejectInvitation(id, userId);
@@ -136,6 +156,9 @@ export class MatchesController {
 
   @Patch(':id/requests/:userId/approve')
   @ApiOperation({ summary: 'Host duyệt yêu cầu tham gia trận của người chơi' })
+  @ApiResponse({ status: 200, description: 'Duyệt yêu cầu tham gia thành công.' })
+  @ApiResponse({ status: 403, description: 'Chỉ Host mới có quyền duyệt yêu cầu.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy trận đấu hoặc yêu cầu.' })
   async hostApproveRequest(
     @Param('id', ParseIntPipe) id: number,
     @Param('userId', ParseIntPipe) applicantUserId: number,
@@ -147,6 +170,9 @@ export class MatchesController {
 
   @Patch(':id/requests/:userId/reject')
   @ApiOperation({ summary: 'Host từ chối yêu cầu tham gia trận của người chơi' })
+  @ApiResponse({ status: 200, description: 'Từ chối yêu cầu tham gia thành công.' })
+  @ApiResponse({ status: 403, description: 'Chỉ Host mới có quyền từ chối yêu cầu.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy trận đấu hoặc yêu cầu.' })
   async hostRejectRequest(
     @Param('id', ParseIntPipe) id: number,
     @Param('userId', ParseIntPipe) applicantUserId: number,
@@ -171,6 +197,11 @@ export class OpenMatchesController {
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles(Role.PLAYER)
+  @ApiOperation({ summary: 'Tạo trận đấu mở (Open Match) gắn với đơn đặt sân' })
+  @ApiResponse({ status: 201, description: 'Tạo Open Match thành công.' })
+  @ApiResponse({ status: 400, description: 'Đơn đặt sân không hợp lệ hoặc đã gắn với trận khác.' })
+  @ApiResponse({ status: 403, description: 'Không phải chủ đơn đặt sân hoặc không có quyền PLAYER.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy đơn đặt sân.' })
   createFromBooking(
     @Request() request: any,
     @Param('bookingId', ParseIntPipe) bookingId: number,
@@ -180,11 +211,16 @@ export class OpenMatchesController {
   }
 
   @Get('open-matches')
+  @ApiOperation({ summary: 'Xem danh sách các trận đấu mở công khai (Public)' })
+  @ApiResponse({ status: 200, description: 'Danh sách các trận đấu mở.' })
   findAll(@Query() query: QueryOpenMatchDto) {
     return this.matchesService.findAll(query);
   }
 
   @Get('open-matches/:id')
+  @ApiOperation({ summary: 'Xem chi tiết trận đấu mở công khai (Public)' })
+  @ApiResponse({ status: 200, description: 'Chi tiết trận đấu mở.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy trận đấu mở.' })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.matchesService.findOneOrThrow(id);
   }
@@ -193,6 +229,12 @@ export class OpenMatchesController {
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles(Role.PLAYER)
+  @ApiOperation({ summary: 'Người chơi gửi yêu cầu xin tham gia Open Match' })
+  @ApiResponse({ status: 201, description: 'Gửi yêu cầu tham gia thành công.' })
+  @ApiResponse({ status: 400, description: 'Trận đã đủ người hoặc không cho phép tham gia.' })
+  @ApiResponse({ status: 403, description: 'Chỉ PLAYER mới được tham gia.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy trận đấu.' })
+  @ApiResponse({ status: 409, description: 'Đã gửi yêu cầu hoặc đã là thành viên trong trận.' })
   requestToJoin(@Request() request: any, @Param('id', ParseIntPipe) id: number) {
     return this.matchesService.requestToJoin(id, this.userId(request));
   }
@@ -201,6 +243,11 @@ export class OpenMatchesController {
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles(Role.PLAYER)
+  @ApiOperation({ summary: 'Host duyệt yêu cầu tham gia trận đấu mở' })
+  @ApiResponse({ status: 200, description: 'Duyệt thành viên tham gia thành công.' })
+  @ApiResponse({ status: 400, description: 'Trận đã đủ người.' })
+  @ApiResponse({ status: 403, description: 'Chỉ Host mới có quyền duyệt yêu cầu.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy yêu cầu tham gia.' })
   accept(
     @Request() request: any,
     @Param('id', ParseIntPipe) id: number,
@@ -213,6 +260,10 @@ export class OpenMatchesController {
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles(Role.PLAYER)
+  @ApiOperation({ summary: 'Host từ chối yêu cầu tham gia trận đấu mở' })
+  @ApiResponse({ status: 200, description: 'Đã từ chối yêu cầu tham gia.' })
+  @ApiResponse({ status: 403, description: 'Chỉ Host mới có quyền từ chối.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy yêu cầu tham gia.' })
   reject(
     @Request() request: any,
     @Param('id', ParseIntPipe) id: number,
@@ -225,6 +276,11 @@ export class OpenMatchesController {
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles(Role.PLAYER)
+  @ApiOperation({ summary: 'Người chơi rời khỏi trận đấu mở' })
+  @ApiResponse({ status: 200, description: 'Rời trận đấu thành công.' })
+  @ApiResponse({ status: 400, description: 'Host không thể rời trận hoặc trạng thái trận không cho phép.' })
+  @ApiResponse({ status: 403, description: 'Bạn không phải thành viên trận này.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy trận đấu.' })
   leave(@Request() request: any, @Param('id', ParseIntPipe) id: number) {
     return this.matchesService.leave(this.userId(request), id);
   }

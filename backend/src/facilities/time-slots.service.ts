@@ -9,6 +9,7 @@ import { BookingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OperatingHoursService } from './operating-hours.service';
 import { CreateTimeSlotDto, UpdateTimeSlotDto } from './dto/time-slot.dto';
+import { Role } from '../auth/roles.enum';
 
 const PRISMA_UNIQUE_CONSTRAINT_ERROR = 'P2002';
 
@@ -60,8 +61,8 @@ export class TimeSlotsService {
     return result;
   }
 
-  async create(ownerId: number, facilityId: number, courtId: number, dto: CreateTimeSlotDto) {
-    await this.assertOwnership(ownerId, facilityId, courtId);
+  async create(ownerId: number, facilityId: number, courtId: number, dto: CreateTimeSlotDto, userRole?: string) {
+    await this.assertOwnership(ownerId, facilityId, courtId, userRole);
     this.assertValidRange(dto.startTime, dto.endTime);
 
     const withinOperatingHours = await this.operatingHoursService.isWithinOperatingHours(
@@ -99,8 +100,9 @@ export class TimeSlotsService {
     courtId: number,
     slotId: number,
     dto: UpdateTimeSlotDto,
+    userRole?: string,
   ) {
-    const slot = await this.assertSlotOwnership(ownerId, facilityId, courtId, slotId);
+    const slot = await this.assertSlotOwnership(ownerId, facilityId, courtId, slotId, userRole);
 
     const startTime = dto.startTime ?? slot.startTime;
     const endTime = dto.endTime ?? slot.endTime;
@@ -130,8 +132,8 @@ export class TimeSlotsService {
     });
   }
 
-  async remove(ownerId: number, facilityId: number, courtId: number, slotId: number) {
-    await this.assertSlotOwnership(ownerId, facilityId, courtId, slotId);
+  async remove(ownerId: number, facilityId: number, courtId: number, slotId: number, userRole?: string) {
+    await this.assertSlotOwnership(ownerId, facilityId, courtId, slotId, userRole);
     await this.prisma.timeSlot.delete({ where: { id: slotId } });
     return { deleted: true };
   }
@@ -175,12 +177,12 @@ export class TimeSlotsService {
     return court;
   }
 
-  private async assertOwnership(ownerId: number, facilityId: number, courtId: number) {
+  private async assertOwnership(ownerId: number, facilityId: number, courtId: number, userRole?: string) {
     const facility = await this.prisma.facility.findUnique({ where: { id: facilityId } });
     if (!facility) {
       throw new NotFoundException(`Không tìm thấy cơ sở với ID ${facilityId}`);
     }
-    if (facility.ownerId !== ownerId) {
+    if (userRole !== Role.ADMIN && facility.ownerId !== ownerId) {
       throw new ForbiddenException('Bạn không có quyền can thiệp vào cơ sở này');
     }
     await this.assertCourtBelongsToFacility(facilityId, courtId);
@@ -192,8 +194,9 @@ export class TimeSlotsService {
     facilityId: number,
     courtId: number,
     slotId: number,
+    userRole?: string,
   ) {
-    await this.assertOwnership(ownerId, facilityId, courtId);
+    await this.assertOwnership(ownerId, facilityId, courtId, userRole);
     const slot = await this.prisma.timeSlot.findUnique({ where: { id: slotId } });
     if (!slot || slot.courtId !== courtId) {
       throw new NotFoundException(`Không tìm thấy khung giờ với ID ${slotId} trong sân này`);

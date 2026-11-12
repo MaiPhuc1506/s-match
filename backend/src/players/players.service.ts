@@ -34,13 +34,14 @@ export class PlayersService {
   }
 
   async updateMyProfile(userId: number, dto: UpdateProfileDto) {
-    const { fullName, phone, ...profileData } = dto;
+    const { fullName, phone, phoneNumber, ...profileData } = dto;
+    const targetPhone = phone ?? phoneNumber;
 
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: {
         fullName,
-        phone,
+        phone: targetPhone,
         playerProfile: {
           upsert: {
             create: profileData,
