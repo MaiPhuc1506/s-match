@@ -1,0 +1,23 @@
+# SMM-44 — PostgreSQL + PostGIS TẠM THỜI chỉ để dựng lại DB sạch và test PostGIS.
+# Không dùng chung với compose chính: container, cổng (5434) và dữ liệu (tmpfs) đều riêng biệt.
+# Dừng container là mất toàn bộ dữ liệu => luôn là "database sạch".
+#
+#   docker compose -f docker-compose.smm44.yml up -d
+#   docker compose -f docker-compose.smm44.yml down
+services:
+  postgres_smm44:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: smatch_postgres_smm44
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 12345
+      POSTGRES_DB: postgres
+    ports:
+      - "5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
