@@ -285,6 +285,9 @@ async function main() {
 
   try {
     await prisma.$executeRawUnsafe(
+      `SELECT setval(pg_get_serial_sequence('"Facility"', 'id'), coalesce(max(id), 1)) FROM "Facility";`,
+    );
+    await prisma.$executeRawUnsafe(
       `SELECT setval(pg_get_serial_sequence('"Court"', 'id'), coalesce(max(id), 1)) FROM "Court";`,
     );
     await prisma.$executeRawUnsafe(
