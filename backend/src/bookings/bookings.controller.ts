@@ -37,6 +37,7 @@ export class BookingsController {
   }
 
   @Post()
+  @Roles(Role.PLAYER)
   @ApiOperation({ summary: 'Tạo đơn đặt sân mới (kiểm tra chống trùng lịch)' })
   @ApiResponse({ status: 201, description: 'Đặt sân thành công.' })
   @ApiResponse({ status: 400, description: 'Dữ liệu thời gian hoặc sân không hợp lệ.' })

@@ -1,12 +1,15 @@
 import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { Role } from '../auth/roles.enum';
 import { PlayersService } from './players.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @ApiTags('Player Profile')
 @ApiBearerAuth()
 @UseGuards(RolesGuard)
+@Roles(Role.PLAYER)
 @Controller('players')
 export class PlayersController {
   constructor(private readonly playersService: PlayersService) {}

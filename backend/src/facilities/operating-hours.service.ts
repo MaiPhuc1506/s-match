@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { Role } from '../auth/roles.enum';
 import {
   BulkUpsertOperatingHoursDto,
   UpsertOperatingHourDto,
@@ -27,8 +28,8 @@ export class OperatingHoursService {
     });
   }
 
-  async upsertOne(ownerId: number, facilityId: number, dto: UpsertOperatingHourDto) {
-    await this.assertOwnership(ownerId, facilityId);
+  async upsertOne(ownerId: number, facilityId: number, dto: UpsertOperatingHourDto, userRole?: string) {
+    await this.assertOwnership(ownerId, facilityId, userRole);
     this.assertValidRange(dto.openTime, dto.closeTime);
 
     return this.prisma.operatingHours.upsert({
@@ -40,8 +41,8 @@ export class OperatingHoursService {
     });
   }
 
-  async upsertBulk(ownerId: number, facilityId: number, dto: BulkUpsertOperatingHoursDto) {
-    await this.assertOwnership(ownerId, facilityId);
+  async upsertBulk(ownerId: number, facilityId: number, dto: BulkUpsertOperatingHoursDto, userRole?: string) {
+    await this.assertOwnership(ownerId, facilityId, userRole);
     dto.days.forEach((day) => this.assertValidRange(day.openTime, day.closeTime));
 
     return this.prisma.$transaction(
@@ -57,8 +58,8 @@ export class OperatingHoursService {
     );
   }
 
-  async remove(ownerId: number, facilityId: number, dayOfWeek: number) {
-    await this.assertOwnership(ownerId, facilityId);
+  async remove(ownerId: number, facilityId: number, dayOfWeek: number, userRole?: string) {
+    await this.assertOwnership(ownerId, facilityId, userRole);
 
     const existing = await this.prisma.operatingHours.findUnique({
       where: { facilityId_dayOfWeek: { facilityId, dayOfWeek } },
@@ -100,12 +101,12 @@ export class OperatingHoursService {
     }
   }
 
-  private async assertOwnership(ownerId: number, facilityId: number) {
+  private async assertOwnership(ownerId: number, facilityId: number, userRole?: string) {
     const facility = await this.prisma.facility.findUnique({ where: { id: facilityId } });
     if (!facility) {
       throw new NotFoundException(`Không tìm thấy cơ sở với ID ${facilityId}`);
     }
-    if (facility.ownerId !== ownerId) {
+    if (userRole !== Role.ADMIN && facility.ownerId !== ownerId) {
       throw new ForbiddenException('Bạn không có quyền cập nhật giờ hoạt động của cơ sở này');
     }
     return facility;

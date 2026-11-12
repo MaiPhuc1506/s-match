@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  DefaultValuePipe,
   Delete,
   Get,
   Param,
@@ -72,9 +73,8 @@ export class AvailabilityController {
   })
   getUpcomingSlots(
     @Param('userId', ParseIntPipe) userId: number,
-    @Query('days') days?: string,
+    @Query('days', new DefaultValuePipe(7), ParseIntPipe) days: number,
   ) {
-    const daysAhead = days ? Number(days) : 7;
-    return this.availabilityService.getUpcomingTimeSlots(userId, daysAhead);
+    return this.availabilityService.getUpcomingTimeSlots(userId, days);
   }
 }

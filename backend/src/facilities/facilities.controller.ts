@@ -114,7 +114,7 @@ export class FacilitiesController {
     @Body() dto: CreateCourtDto,
   ) {
     const ownerId = Number(req.user.sub);
-    return this.facilitiesService.addCourt(ownerId, facilityId, dto);
+    return this.facilitiesService.addCourt(ownerId, facilityId, dto, req.user.role);
   }
 
   @Patch(':id/courts/:courtId')

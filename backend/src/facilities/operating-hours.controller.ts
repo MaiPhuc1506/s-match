@@ -49,7 +49,7 @@ export class OperatingHoursController {
     @Body() dto: UpsertOperatingHourDto,
   ) {
     const ownerId = Number(req.user.sub);
-    return this.operatingHoursService.upsertOne(ownerId, facilityId, dto);
+    return this.operatingHoursService.upsertOne(ownerId, facilityId, dto, req.user.role);
   }
 
   @Put('bulk')
@@ -65,7 +65,7 @@ export class OperatingHoursController {
     @Body() dto: BulkUpsertOperatingHoursDto,
   ) {
     const ownerId = Number(req.user.sub);
-    return this.operatingHoursService.upsertBulk(ownerId, facilityId, dto);
+    return this.operatingHoursService.upsertBulk(ownerId, facilityId, dto, req.user.role);
   }
 
   @Delete(':dayOfWeek')
@@ -81,6 +81,6 @@ export class OperatingHoursController {
     @Param('dayOfWeek', ParseIntPipe) dayOfWeek: number,
   ) {
     const ownerId = Number(req.user.sub);
-    return this.operatingHoursService.remove(ownerId, facilityId, dayOfWeek);
+    return this.operatingHoursService.remove(ownerId, facilityId, dayOfWeek, req.user.role);
   }
 }
