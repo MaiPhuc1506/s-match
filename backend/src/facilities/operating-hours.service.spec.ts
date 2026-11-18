@@ -115,6 +115,14 @@ describe('OperatingHoursService', () => {
   });
 
   describe('isWithinOperatingHours', () => {
+    it('allows a booking ending at 23:00 but rejects one at or beyond closing', async () => {
+      prisma.operatingHours.findUnique.mockResolvedValue({
+        facilityId: 10, dayOfWeek: 1, openTime: '06:00', closeTime: '23:00',
+      });
+      expect(await service.isWithinOperatingHours(10, 1, '22:00', '23:00')).toBe(true);
+      expect(await service.isWithinOperatingHours(10, 1, '23:00', '24:00')).toBe(false);
+      expect(await service.isWithinOperatingHours(10, 1, '22:30', '23:30')).toBe(false);
+    });
     it('should return true if booking is within range', async () => {
       prisma.operatingHours.findUnique.mockResolvedValue({
         facilityId: 10,
@@ -140,4 +148,3 @@ describe('OperatingHoursService', () => {
     });
   });
 });
-

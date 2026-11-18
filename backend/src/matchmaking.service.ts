@@ -41,7 +41,7 @@ export class MatchmakingService {
       return Number(userId);
     });
     const profiles = await this.prisma.playerProfile.findMany({
-      where: { userId: { in: userIds }, user: { role: { name: RoleName.PLAYER } } },
+      where: { userId: { in: userIds }, locationSharingEnabled: true, user: { role: { name: RoleName.PLAYER } } },
       select: {
         userId: true, nickname: true, avatarUrl: true, skillLevel: true,
         user: { select: { fullName: true } },
@@ -52,11 +52,11 @@ export class MatchmakingService {
     const byUserId = new Map(profiles.map((profile) => [String(profile.userId), profile]));
     return this.saveSearch(userId, criteria, {
       // Iterate ranking, never the database rows: IN queries do not preserve order.
-      matchedUsers: ranked.matchedUsers.flatMap(({ userId, matchScore }) => {
+      matchedUsers: ranked.matchedUsers.flatMap(({ userId, matchScore, breakdown }) => {
         const profile = byUserId.get(userId);
         if (!profile) return [];
         return [{
-          userId, matchScore,
+          userId, matchScore, breakdown,
           profile: {
             fullName: profile.user.fullName ?? null,
             nickname: profile.nickname ?? null,

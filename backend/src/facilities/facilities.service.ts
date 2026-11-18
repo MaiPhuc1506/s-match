@@ -34,6 +34,7 @@ export class FacilitiesService {
       include: {
         courts: true,
         operatingHours: true,
+        services: { orderBy: { sortOrder: 'asc' } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -44,6 +45,7 @@ export class FacilitiesService {
       include: {
         courts: { include: { timeSlots: true } },
         operatingHours: true,
+        services: { orderBy: { sortOrder: 'asc' } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -55,6 +57,7 @@ export class FacilitiesService {
       include: {
         courts: { include: { timeSlots: true } },
         operatingHours: true,
+        services: { orderBy: { sortOrder: 'asc' } },
       },
     });
 

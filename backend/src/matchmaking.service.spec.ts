@@ -2,7 +2,7 @@ import { BadGatewayException, BadRequestException, ServiceUnavailableException }
 import { MatchmakingService } from './matchmaking.service';
 import { FastApiClient } from './matchmaking/fastapi.client';
 import { UnavailableCandidateProvider } from './matchmaking/candidate-provider';
-import { candidateData, findPlayerRequest, recommendationProfile } from '../test/helpers/matchmaking.fixture';
+import { candidateData, fastApiResponse, findPlayerRequest, recommendationProfile } from '../test/helpers/matchmaking.fixture';
 import { PrismaService } from './prisma/prisma.service';
 import { RecommendationHistoryService } from './recommendation-history/recommendation-history.service';
 
@@ -15,7 +15,7 @@ describe('MatchmakingService (dependency mocks only)', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     provider.getCandidates.mockResolvedValue(candidateData());
-    client.recommend.mockResolvedValue({ matchedUsers: [{ userId: '7', matchScore: 85 }], totalCandidatesProcessed: 2 });
+    client.recommend.mockResolvedValue({ matchedUsers: [{ userId: '7', matchScore: 85, breakdown: fastApiResponse().matched_users[0].breakdown }], totalCandidatesProcessed: 2 });
     prisma.playerProfile.findMany.mockResolvedValue([recommendationProfile(7)]);
     service = new MatchmakingService(provider, client as unknown as FastApiClient, prisma as unknown as PrismaService, history as unknown as RecommendationHistoryService);
   });
@@ -24,7 +24,7 @@ describe('MatchmakingService (dependency mocks only)', () => {
     const result = await service.getRecommendedMatches(8, findPlayerRequest);
     expect(provider.getCandidates).toHaveBeenCalledWith(8, findPlayerRequest);
     expect(client.recommend).toHaveBeenCalledWith(candidateData());
-    expect(result).toEqual({ matchedUsers: [{ userId: '7', matchScore: 85, profile: {
+    expect(result).toEqual({ matchedUsers: [{ userId: '7', matchScore: 85, breakdown: fastApiResponse().matched_users[0].breakdown, profile: {
       fullName: 'Fixture player 7', nickname: null, avatarUrl: null, skillLevel: null,
     } }], totalCandidatesProcessed: 2 });
   });
@@ -36,12 +36,12 @@ describe('MatchmakingService (dependency mocks only)', () => {
     expect(client.recommend).not.toHaveBeenCalled();
   });
   it('loads all ranked profiles by userId with one PLAYER-only allowlist query', async () => {
-    client.recommend.mockResolvedValue({ matchedUsers: [{ userId: '7', matchScore: 85 }, { userId: '3', matchScore: 80 }], totalCandidatesProcessed: 2 });
+    client.recommend.mockResolvedValue({ matchedUsers: [{ userId: '7', matchScore: 85, breakdown: fastApiResponse().matched_users[0].breakdown }, { userId: '3', matchScore: 80, breakdown: fastApiResponse().matched_users[1].breakdown }], totalCandidatesProcessed: 2 });
     prisma.playerProfile.findMany.mockResolvedValue([recommendationProfile(3), recommendationProfile(7)]);
     const result = await service.getRecommendedMatches(8, findPlayerRequest);
     expect(prisma.playerProfile.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.playerProfile.findMany).toHaveBeenCalledWith({
-      where: { userId: { in: [7, 3] }, user: { role: { name: 'PLAYER' } } },
+      where: { userId: { in: [7, 3] }, locationSharingEnabled: true, user: { role: { name: 'PLAYER' } } },
       select: { userId: true, nickname: true, avatarUrl: true, skillLevel: true, user: { select: { fullName: true } } },
     });
     expect(result.matchedUsers.map((row) => [row.userId, row.matchScore, row.profile.fullName])).toEqual([
@@ -63,12 +63,12 @@ describe('MatchmakingService (dependency mocks only)', () => {
       user: { fullName: null, email: 'private@example.test', phone: 'PRIVATE', password: 'PRIVATE' },
     }]);
     const result = await service.getRecommendedMatches(8, findPlayerRequest);
-    expect(result.matchedUsers).toEqual([{ userId: '7', matchScore: 85, profile: {
+    expect(result.matchedUsers).toEqual([{ userId: '7', matchScore: 85, breakdown: fastApiResponse().matched_users[0].breakdown, profile: {
       fullName: null, nickname: null, avatarUrl: null, skillLevel: null,
     } }]);
   });
   it('drops missing or no-longer-PLAYER profiles without replacing them or changing processed count', async () => {
-    client.recommend.mockResolvedValue({ matchedUsers: [{ userId: '7', matchScore: 85 }, { userId: '3', matchScore: 80 }], totalCandidatesProcessed: 2 });
+    client.recommend.mockResolvedValue({ matchedUsers: [{ userId: '7', matchScore: 85, breakdown: fastApiResponse().matched_users[0].breakdown }, { userId: '3', matchScore: 80, breakdown: fastApiResponse().matched_users[1].breakdown }], totalCandidatesProcessed: 2 });
     // The database PLAYER predicate excludes removed profiles and changed roles.
     prisma.playerProfile.findMany.mockResolvedValue([recommendationProfile(3)]);
     const result = await service.getRecommendedMatches(8, findPlayerRequest);

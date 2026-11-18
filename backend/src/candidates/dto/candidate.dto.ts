@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsNumber, IsOptional, Max, Min } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, Max, Min } from 'class-validator';
 
 export class UpdateLocationDto {
   @ApiProperty({ example: 16.047079, description: 'Vĩ độ (-90 → 90)' })
@@ -46,4 +46,10 @@ export class CandidateQueryDto {
   @Min(1)
   @Max(20)
   topK?: number;
+}
+
+export class UpdateLocationSharingDto {
+  @ApiProperty({ description: 'Cho phép người chơi khác khám phá hồ sơ theo vị trí', example: false })
+  @IsBoolean()
+  enabled: boolean;
 }

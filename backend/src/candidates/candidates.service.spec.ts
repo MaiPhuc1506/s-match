@@ -72,6 +72,20 @@ describe('CandidatesService', () => {
     });
   });
 
+  describe('location sharing', () => {
+    it('defaults to disabled when no profile exists', async () => {
+      prisma.playerProfile.findUnique.mockResolvedValue(null);
+      await expect(service.getLocationSharing(1)).resolves.toEqual({ enabled: false });
+    });
+    it.each([true, false])('stores consent %s only for the authenticated user', async (enabled) => {
+      prisma.playerProfile.upsert.mockResolvedValue({ locationSharingEnabled: enabled });
+      await expect(service.updateLocationSharing(1, enabled)).resolves.toEqual({ enabled });
+      expect(prisma.playerProfile.upsert).toHaveBeenCalledWith(expect.objectContaining({
+        where: { userId: 1 }, update: { locationSharingEnabled: enabled },
+      }));
+    });
+  });
+
   describe('findNearby', () => {
     it('throws BadRequestException when the user has no location yet', async () => {
       prisma.playerProfile.findUnique.mockResolvedValue({ userId: 1, latitude: null, longitude: null });
@@ -91,6 +105,9 @@ describe('CandidatesService', () => {
 
       expect(result.candidates.map((c) => c.userId)).toEqual([3, 2]);
       expect(result.candidates[0].distanceKm).toBeLessThan(result.candidates[1].distanceKm);
+      expect(result.candidates[0]).not.toHaveProperty('latitude');
+      expect(result.candidates[0]).not.toHaveProperty('longitude');
+      expect(prisma.playerProfile.findMany.mock.calls[0][0].where.locationSharingEnabled).toBe(true);
     });
 
     it('respects the limit', async () => {

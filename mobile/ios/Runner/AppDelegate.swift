@@ -23,6 +23,10 @@ import MapLibre
       simulatorMapPinch = SimulatorMapPinchBridge(registrar: registrar)
     }
     #endif
+    if let mascotRegistrar = engineBridge.pluginRegistry.registrar(forPlugin: "SmashScotBotAvatarPlugin") {
+      let factory = BotAvatarPlatformViewFactory(messenger: mascotRegistrar.messenger())
+      mascotRegistrar.register(factory, withId: "smashscot/bot_avatar")
+    }
   }
 }
 

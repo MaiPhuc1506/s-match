@@ -94,6 +94,7 @@ model PlayerProfile {
   latitude          Float?
   longitude         Float?
   locationUpdatedAt DateTime?
+  locationSharingEnabled Boolean @default(false)
 
   // SMM-12 / SMM-13: Bổ sung bảng Skill nối với PlayerProfile
   skill Skill?
@@ -171,6 +172,7 @@ model Facility {
   longitude      Float?
   contactPhone   String?
   description    String?
+  services       FacilityService[]
   courts         Court[]
   operatingHours OperatingHours[]
   createdAt      DateTime         @default(now())
@@ -203,6 +205,8 @@ model TimeSlot {
   dayOfWeek Int      // 0: Chủ Nhật, 1: Thứ 2, ..., 6: Thứ 7
   startTime String   // "18:00"
   endTime   String   // "19:00"
+  hourlyRate Float?  // Optional published hourly rate; price remains the full slot charge.
+  walkInPrice Float? // Walk-in charge for the entire slot.
   price     Float    // Giá cho khung giờ này (VNĐ)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -449,4 +453,17 @@ model RatingHistory {
 
   @@index([userId, createdAt])
   @@index([ratingId])
+}
+
+model FacilityService {
+  id Int @id @default(autoincrement())
+  facilityId Int
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  name String
+  price Float
+  unit String
+  category String @default("BEVERAGE")
+  sortOrder Int @default(0)
+  sourceKey String
+  @@unique([facilityId, sourceKey])
 }

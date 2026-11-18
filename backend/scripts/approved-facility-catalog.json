@@ -1,0 +1,455 @@
+{
+  "source": "Approved Figma Prototype Flow; local demo hours are 05:00–23:00. Extended periods use the nearest illustrative rate; concept venues, not verified businesses.",
+  "facilities": [
+    {
+      "name": "Hai Chau Badminton",
+      "id": 4,
+      "courts": 4,
+      "illustrativeHours": "05:00\u201323:00",
+      "illustrativeTariffs": [
+        {
+          "range": "05:00\u201312:00",
+          "fixedVndPerHour": 70000,
+          "walkInVndPerHour": 80000
+        },
+        {
+          "range": "12:00\u201317:00",
+          "fixedVndPerHour": 85000,
+          "walkInVndPerHour": 95000
+        },
+        {
+          "range": "17:00\u201320:00",
+          "fixedVndPerHour": 110000,
+          "walkInVndPerHour": 125000
+        },
+        {
+          "range": "20:00\u201323:00",
+          "fixedVndPerHour": 90000,
+          "walkInVndPerHour": 100000
+        }
+      ],
+      "illustrativeServices": [
+        {
+          "name": "Mineral water",
+          "priceVnd": 10000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Revive Original",
+          "priceVnd": 15000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Revive Salted Lemon",
+          "priceVnd": 15000,
+          "unit": "bottle"
+        }
+      ]
+    },
+    {
+      "name": "Hoa Cuong Badminton",
+      "id": 5,
+      "courts": 6,
+      "illustrativeHours": "05:00\u201323:00",
+      "illustrativeTariffs": [
+        {
+          "range": "05:00\u201311:00",
+          "fixedVndPerHour": 80000,
+          "walkInVndPerHour": 90000
+        },
+        {
+          "range": "11:00\u201316:00",
+          "fixedVndPerHour": 95000,
+          "walkInVndPerHour": 110000
+        },
+        {
+          "range": "16:00\u201320:00",
+          "fixedVndPerHour": 120000,
+          "walkInVndPerHour": 135000
+        },
+        {
+          "range": "20:00\u201323:00",
+          "fixedVndPerHour": 100000,
+          "walkInVndPerHour": 115000
+        }
+      ],
+      "illustrativeServices": [
+        {
+          "name": "Mineral water",
+          "priceVnd": 10000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Pocari Sweat",
+          "priceVnd": 20000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Fresh coconut",
+          "priceVnd": 25000,
+          "unit": "coconut"
+        }
+      ]
+    },
+    {
+      "name": "Thanh Khe Badminton",
+      "id": 6,
+      "courts": 4,
+      "illustrativeHours": "05:00\u201323:00",
+      "illustrativeTariffs": [
+        {
+          "range": "05:00\u201311:00",
+          "fixedVndPerHour": 60000,
+          "walkInVndPerHour": 70000
+        },
+        {
+          "range": "11:00\u201317:00",
+          "fixedVndPerHour": 75000,
+          "walkInVndPerHour": 85000
+        },
+        {
+          "range": "17:00\u201320:00",
+          "fixedVndPerHour": 100000,
+          "walkInVndPerHour": 115000
+        },
+        {
+          "range": "20:00\u201323:00",
+          "fixedVndPerHour": 80000,
+          "walkInVndPerHour": 90000
+        }
+      ],
+      "illustrativeServices": [
+        {
+          "name": "Mineral water",
+          "priceVnd": 8000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Revive Original",
+          "priceVnd": 15000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Iced lemon tea",
+          "priceVnd": 12000,
+          "unit": "cup"
+        }
+      ]
+    },
+    {
+      "name": "An Khe Badminton",
+      "id": 7,
+      "courts": 3,
+      "illustrativeHours": "05:00\u201323:00",
+      "illustrativeTariffs": [
+        {
+          "range": "05:00\u201310:00",
+          "fixedVndPerHour": 55000,
+          "walkInVndPerHour": 65000
+        },
+        {
+          "range": "10:00\u201316:00",
+          "fixedVndPerHour": 70000,
+          "walkInVndPerHour": 80000
+        },
+        {
+          "range": "16:00\u201320:00",
+          "fixedVndPerHour": 95000,
+          "walkInVndPerHour": 110000
+        },
+        {
+          "range": "20:00\u201323:00",
+          "fixedVndPerHour": 75000,
+          "walkInVndPerHour": 85000
+        }
+      ],
+      "illustrativeServices": [
+        {
+          "name": "Mineral water",
+          "priceVnd": 8000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Revive Salted Lemon",
+          "priceVnd": 15000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Orange juice",
+          "priceVnd": 20000,
+          "unit": "cup"
+        }
+      ]
+    },
+    {
+      "name": "An Hai Badminton",
+      "id": 8,
+      "courts": 4,
+      "illustrativeHours": "05:00\u201323:00",
+      "illustrativeTariffs": [
+        {
+          "range": "05:00\u201312:00",
+          "fixedVndPerHour": 75000,
+          "walkInVndPerHour": 85000
+        },
+        {
+          "range": "12:00\u201317:00",
+          "fixedVndPerHour": 90000,
+          "walkInVndPerHour": 100000
+        },
+        {
+          "range": "17:00\u201321:00",
+          "fixedVndPerHour": 115000,
+          "walkInVndPerHour": 130000
+        },
+        {
+          "range": "21:00\u201323:00",
+          "fixedVndPerHour": 95000,
+          "walkInVndPerHour": 105000
+        }
+      ],
+      "illustrativeServices": [
+        {
+          "name": "Mineral water",
+          "priceVnd": 10000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Pocari Sweat",
+          "priceVnd": 20000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Iced lemon tea",
+          "priceVnd": 15000,
+          "unit": "cup"
+        }
+      ]
+    },
+    {
+      "name": "Son Tra Badminton",
+      "id": 9,
+      "courts": 6,
+      "illustrativeHours": "05:00\u201323:00",
+      "illustrativeTariffs": [
+        {
+          "range": "05:00\u201311:00",
+          "fixedVndPerHour": 90000,
+          "walkInVndPerHour": 100000
+        },
+        {
+          "range": "11:00\u201316:00",
+          "fixedVndPerHour": 105000,
+          "walkInVndPerHour": 120000
+        },
+        {
+          "range": "16:00\u201321:00",
+          "fixedVndPerHour": 135000,
+          "walkInVndPerHour": 150000
+        },
+        {
+          "range": "21:00\u201323:00",
+          "fixedVndPerHour": 110000,
+          "walkInVndPerHour": 125000
+        }
+      ],
+      "illustrativeServices": [
+        {
+          "name": "Mineral water",
+          "priceVnd": 12000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Revive Original",
+          "priceVnd": 18000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Fresh coconut",
+          "priceVnd": 25000,
+          "unit": "coconut"
+        }
+      ]
+    },
+    {
+      "name": "Ngu Hanh Son Badminton",
+      "id": 10,
+      "courts": 4,
+      "illustrativeHours": "05:00\u201323:00",
+      "illustrativeTariffs": [
+        {
+          "range": "05:00\u201311:00",
+          "fixedVndPerHour": 85000,
+          "walkInVndPerHour": 95000
+        },
+        {
+          "range": "11:00\u201317:00",
+          "fixedVndPerHour": 100000,
+          "walkInVndPerHour": 115000
+        },
+        {
+          "range": "17:00\u201320:00",
+          "fixedVndPerHour": 125000,
+          "walkInVndPerHour": 140000
+        },
+        {
+          "range": "20:00\u201323:00",
+          "fixedVndPerHour": 105000,
+          "walkInVndPerHour": 120000
+        }
+      ],
+      "illustrativeServices": [
+        {
+          "name": "Mineral water",
+          "priceVnd": 12000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Pocari Sweat",
+          "priceVnd": 22000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Orange juice",
+          "priceVnd": 25000,
+          "unit": "cup"
+        }
+      ]
+    },
+    {
+      "name": "Hoa Xuan Badminton",
+      "id": 11,
+      "courts": 5,
+      "illustrativeHours": "05:00\u201323:00",
+      "illustrativeTariffs": [
+        {
+          "range": "05:00\u201312:00",
+          "fixedVndPerHour": 70000,
+          "walkInVndPerHour": 80000
+        },
+        {
+          "range": "12:00\u201316:00",
+          "fixedVndPerHour": 80000,
+          "walkInVndPerHour": 90000
+        },
+        {
+          "range": "16:00\u201320:00",
+          "fixedVndPerHour": 105000,
+          "walkInVndPerHour": 120000
+        },
+        {
+          "range": "20:00\u201323:00",
+          "fixedVndPerHour": 85000,
+          "walkInVndPerHour": 95000
+        }
+      ],
+      "illustrativeServices": [
+        {
+          "name": "Mineral water",
+          "priceVnd": 10000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Revive Salted Lemon",
+          "priceVnd": 15000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Fresh coconut",
+          "priceVnd": 22000,
+          "unit": "coconut"
+        }
+      ]
+    },
+    {
+      "name": "Cam Le Badminton",
+      "id": 12,
+      "courts": 4,
+      "illustrativeHours": "05:00\u201323:00",
+      "illustrativeTariffs": [
+        {
+          "range": "05:00\u201311:30",
+          "fixedVndPerHour": 60000,
+          "walkInVndPerHour": 70000
+        },
+        {
+          "range": "11:30\u201316:30",
+          "fixedVndPerHour": 70000,
+          "walkInVndPerHour": 80000
+        },
+        {
+          "range": "16:30\u201319:30",
+          "fixedVndPerHour": 90000,
+          "walkInVndPerHour": 105000
+        },
+        {
+          "range": "19:30\u201323:00",
+          "fixedVndPerHour": 75000,
+          "walkInVndPerHour": 85000
+        }
+      ],
+      "illustrativeServices": [
+        {
+          "name": "Mineral water",
+          "priceVnd": 8000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Revive Original",
+          "priceVnd": 14000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Iced lemon tea",
+          "priceVnd": 12000,
+          "unit": "cup"
+        }
+      ]
+    },
+    {
+      "name": "Hoa Khanh Badminton",
+      "id": 13,
+      "courts": 6,
+      "illustrativeHours": "05:00\u201323:00",
+      "illustrativeTariffs": [
+        {
+          "range": "05:00\u201314:00",
+          "fixedVndPerHour": 60000,
+          "walkInVndPerHour": 70000
+        },
+        {
+          "range": "14:00\u201317:00",
+          "fixedVndPerHour": 90000,
+          "walkInVndPerHour": 100000
+        },
+        {
+          "range": "17:00\u201320:00",
+          "fixedVndPerHour": 130000,
+          "walkInVndPerHour": 150000
+        },
+        {
+          "range": "20:00\u201323:00",
+          "fixedVndPerHour": 90000,
+          "walkInVndPerHour": 100000
+        }
+      ],
+      "illustrativeServices": [
+        {
+          "name": "Mineral water",
+          "priceVnd": 10000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Revive Original",
+          "priceVnd": 15000,
+          "unit": "bottle"
+        },
+        {
+          "name": "Revive Salted Lemon",
+          "priceVnd": 15000,
+          "unit": "bottle"
+        }
+      ]
+    }
+  ]
+}

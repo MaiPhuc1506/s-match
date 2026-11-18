@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -139,22 +140,20 @@ void main() {
       await tester.tap(find.byKey(const Key('view_courts')));
       await tester.pumpAndSettle();
       expect(find.byType(LiveFacilitySchedule), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.calendar_month));
+      await tester.tap(find.byIcon(CupertinoIcons.calendar));
       await tester.pumpAndSettle();
       tester
-          .widget<CalendarDatePicker>(find.byType(CalendarDatePicker))
-          .onDateChanged(tomorrow);
+          .widget<CupertinoDatePicker>(find.byType(CupertinoDatePicker))
+          .onDateTimeChanged(tomorrow);
       await tester.pump();
-      await tester.tap(find.text('OK'));
+      await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Selected court'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('18:00 – 19:00'));
+      await tester.tap(find.byKey(const ValueKey('slot-52-18:00 – 19:00')));
       await tester.pump();
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
       expect(find.text('Selected court'), findsOneWidget);
-      expect(find.text('125000 VND'), findsWidgets);
+      expect(find.text('125,000 VND'), findsWidgets);
       await tester.tap(find.text('Confirm Booking'));
       await tester.pumpAndSettle();
       expect(writes, hasLength(1));

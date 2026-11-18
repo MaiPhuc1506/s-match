@@ -50,7 +50,9 @@ export class BookingsService {
     }
 
     // Đơn đặt sân phải nằm trong cùng 1 ngày
-    if (vietnamTime(start).date !== vietnamTime(end).date) {
+    const endsAtMidnight = vietnamTime(end).time === '00:00' &&
+      vietnamTime(new Date(end.getTime() - 1)).date === vietnamTime(start).date;
+    if (vietnamTime(start).date !== vietnamTime(end).date && !endsAtMidnight) {
       throw new BadRequestException('Đơn đặt sân phải diễn ra trong cùng một ngày');
     }
 
@@ -80,7 +82,7 @@ export class BookingsService {
 
       // 3. Kiểm tra giờ hoạt động của cơ sở
       const startInfo = vietnamTime(start);
-      const endInfo = vietnamTime(end);
+      const endInfo = { ...vietnamTime(end), time: endsAtMidnight ? '24:00' : vietnamTime(end).time };
 
       const isWithinHours = await this.operatingHoursService.isWithinOperatingHours(
         court.facilityId,

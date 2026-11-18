@@ -100,4 +100,44 @@ void main() {
       expect(requests[5].data, {'isActive': false});
     },
   );
+
+  test(
+    'price editing fails safely when the backend lacks the pricing endpoint',
+    () async {
+      final client = ApiClient.instance;
+      final oldToken = client.token;
+      client.setToken('owner-token');
+      final paths = <String>[];
+      final interceptor = InterceptorsWrapper(
+        onRequest: (options, handler) {
+          paths.add(options.path);
+          handler.reject(
+            DioException(
+              requestOptions: options,
+              response: Response(requestOptions: options, statusCode: 404),
+            ),
+          );
+        },
+      );
+      client.dio.interceptors.add(interceptor);
+      addTearDown(() {
+        client.dio.interceptors.remove(interceptor);
+        if (oldToken == null) {
+          client.clearToken();
+        } else {
+          client.setToken(oldToken);
+        }
+      });
+      expect(
+        await FacilityService.instance.updateTimeSlotPrice(
+          facilityId: 42,
+          courtId: 7,
+          slotId: 9,
+          price: 90000,
+        ),
+        isFalse,
+      );
+      expect(paths, ['/facilities/42/courts/7/time-slots/9/pricing']);
+    },
+  );
 }

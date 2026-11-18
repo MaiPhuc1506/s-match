@@ -40,9 +40,9 @@ export class TimeSlotsService {
     const day = vietnamDay(date);
     const court = await this.assertCourtBelongsToFacility(facilityId, courtId);
     if (court.status !== 'ACTIVE') return [];
-    const [slots, bookings] = await Promise.all([
+    const [slots, bookings, hours] = await Promise.all([
       this.prisma.timeSlot.findMany({
-        where: { courtId, dayOfWeek: day.dayOfWeek, isActive: true },
+        where: { courtId, dayOfWeek: day.dayOfWeek },
         orderBy: { startTime: 'asc' },
       }),
       this.prisma.booking.findMany({
@@ -50,13 +50,41 @@ export class TimeSlotsService {
           startTime: { lt: day.end }, endTime: { gt: day.start } },
         select: { startTime: true, endTime: true },
       }),
+      this.operatingHoursService.findAllForFacility(facilityId),
     ]);
-    const result = [];
+    const result: Array<{
+      id: number | null; courtId: number; dayOfWeek: number;
+      startTime: string; endTime: string; price: number | null;
+      isActive: boolean; isBooked: boolean; status: string;
+    }> = [];
     for (const slot of slots) {
-      if (!await this.operatingHoursService.isWithinOperatingHours(facilityId, day.dayOfWeek, slot.startTime, slot.endTime)) continue;
       const start = new Date(`${date}T${slot.startTime}:00+07:00`);
       const end = new Date(`${date}T${slot.endTime}:00+07:00`);
-      result.push({ ...slot, isBooked: bookings.some((b) => b.startTime < end && b.endTime > start) });
+      const isBooked = bookings.some((b) => b.startTime < end && b.endTime > start);
+      const withinHours = await this.operatingHoursService.isWithinOperatingHours(facilityId, day.dayOfWeek, slot.startTime, slot.endTime);
+      // Do not show inactive templates superseded by an active overlapping
+      // template. Other inactive templates within opening hours are real locks.
+      const representedByActiveSlot = !slot.isActive && slots.some((other) =>
+        other.isActive && other.startTime < slot.endTime && other.endTime > slot.startTime &&
+        (!isBooked || bookings.some((booking) =>
+          booking.startTime < end && booking.endTime > start &&
+          booking.startTime < new Date(`${date}T${other.endTime}:00+07:00`) &&
+          booking.endTime > new Date(`${date}T${other.startTime}:00+07:00`),
+        )),
+      );
+      if (!representedByActiveSlot && (withinHours || isBooked)) {
+        const isActive = slot.isActive && withinHours;
+        result.push({ ...slot, isActive, isBooked, status: isBooked ? 'BOOKED' : isActive ? 'AVAILABLE' : 'LOCKED' });
+      }
+    }
+    // The closing cell is supplied by the API rather than invented by clients.
+    const dayHours = hours.find((h) => h.dayOfWeek === day.dayOfWeek);
+    if (dayHours && timeToMinutes(dayHours.closeTime) <= 23 * 60 &&
+        !result.some((s) => s.startTime === '23:00' && s.endTime === '24:00')) {
+      result.push({
+        id: null, courtId, dayOfWeek: day.dayOfWeek, startTime: '23:00',
+        endTime: '24:00', price: null, isActive: false, isBooked: false, status: 'LOCKED',
+      });
     }
     return result;
   }
@@ -127,6 +155,11 @@ export class TimeSlotsService {
         ...(dto.startTime !== undefined && { startTime: dto.startTime }),
         ...(dto.endTime !== undefined && { endTime: dto.endTime }),
         ...(dto.price !== undefined && { price: dto.price }),
+        ...((dto.startTime !== undefined || dto.endTime !== undefined)
+          ? { hourlyRate: null, walkInPrice: null }
+          : dto.price !== undefined && slot.hourlyRate != null
+            ? { hourlyRate: dto.price * 60 / (timeToMinutes(endTime) - timeToMinutes(startTime)) }
+            : {}),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
       },
     });

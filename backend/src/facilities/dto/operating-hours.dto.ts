@@ -29,7 +29,7 @@ export class UpsertOperatingHourDto {
 
   @ApiProperty({ example: '22:00' })
   @IsString()
-  @Matches(TIME_PATTERN, { message: TIME_MESSAGE })
+  @Matches(/^(?:([01]\d|2[0-3]):[0-5]\d|24:00)$/, { message: TIME_MESSAGE })
   closeTime: string;
 }
 

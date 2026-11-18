@@ -95,6 +95,23 @@ export class CandidatesService {
     };
   }
 
+  async getLocationSharing(userId: number) {
+    const profile = await this.prisma.playerProfile.findUnique({
+      where: { userId }, select: { locationSharingEnabled: true },
+    });
+    return { enabled: profile?.locationSharingEnabled ?? false };
+  }
+
+  async updateLocationSharing(userId: number, enabled: boolean) {
+    const profile = await this.prisma.playerProfile.upsert({
+      where: { userId },
+      update: { locationSharingEnabled: enabled },
+      create: { userId, locationSharingEnabled: enabled },
+      select: { locationSharingEnabled: true },
+    });
+    return { enabled: profile.locationSharingEnabled };
+  }
+
   async findNearby(userId: number, query: CandidateQueryDto) {
     const me = await this.getMyLocationOrThrow(userId);
     const preference = await this.getPreference(userId);
@@ -111,8 +128,6 @@ export class CandidatesService {
         fullName: profile.user.fullName,
         nickname: profile.nickname,
         skillLevel: profile.skillLevel,
-        latitude: profile.latitude,
-        longitude: profile.longitude,
         distanceKm,
       })),
     };
@@ -208,6 +223,7 @@ export class CandidatesService {
     const rows = await this.prisma.playerProfile.findMany({
       where: {
         userId: { not: userId },
+        locationSharingEnabled: true,
         latitude: { gte: box.minLat, lte: box.maxLat },
         longitude: { gte: box.minLon, lte: box.maxLon },
         user: { role: { name: RoleName.PLAYER } },

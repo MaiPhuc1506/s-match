@@ -9,6 +9,7 @@ import 'package:mobile/features/booking/services/live_booking_service.dart';
 import 'package:mobile/features/booking/widgets/live_facility_schedule.dart';
 import 'package:mobile/features/booking/screens/booking_summary_screen.dart';
 import 'package:mobile/features/booking/screens/booking_success_screen.dart';
+import 'package:mobile/features/booking/booking_theme.dart';
 
 class BookingFake extends LiveBookingService {
   final submitted = Completer<Map<String, dynamic>>();
@@ -57,6 +58,44 @@ class BookingFake extends LiveBookingService {
     calls++;
     return submitted.future;
   }
+}
+
+class SelectionFake extends LiveBookingService {
+  @override
+  Future<Map<String, dynamic>> facility(int id) async => {
+    'id': id,
+    'name': 'Facility',
+    'courts': [
+      {'id': 51, 'name': 'Court 1', 'status': 'ACTIVE'},
+      {'id': 52, 'name': 'Court 2', 'status': 'ACTIVE'},
+    ],
+  };
+
+  @override
+  Future<List<Map<String, dynamic>>> slots(
+    int facilityId,
+    int courtId,
+    String date,
+  ) async => [
+    {
+      'id': 80,
+      'startTime': '18:00',
+      'endTime': '19:00',
+      'isActive': true,
+      'price': courtId == 51 ? 125000 : 95000,
+      'isBooked': false,
+      'status': 'AVAILABLE',
+    },
+    {
+      'id': 81,
+      'startTime': '19:00',
+      'endTime': '20:00',
+      'isActive': true,
+      'price': 110000,
+      'isBooked': false,
+      'status': 'AVAILABLE',
+    },
+  ];
 }
 
 void main() {
@@ -154,11 +193,16 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining('Không tải được lịch sân'), findsOneWidget);
+      expect(
+        find.textContaining('Could not load court availability'),
+        findsOneWidget,
+      );
       fail = false;
-      await tester.tap(find.textContaining('Không tải được lịch sân'));
+      await tester.tap(
+        find.textContaining('Could not load court availability'),
+      );
       await tester.pumpAndSettle();
-      expect(find.text('Cơ sở chưa có sân đang hoạt động.'), findsOneWidget);
+      expect(find.text('No active courts at this facility.'), findsOneWidget);
       expect(
         tester
             .widget<FilledButton>(find.widgetWithText(FilledButton, 'Continue'))
@@ -192,7 +236,11 @@ void main() {
             } else {
               expect(
                 o.path,
-                '/facilities/45/courts/51/time-slots/availability',
+                matches(
+                  RegExp(
+                    r'^/facilities/45/courts/(50|51)/time-slots/availability$',
+                  ),
+                ),
               );
               h.resolve(
                 Response(
@@ -223,16 +271,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<ChoiceChip>(
-              find.widgetWithText(ChoiceChip, 'Requested court'),
-            )
-            .selected,
-        isTrue,
-      );
-      expect(find.text('Đã đặt'), findsOneWidget);
-      expect(tester.widget<ListTile>(find.byType(ListTile)).onTap, isNull);
+      expect(find.text('Requested court'), findsOneWidget);
+      final bookedCell = find.byKey(const ValueKey('slot-51-18:00 – 19:00'));
+      expect(tester.widget<InkWell>(bookedCell).onTap, isNull);
       expect(
         tester
             .widget<FilledButton>(find.widgetWithText(FilledButton, 'Continue'))
@@ -241,6 +282,227 @@ void main() {
       );
     },
   );
+
+  testWidgets('Schedule displays booked, available and closed cells from API', (
+    tester,
+  ) async {
+    final dio = Dio();
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (o, h) {
+          h.resolve(
+            Response(
+              requestOptions: o,
+              data: o.path == '/facilities/45'
+                  ? {
+                      'id': 45,
+                      'name': 'Facility',
+                      'operatingHours': [
+                        {
+                          'dayOfWeek': 1,
+                          'openTime': '06:00',
+                          'closeTime': '23:00',
+                        },
+                      ],
+                      'courts': [
+                        {'id': 51, 'name': 'Court 1', 'status': 'ACTIVE'},
+                      ],
+                    }
+                  : [
+                      {
+                        'id': 3,
+                        'startTime': '05:00',
+                        'endTime': '06:00',
+                        'price': 80000,
+                        'isActive': true,
+                        'isBooked': false,
+                        'status': 'AVAILABLE',
+                      },
+                      {
+                        'id': 1,
+                        'startTime': '18:00',
+                        'endTime': '19:00',
+                        'price': 80000,
+                        'isBooked': true,
+                        'status': 'BOOKED',
+                      },
+                      {
+                        'id': 2,
+                        'startTime': '19:00',
+                        'endTime': '20:00',
+                        'price': 80000,
+                        'isBooked': false,
+                        'status': 'AVAILABLE',
+                      },
+                      {
+                        'id': 4,
+                        'startTime': '20:00',
+                        'endTime': '21:00',
+                        'price': 80000,
+                        'isActive': false,
+                        'isBooked': false,
+                        'status': 'LOCKED',
+                      },
+                      {
+                        'id': 5,
+                        'startTime': '21:00',
+                        'endTime': '22:00',
+                        'isActive': true,
+                        'isBooked': false,
+                        'status': 'EVENT',
+                      },
+                      {
+                        'id': null,
+                        'startTime': '23:00',
+                        'endTime': '24:00',
+                        'isActive': false,
+                        'isBooked': false,
+                        'status': 'LOCKED',
+                      },
+                    ],
+            ),
+          );
+        },
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LiveFacilitySchedule(
+          facilityId: 45,
+          service: LiveBookingService(dio: dio),
+          now: () => DateTime.utc(2026, 11, 9, 1),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final booked = find.byKey(const ValueKey('slot-51-18:00 – 19:00'));
+    final available = find.byKey(const ValueKey('slot-51-19:00 – 20:00'));
+    final past = find.byKey(const ValueKey('slot-51-05:00 – 06:00'));
+    final actualLock = find.byKey(const ValueKey('slot-51-20:00 – 21:00'));
+    final locked = find.byKey(const ValueKey('slot-51-23:00 – 24:00'));
+    final event = find.byKey(const ValueKey('slot-51-21:00 – 22:00'));
+    Color cellColor(Finder finder) =>
+        (tester
+                    .widget<Container>(
+                      find
+                          .descendant(
+                            of: finder,
+                            matching: find.byType(Container),
+                          )
+                          .first,
+                    )
+                    .decoration!
+                as BoxDecoration)
+            .color!;
+    expect(cellColor(booked), BookingColors.slotBooked);
+    expect(cellColor(available), Colors.white);
+    expect(cellColor(past), Colors.white);
+    expect(cellColor(actualLock), BookingColors.slotLocked);
+    expect(cellColor(locked), BookingColors.slotLocked);
+    expect(cellColor(event), BookingColors.slotEvent);
+    expect(find.text('Past'), findsNothing);
+    expect(find.text('Selected'), findsOneWidget);
+    expect(tester.widget<InkWell>(booked).onTap, isNull);
+    expect(tester.widget<InkWell>(available).onTap, isNotNull);
+    expect(tester.widget<InkWell>(past).onTap, isNull);
+    expect(tester.widget<InkWell>(actualLock).onTap, isNull);
+    expect(tester.widget<InkWell>(locked).onTap, isNull);
+    expect(tester.widget<InkWell>(event).onTap, isNull);
+  });
+
+  testWidgets('Selection toggles, switches courts and uses the API price', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LiveFacilitySchedule(
+          facilityId: 45,
+          service: SelectionFake(),
+          now: () => DateTime.utc(2026, 11, 9, 1),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final first = find.byKey(const ValueKey('slot-51-18:00 – 19:00'));
+    final second = find.byKey(const ValueKey('slot-52-18:00 – 19:00'));
+    final later = find.byKey(const ValueKey('slot-52-19:00 – 20:00'));
+    final continueButton = find.byKey(const Key('booking-continue'));
+    Color cellColor(Finder slot) =>
+        (tester
+                    .widget<Container>(
+                      find
+                          .descendant(
+                            of: slot,
+                            matching: find.byType(Container),
+                          )
+                          .first,
+                    )
+                    .decoration!
+                as BoxDecoration)
+            .color!;
+    expect(cellColor(first), Colors.white);
+    expect(tester.widget<FilledButton>(continueButton).onPressed, isNull);
+
+    await tester.tap(first);
+    await tester.pump();
+    expect(cellColor(first), BookingColors.primary);
+    expect(find.text('Court 1 · 18:00–19:00'), findsOneWidget);
+    expect(find.text('125,000 VND'), findsOneWidget);
+    expect(tester.widget<FilledButton>(continueButton).onPressed, isNotNull);
+
+    await tester.tap(second);
+    await tester.pump();
+    expect(cellColor(first), Colors.white);
+    expect(cellColor(second), BookingColors.primary);
+    expect(find.text('Court 2 · 18:00–19:00'), findsOneWidget);
+    expect(find.text('95,000 VND'), findsOneWidget);
+    expect(find.text('125,000 VND'), findsNothing);
+
+    await tester.tap(later);
+    await tester.pump();
+    expect(cellColor(second), Colors.white);
+    expect(cellColor(later), BookingColors.primary);
+    expect(find.text('Court 2 · 19:00–20:00'), findsOneWidget);
+    expect(find.text('110,000 VND'), findsOneWidget);
+
+    await tester.tap(later);
+    await tester.pump();
+    expect(cellColor(later), Colors.white);
+    expect(
+      find.text('Choose one available time slot to continue.'),
+      findsOneWidget,
+    );
+    expect(find.text('110,000 VND'), findsNothing);
+    expect(tester.widget<FilledButton>(continueButton).onPressed, isNull);
+  });
+
+  testWidgets('Selection expires when the slot starts', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LiveFacilitySchedule(
+          facilityId: 45,
+          service: SelectionFake(),
+          now: () => DateTime.utc(2026, 11, 9, 10, 59, 58),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('slot-51-18:00 – 19:00')));
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('booking-continue')))
+          .onPressed,
+      isNotNull,
+    );
+    await tester.pump(const Duration(seconds: 2));
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('booking-continue')))
+          .onPressed,
+      isNull,
+    );
+  });
 
   testWidgets(
     'Submit network error stays on summary and directs the player to check history',
@@ -256,7 +518,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('18:00 – 19:00'));
+      await tester.tap(find.byKey(const ValueKey('slot-51-18:00 – 19:00')));
       await tester.pump();
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
@@ -295,13 +557,13 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await tester.tap(find.text('18:00 – 19:00'));
+        await tester.tap(find.byKey(const ValueKey('slot-51-18:00 – 19:00')));
         await tester.pump();
         await tester.tap(find.text('Continue'));
         await tester.pumpAndSettle();
         expect(find.byType(BookingSummaryScreen), findsOneWidget);
         expect(find.text('Selected Court'), findsOneWidget);
-        expect(find.text('125000 VND'), findsWidgets);
+        expect(find.text('125,000 VND'), findsWidgets);
         await tester.tap(find.text('Confirm Booking'));
         await tester.pump();
         expect(fake.calls, 1);
@@ -327,7 +589,7 @@ void main() {
         );
         if (conflict) {
           expect(
-            find.textContaining('Khung giờ vừa có người đặt'),
+            find.textContaining('This slot was just booked'),
             findsOneWidget,
           );
           expect(
@@ -340,10 +602,17 @@ void main() {
           );
           await tester.pageBack();
           await tester.pumpAndSettle();
-          expect(find.text('Đã đặt'), findsOneWidget);
+          expect(
+            tester
+                .widget<InkWell>(
+                  find.byKey(const ValueKey('slot-51-18:00 – 19:00')),
+                )
+                .onTap,
+            isNull,
+          );
           expect(fake.calls, 1);
         } else {
-          expect(find.textContaining('100000 VND'), findsWidgets);
+          expect(find.textContaining('100,000 VND'), findsWidgets);
           final client = ApiClient.instance;
           final old = client.token;
           client.setToken('history-session');
@@ -384,4 +653,34 @@ void main() {
       },
     );
   }
+  testWidgets('Small grid rechecks a slot before confirmation', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final fake = BookingFake();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LiveFacilitySchedule(
+          facilityId: 45,
+          initialCourtId: 51,
+          service: fake,
+          now: () => DateTime.utc(2026, 11, 9, 1),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('slot-51-18:00 – 19:00')));
+    await tester.pump();
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BookingSummaryScreen), findsOneWidget);
+    fake.booked = true;
+    await tester.tap(find.text('Confirm Booking'));
+    await tester.pumpAndSettle();
+    expect(fake.calls, 0);
+    expect(
+      find.textContaining('Availability or price changed'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }

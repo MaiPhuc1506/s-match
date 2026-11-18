@@ -22,7 +22,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '../auth/roles.enum';
 import { TimeSlotsService } from './time-slots.service';
-import { CreateTimeSlotDto, UpdateTimeSlotDto } from './dto/time-slot.dto';
+import { CreateTimeSlotDto, UpdateTimeSlotDto, UpdateTimeSlotPriceDto } from './dto/time-slot.dto';
 
 @ApiTags('Facilities (Court Management)')
 @Controller('facilities/:id/courts/:courtId/time-slots')
@@ -67,6 +67,23 @@ export class TimeSlotsController {
   ) {
     const ownerId = Number(req.user.sub);
     return this.timeSlotsService.create(ownerId, facilityId, courtId, dto, req.user.role);
+  }
+
+  @Patch(':slotId/pricing')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(Role.OWNER, Role.ADMIN)
+  @ApiOperation({ summary: 'Cập nhật giá slot, giữ giá walk-in và booking cũ' })
+  updatePrice(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) facilityId: number,
+    @Param('courtId', ParseIntPipe) courtId: number,
+    @Param('slotId', ParseIntPipe) slotId: number,
+    @Body() dto: UpdateTimeSlotPriceDto,
+  ) {
+    return this.timeSlotsService.update(
+      Number(req.user.sub), facilityId, courtId, slotId, { price: dto.price }, req.user.role,
+    );
   }
 
   @Patch(':slotId')

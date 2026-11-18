@@ -47,8 +47,13 @@ class DashboardBooking {
     this.status,
     this.total, {
     this.startTime,
+    this.endTime,
+    this.facilityName,
+    this.id,
   });
-  final DateTime? startTime;
+  final DateTime? startTime, endTime;
+  final String? facilityName;
+  final int? id;
   final String court, player, time, status, total;
 }
 
@@ -556,6 +561,11 @@ class DashboardRepository {
                     '${status[0].toUpperCase()}${status.substring(1)}',
                     '${b['totalPrice']} VND',
                     startTime: DateTime.parse(b['startTime'] as String),
+                    endTime: DateTime.parse(b['endTime'] as String),
+                    id: (b['id'] as num?)?.toInt(),
+                    facilityName:
+                        ((b['court'] as Map)['facility'] as Map?)?['name']
+                            ?.toString(),
                   );
                 })
                 .toList(growable: false)

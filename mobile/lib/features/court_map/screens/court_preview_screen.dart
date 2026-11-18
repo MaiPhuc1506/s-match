@@ -10,6 +10,8 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../booking/screens/booking_flow_screen.dart';
 import '../exploration_data.dart';
+import '../widgets/facility_services.dart';
+import '../widgets/facility_detail_content.dart';
 import '../widgets/exploration_widgets.dart';
 
 final courtFavoriteProvider = StateProvider<bool>((ref) => false);
@@ -31,18 +33,20 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
       ? courtFavoriteProvider
       : courtFavoriteByIdProvider(widget.location!.id);
   int _image = 0;
+  bool _showServices = false;
   @override
   void dispose() {
     _gallery.dispose();
     super.dispose();
   }
 
-  void _viewCourts() {
-    if (widget.onViewCourts != null) {
+  void _viewCourts([int? courtId]) {
+    if (widget.onViewCourts != null && courtId == null) {
       widget.onViewCourts!();
       return;
     }
-    if (widget.location?.demo == true) {
+    if (widget.location?.demo == true ||
+        (widget.location != null && widget.location!.id <= 0)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -55,7 +59,10 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
     if (widget.location != null) {
       Navigator.of(context).push(
         explorationRoute<void>(
-          BookingFacilityScheduleScreen(facilityId: widget.location!.id),
+          BookingFacilityScheduleScreen(
+            facilityId: widget.location!.id,
+            courtId: courtId,
+          ),
           '/facility-booking',
         ),
       );
@@ -113,6 +120,23 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
   @override
   Widget build(BuildContext context) {
     final location = widget.location;
+    if (location != null && !location.demo && location.id > 0) {
+      return FacilityDetailContent(
+        initial: location,
+        onBook: _viewCourts,
+        onFavorite: () =>
+            ref.read(_favorite.notifier).state = !ref.read(_favorite),
+        favorite: ref.watch(_favorite),
+        onShare: () => _share(
+          context,
+          CourtPreviewData(
+            name: location.name,
+            address: location.address,
+            photos: location.photos,
+          ),
+        ),
+      );
+    }
     final data = location == null
         ? ref.watch(courtPreviewProvider)
         : AsyncData(
@@ -375,6 +399,14 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
                         ),
                       ],
                     ),
+                    if (widget.location?.description != null &&
+                        widget.location!.description!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        widget.location!.description!.trim(),
+                        style: exploreText(12, color: exploreMuted, line: 17),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     if (widget.location == null) _amenities(),
                     const SizedBox(height: 12),
@@ -383,71 +415,111 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
                       'Operating Hours',
                       widget.location == null
                           ? '06:00 - 23:00'
-                          : 'Chưa có thông tin',
+                          : widget.location!.operatingHoursText ??
+                                'Chưa có thông tin',
                       onTap: () => _info(
                         'Operating Hours',
                         widget.location == null
                             ? '06:00 - 23:00'
-                            : 'Chưa có thông tin xác nhận giờ mở cửa.',
+                            : widget.location!.operatingHoursText ??
+                                  'Chưa có thông tin xác nhận giờ mở cửa.',
                       ),
-                      badge: widget.location == null,
+                      badge:
+                          widget.location == null ||
+                          widget.location!.isOpen == true,
                     ),
                     _valueRow(
                       'price',
                       'Price Range',
                       widget.location == null
                           ? '80.000 - 120.000 VND / hour'
-                          : widget.location!.priceRange ?? 'Chưa có thông tin',
+                          : widget.location!.priceSummary ??
+                                'Chưa có thông tin',
                       onTap: () => _info(
                         'Price Range',
                         widget.location == null
                             ? 'Demo pricing — not a live quote.'
-                            : widget.location!.priceRange ??
+                            : widget.location!.priceSummary ??
                                   'Chưa có thông tin giá.',
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Court Information',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: exploreText(
-                              14,
-                              weight: FontWeight.w600,
-                              line: 19,
-                            ),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: _showCourts,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 3),
+                    if (widget.location != null) ...[
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: () =>
+                                setState(() => _showServices = false),
                             child: Text(
-                              'See all',
-                              style: exploreText(
-                                12,
-                                color: exploreMuted,
-                                line: 17,
+                              'Info',
+                              style: TextStyle(
+                                fontWeight: !_showServices
+                                    ? FontWeight.w700
+                                    : FontWeight.w400,
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 128,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: widget.location?.courts.length ?? 3,
-                        separatorBuilder: (_, _) => const SizedBox(width: 10),
-                        itemBuilder: (_, i) => _courtCard(i),
+                          TextButton(
+                            onPressed: () =>
+                                setState(() => _showServices = true),
+                            child: Text(
+                              'Services',
+                              style: TextStyle(
+                                fontWeight: _showServices
+                                    ? FontWeight.w700
+                                    : FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_showServices && widget.location != null)
+                      FacilityServices(courts: widget.location!.courts),
+                    if (!_showServices) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Court Information',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: exploreText(
+                                14,
+                                weight: FontWeight.w600,
+                                line: 19,
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: _showCourts,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 3),
+                              child: Text(
+                                'See all',
+                                style: exploreText(
+                                  12,
+                                  color: exploreMuted,
+                                  line: 17,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 128,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: widget.location?.courts.length ?? 3,
+                          separatorBuilder: (_, _) => const SizedBox(width: 10),
+                          itemBuilder: (_, i) => _courtCard(i),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -545,8 +617,15 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
     ),
   );
 
-  Widget _courtCard(int index) => widget.location != null
-      ? Container(
+  Widget _courtCard(int index) {
+    if (widget.location != null) {
+      final court = widget.location!.courts[index];
+      final rawId = court['id'];
+      final courtId = rawId is num ? rawId.toInt() : null;
+      return InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _viewCourts(courtId),
+        child: Container(
           width: 160,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -559,81 +638,79 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
               const Icon(Icons.sports_tennis, color: exploreGreen),
               const SizedBox(height: 8),
               Text(
-                widget.location!.courts[index]['name']?.toString() ?? 'Court',
+                court['name']?.toString() ?? 'Court',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: exploreText(12),
               ),
               Text(
-                widget.location!.courts[index]['courtType']?.toString() ?? '',
+                court['courtType']?.toString() ?? '',
                 style: exploreText(10),
               ),
               Text(
-                widget.location!.courts[index]['status']?.toString() ??
-                    'Chưa rõ trạng thái',
+                court['status']?.toString() ?? 'Chưa rõ trạng thái',
                 style: exploreText(10),
               ),
             ],
           ),
-        )
-      : InkWell(
-          onTap: _viewCourts,
-          child: Container(
-            width: 112,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x0A133C31),
-                  offset: Offset(0, 4),
-                  blurRadius: 8,
-                ),
-              ],
+        ),
+      );
+    }
+    return InkWell(
+      onTap: _viewCourts,
+      child: Container(
+        width: 112,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0A133C31),
+              offset: Offset(0, 4),
+              blurRadius: 8,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 62, width: 112, child: ExplorePhoto()),
-                Padding(
-                  padding: const EdgeInsets.only(left: 8, top: 6),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Court ${index + 1}',
-                        style: exploreText(
-                          12,
-                          weight: FontWeight.w600,
-                          line: 17,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        index == 2 ? '● Busy' : '● Available',
-                        maxLines: 1,
-                        style: exploreText(
-                          10,
-                          line: 14,
-                          color: index == 2
-                              ? const Color(0xFFF25561)
-                              : const Color(0xFF07934F),
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        index == 2 ? '100.000 VND' : '80.000 VND',
-                        maxLines: 1,
-                        style: exploreText(10, line: 14),
-                      ),
-                    ],
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 62, width: 112, child: ExplorePhoto()),
+            Padding(
+              padding: const EdgeInsets.only(left: 8, top: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Court ${index + 1}',
+                    style: exploreText(12, weight: FontWeight.w600, line: 17),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 3),
+                  Text(
+                    index == 2 ? '● Busy' : '● Available',
+                    maxLines: 1,
+                    style: exploreText(
+                      10,
+                      line: 14,
+                      color: index == 2
+                          ? const Color(0xFFF25561)
+                          : const Color(0xFF07934F),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    index == 2 ? '100.000 VND' : '80.000 VND',
+                    maxLines: 1,
+                    style: exploreText(10, line: 14),
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
+          ],
+        ),
+      ),
+    );
+  }
 
   void _showCourts() => showModalBottomSheet<void>(
     context: context,

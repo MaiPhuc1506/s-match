@@ -70,10 +70,11 @@ void main() {
     expect(find.text('VNB Test'), findsOneWidget);
     expect(find.text('Sky Badminton'), findsNothing);
     expect(find.text('4.6 (128)'), findsNothing);
-    await tester.ensureVisible(find.text('See all'));
-    await tester.tap(find.text('See all'));
+    await tester.tap(find.text('Info'));
     await tester.pumpAndSettle();
-    expect(find.text('VNB Court 5'), findsWidgets);
+    await tester.ensureVisible(find.text('See all'));
+    expect(find.text('VNB Court 5'), findsOneWidget);
+    // View Courts now opens the shared live schedule; verified by the booking integration test.
     expect(tester.takeException(), isNull);
   });
 

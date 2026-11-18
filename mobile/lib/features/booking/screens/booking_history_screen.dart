@@ -1,3 +1,4 @@
+import '../../court_map/facility_images.dart';
 import '../../../core/theme/app_motion_widgets.dart';
 
 import 'package:dio/dio.dart';
@@ -147,6 +148,14 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
         final b = Map<String, dynamic>.from(raw as Map);
         final court = b['court'] as Map;
         final facility = court['facility'] as Map;
+        final photos = FacilityImages.resolve(
+          name: facility['name']?.toString() ?? '',
+          address: facility['address']?.toString() ?? '',
+          photos:
+              (facility['photos'] as List?)?.whereType<String>().toList() ??
+              const [],
+        );
+        if (photos.isNotEmpty) b['photoAsset'] = photos.first;
         return BookingHistoryItem(
           source: b,
           id: '${b['id']}',

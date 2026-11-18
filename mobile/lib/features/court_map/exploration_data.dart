@@ -1,4 +1,5 @@
 import '../../core/network/api_client.dart';
+import 'facility_images.dart';
 
 import 'package:dio/dio.dart';
 
@@ -155,8 +156,12 @@ class CourtLocation {
   final String? priceRange;
   final bool? isOpen;
   final String address;
+  final String? contactPhone;
+  final String? description;
   final List<String> photos;
   final List<Map<String, dynamic>> courts;
+  final List<Map<String, dynamic>> operatingHours;
+  final List<Map<String, dynamic>> services;
   final bool demo;
   bool get hasCoordinates =>
       latitude != null &&
@@ -171,8 +176,59 @@ class CourtLocation {
   String get distanceText => distanceKm == null
       ? (demo ? 'Distance unavailable' : 'Chưa có khoảng cách')
       : '${distanceKm!.toStringAsFixed(1)} km';
+  String? get priceSummary {
+    if (priceRange != null && priceRange!.trim().isNotEmpty) {
+      return priceRange;
+    }
+    double? minPrice;
+    double? maxPrice;
+    for (final court in courts) {
+      if (court['status'] != null && court['status'] != 'ACTIVE') continue;
+      final slots = court['timeSlots'];
+      if (slots is! List) continue;
+      for (final rawSlot in slots) {
+        if (rawSlot is! Map) continue;
+        if (rawSlot['isActive'] == false) continue;
+        final price = rawSlot['hourlyRate'] ?? rawSlot['price'];
+        if (price is num && price.isFinite && price > 0) {
+          final value = price.toDouble();
+          minPrice = minPrice == null
+              ? value
+              : (value < minPrice ? value : minPrice);
+          maxPrice = maxPrice == null
+              ? value
+              : (value > maxPrice ? value : maxPrice);
+        }
+      }
+    }
+    if (minPrice == null || maxPrice == null) return null;
+    final minInt = minPrice.round();
+    final maxInt = maxPrice.round();
+    return minInt == maxInt
+        ? '$minInt VND / hour'
+        : '$minInt - $maxInt VND / hour';
+  }
+
+  String? get operatingHoursText {
+    if (operatingHours.isEmpty) return null;
+    final ranges = <String>[];
+    for (final item in operatingHours) {
+      final open = item['openTime']?.toString().trim();
+      final close = item['closeTime']?.toString().trim();
+      if (open != null &&
+          open.isNotEmpty &&
+          close != null &&
+          close.isNotEmpty) {
+        final range = '$open - $close';
+        if (!ranges.contains(range)) ranges.add(range);
+      }
+    }
+    if (ranges.isEmpty) return null;
+    return ranges.first;
+  }
+
   String get mapSubtitle =>
-      [if (distanceKm != null) distanceText, ?priceRange].join(' · ');
+      [if (distanceKm != null) distanceText, ?priceSummary].join(' · ');
   String get availabilityText => isOpen == null
       ? (demo ? 'Demo availability' : 'Chưa rõ giờ mở cửa')
       : isOpen!
@@ -190,12 +246,16 @@ class CourtLocation {
     this.priceRange,
     this.isOpen,
     this.address = '',
+    this.contactPhone,
+    this.description,
     this.photos = const [],
     this.courts = const [],
+    this.operatingHours = const [],
+    this.services = const [],
     this.demo = false,
   });
 
-  /// Factory for deserializing from future NestJS /facilities endpoint.
+  /// Factory for deserializing from NestJS /facilities endpoint.
   factory CourtLocation.fromJson(Map<String, dynamic> json) {
     return CourtLocation(
       id: (json['id'] as num).toInt(),
@@ -208,13 +268,30 @@ class CourtLocation {
       priceRange: json['priceRange'] as String?,
       isOpen: json['isOpen'] as bool?,
       address: json['address'] as String? ?? '',
-      photos:
-          (json['photos'] as List?)?.map((e) => e.toString()).toList() ??
-          const [],
+      contactPhone: json['contactPhone'] as String?,
+      description: json['description'] as String?,
+      photos: FacilityImages.resolve(
+        name: json['name'] as String? ?? '',
+        address: json['address'] as String? ?? '',
+        photos:
+            (json['photos'] as List?)?.whereType<String>().toList() ?? const [],
+      ),
       courts:
           (json['courts'] as List?)
               ?.whereType<Map>()
               .map((c) => Map<String, dynamic>.from(c))
+              .toList() ??
+          const [],
+      services:
+          (json['services'] as List?)
+              ?.whereType<Map>()
+              .map((s) => Map<String, dynamic>.from(s))
+              .toList() ??
+          const [],
+      operatingHours:
+          (json['operatingHours'] as List?)
+              ?.whereType<Map>()
+              .map((h) => Map<String, dynamic>.from(h))
               .toList() ??
           const [],
     );
@@ -378,15 +455,29 @@ final nearbyPlayersProvider = FutureProvider.autoDispose<List<NearbyPlayer>>(
 final courtPreviewProvider = FutureProvider<CourtPreviewData>(
   (ref) => ref.watch(explorationRepositoryProvider).court(),
 );
+final facilityDetailProvider = FutureProvider.autoDispose
+    .family<CourtLocation, int>((ref, id) async {
+      final response = await ApiClient.instance.dio.get('/facilities/$id');
+      final location = CourtLocation.fromJson(
+        Map<String, dynamic>.from(response.data as Map),
+      );
+      if (location.id != id) {
+        throw const FormatException('Facility identity mismatch');
+      }
+      return location;
+    });
 final nearbyCourtsProvider = FutureProvider.autoDispose<List<CourtLocation>>((
   ref,
 ) async {
   final response = await ApiClient.instance.dio.get('/facilities');
-  return (response.data as List)
-      .map(
-        (item) =>
-            CourtLocation.fromJson(Map<String, dynamic>.from(item as Map)),
-      )
+  final data = response.data;
+  if (data is! List) {
+    throw const FormatException('Invalid facilities response');
+  }
+  return data
+      .whereType<Map>()
+      .map((item) => CourtLocation.fromJson(Map<String, dynamic>.from(item)))
+      .where((court) => !court.demo && court.id > 0)
       .toList();
 });
 

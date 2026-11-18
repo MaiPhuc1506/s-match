@@ -4,7 +4,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '../auth/roles.enum';
 import { CandidatesService } from './candidates.service';
-import { CandidateQueryDto, UpdateLocationDto } from './dto/candidate.dto';
+import { CandidateQueryDto, UpdateLocationDto, UpdateLocationSharingDto } from './dto/candidate.dto';
 
 @ApiTags('Candidates (Geo Search & Matchmaking Data)')
 @ApiBearerAuth()
@@ -26,6 +26,18 @@ export class CandidatesController {
     return this.candidatesService.updateMyLocation(this.extractUserId(req), dto);
   }
 
+  @Get('me/location-sharing')
+  @ApiOperation({ summary: 'Xem lựa chọn chia sẻ vị trí của tôi' })
+  getLocationSharing(@Request() req: any) {
+    return this.candidatesService.getLocationSharing(this.extractUserId(req));
+  }
+
+  @Put('me/location-sharing')
+  @ApiOperation({ summary: 'Bật hoặc thu hồi quyền khám phá theo vị trí' })
+  updateLocationSharing(@Request() req: any, @Body() dto: UpdateLocationSharingDto) {
+    return this.candidatesService.updateLocationSharing(this.extractUserId(req), dto.enabled);
+  }
+
   @Get('nearby')
   @ApiOperation({ summary: 'Tìm người chơi gần tôi trong bán kính (gần nhất trước)' })
   @ApiResponse({ status: 200, description: 'Danh sách người chơi kèm khoảng cách (km).' })
@@ -37,11 +49,18 @@ export class CandidatesController {
   @Get('matchmaking-request')
   @ApiOperation({
     summary:
-      'Dựng sẵn body cho Matchmaking Service (POST /api/v1/match): current_user + candidates trong bán kính',
+      'Xem dữ liệu matchmaking an toàn; tọa độ ứng viên chỉ dùng nội bộ',
   })
-  @ApiResponse({ status: 200, description: '{ request, meta } — gửi nguyên `request` sang Matchmaking Service.' })
+  @ApiResponse({ status: 200, description: '{ request, meta } — không chứa tọa độ của ứng viên.' })
   @ApiResponse({ status: 400, description: 'Chưa cập nhật vị trí.' })
-  buildMatchmakingRequest(@Request() req: any, @Query() query: CandidateQueryDto) {
-    return this.candidatesService.buildMatchmakingRequest(this.extractUserId(req), query);
+  async buildMatchmakingRequest(@Request() req: any, @Query() query: CandidateQueryDto) {
+    const result = await this.candidatesService.buildMatchmakingRequest(this.extractUserId(req), query);
+    return {
+      ...result,
+      request: {
+        ...result.request,
+        candidates: result.request.candidates.map(({ location: _location, ...candidate }) => candidate),
+      },
+    };
   }
 }

@@ -926,6 +926,14 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
     }
     final court = _currentCourt;
     if (court == null) {
+      if (_allCourts.isEmpty && _query.isEmpty && !_filtersApplied) {
+        return Center(
+          child: TextButton(
+            onPressed: () => ref.invalidate(nearbyCourtsProvider),
+            child: const Text('Chưa có cơ sở đăng ký. Tải lại'),
+          ),
+        );
+      }
       return Center(
         child: TextButton(
           onPressed: () => setState(() {
@@ -1172,13 +1180,19 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
                           ),
                         ),
                       ),
-                      Text(
-                        court.priceRange ?? 'Chưa có giá',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          height: 17 / 12,
-                          color: const Color(0xFF05644F),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          court.priceSummary ?? 'Chưa có giá',
+                          textAlign: TextAlign.end,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            height: 17 / 12,
+                            color: const Color(0xFF05644F),
+                          ),
                         ),
                       ),
                     ],

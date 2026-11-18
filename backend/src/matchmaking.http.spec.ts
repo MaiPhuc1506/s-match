@@ -75,14 +75,14 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
     expect(provider.getCandidates).toHaveBeenCalledWith(8, expect.objectContaining(findPlayerRequest));
     expect(http.post.mock.calls[0][1].current_user.user_id).toBe('8');
     expect(response.body).toEqual({ matchedUsers: [
-      { userId: '7', matchScore: 85, profile: { fullName: 'Fixture player 7', nickname: null, avatarUrl: null, skillLevel: null } },
-      { userId: '3', matchScore: 80, profile: { fullName: 'Fixture player 3', nickname: null, avatarUrl: null, skillLevel: null } },
+      { userId: '7', matchScore: 85, breakdown: fastApiResponse().matched_users[0].breakdown, profile: { fullName: 'Fixture player 7', nickname: null, avatarUrl: null, skillLevel: null } },
+      { userId: '3', matchScore: 80, breakdown: fastApiResponse().matched_users[1].breakdown, profile: { fullName: 'Fixture player 3', nickname: null, avatarUrl: null, skillLevel: null } },
     ], totalCandidatesProcessed: 2 });
     expect(provider.getCandidates).toHaveBeenCalledTimes(1);
     expect(http.post).toHaveBeenCalledTimes(1);
     expect(prisma.playerProfile.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.playerProfile.findMany.mock.calls[0][0].where).toEqual({
-      userId: { in: [7, 3] }, user: { role: { name: 'PLAYER' } },
+      userId: { in: [7, 3] }, locationSharingEnabled: true, user: { role: { name: 'PLAYER' } },
     });
   });
   it('persists the authenticated search and ordered displayed results through the real history service', async () => {
@@ -198,7 +198,7 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
     expect(response.status).toBe(200);
     expect(Object.keys(response.body).sort()).toEqual(['matchedUsers', 'totalCandidatesProcessed']);
     for (const entry of response.body.matchedUsers) {
-      expect(Object.keys(entry).sort()).toEqual(['matchScore', 'profile', 'userId']);
+      expect(Object.keys(entry).sort()).toEqual(['breakdown', 'matchScore', 'profile', 'userId']);
       expect(Object.keys(entry.profile).sort()).toEqual(['avatarUrl', 'fullName', 'nickname', 'skillLevel']);
     }
     expect(JSON.stringify(response.body)).not.toContain('PRIVATE_DETAILS');
@@ -225,12 +225,22 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
     }]);
     const response = await post();
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ matchedUsers: [{ userId: '7', matchScore: 85, profile: {
+    expect(response.body).toEqual({ matchedUsers: [{ userId: '7', matchScore: 85, breakdown: fastApiResponse().matched_users[0].breakdown, profile: {
       fullName: null, nickname: 'Seven', avatarUrl: 'https://example.test/avatar.png', skillLevel: 'BEGINNER',
     } }], totalCandidatesProcessed: 2 });
     expect(prisma.playerProfile.findMany.mock.calls[0][0].select).toEqual({
       userId: true, nickname: true, avatarUrl: true, skillLevel: true, user: { select: { fullName: true } },
     });
+  });
+  it('excludes candidates who revoke sharing while ranking is in progress', async () => {
+    prisma.playerProfile.findMany.mockImplementation(async ({ where }: any) => {
+      expect(where.locationSharingEnabled).toBe(true);
+      return [recommendationProfile(3)]; // Player 7 no longer consents.
+    });
+    const response = await post();
+    expect(response.status).toBe(200);
+    expect(response.body.matchedUsers.map((row: any) => row.userId)).toEqual(['3']);
+    expect(JSON.stringify(response.body)).not.toMatch(/latitude|longitude|location/);
   });
   it('returns sanitized 503 on profile failure, without retrying', async () => {
     prisma.playerProfile.findMany.mockRejectedValueOnce(new Error('PRIVATE_DATABASE_DETAILS'));
@@ -239,9 +249,9 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
     expect(http.post).toHaveBeenCalledTimes(1);
   });
   it.each([
-    { matched_users: [{ user_id: '7', match_score: 85 }, { user_id: '7', match_score: 80 }] },
-    { matched_users: [{ user_id: '999', match_score: 85 }] },
-    { matched_users: [{ user_id: '8', match_score: 85 }] },
+    { matched_users: [{ ...fastApiResponse().matched_users[0] }, { ...fastApiResponse().matched_users[1], user_id: '7' }] },
+    { matched_users: [{ ...fastApiResponse().matched_users[0], user_id: '999' }] },
+    { matched_users: [{ ...fastApiResponse().matched_users[0], user_id: '8' }] },
   ])('preserves upstream identity validation before profile queries', async ({ matched_users }) => {
     http.post.mockResolvedValueOnce({ status: 200, data: { matched_users, total_candidates_processed: 2 } });
     safeError(await post(), 502);

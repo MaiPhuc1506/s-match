@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../court_map/exploration_data.dart';
+import '../../court_map/screens/court_preview_screen.dart';
+import '../../court_map/screens/find_courts_map_screen.dart';
 import '../../navigation/player_bottom_navigation.dart';
 import '../../match/screens/match_list_screen.dart';
 import '../data/demo_catalog.dart';
@@ -16,7 +19,7 @@ class PlayerHomeScreen extends ConsumerWidget {
   const PlayerHomeScreen({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final data = ref.watch(demoCatalogProvider);
+    final facilitiesAsync = ref.watch(nearbyCourtsProvider);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -122,7 +125,7 @@ class PlayerHomeScreen extends ConsumerWidget {
                           child: InkWell(
                             onTap: () => openExperience(
                               context,
-                              const DemoCourtsMapScreen(),
+                              const FindCourtsMapScreen(),
                             ),
                             child: const Row(
                               children: [
@@ -165,24 +168,76 @@ class PlayerHomeScreen extends ConsumerWidget {
                           'Explore Courts',
                           const ExploreCourtsScreen(),
                         ),
-                        const DemoNotice(
-                          text: '10 demo facilities · Local catalogue',
-                        ),
-                        LayoutBuilder(
-                          builder: (_, bounds) => Wrap(
-                            spacing: 12,
-                            runSpacing: 0,
-                            children: [
-                              for (final f in data.facilities.take(4))
-                                SizedBox(
-                                  width: (bounds.maxWidth - 12) / 2,
-                                  child: FacilityTile(
-                                    facility: f,
-                                    compact: true,
-                                  ),
-                                ),
-                            ],
+                        facilitiesAsync.when(
+                          loading: () => const ExperienceCard(
+                            child: Center(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                child: CircularProgressIndicator(),
+                              ),
+                            ),
                           ),
+                          error: (_, _) => ExperienceCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Unable to load courts. Please try again.',
+                                ),
+                                const SizedBox(height: 8),
+                                TextButton.icon(
+                                  key: const Key('home_courts_retry'),
+                                  onPressed: () =>
+                                      ref.invalidate(nearbyCourtsProvider),
+                                  icon: const Icon(Icons.refresh),
+                                  label: const Text('Retry'),
+                                ),
+                              ],
+                            ),
+                          ),
+                          data: (allFacilities) {
+                            final facilities = allFacilities
+                                .where((f) => !f.demo && f.id > 0)
+                                .toList();
+                            if (facilities.isEmpty) {
+                              return ExperienceCard(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'No registered facilities available yet.',
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextButton.icon(
+                                      key: const Key(
+                                        'home_courts_empty_refresh',
+                                      ),
+                                      onPressed: () =>
+                                          ref.invalidate(nearbyCourtsProvider),
+                                      icon: const Icon(Icons.refresh),
+                                      label: const Text('Refresh'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+                            return LayoutBuilder(
+                              builder: (_, bounds) => Wrap(
+                                spacing: 12,
+                                runSpacing: 0,
+                                children: [
+                                  for (final f in facilities)
+                                    SizedBox(
+                                      width: (bounds.maxWidth - 12) / 2,
+                                      child: FacilityTile(
+                                        facility: f,
+                                        compact: true,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                         _heading(
                           context,
@@ -331,12 +386,16 @@ class _ExperienceSearchScreenState
   String query = '';
   @override
   Widget build(BuildContext context) {
+    final facilitiesAsync = ref.watch(nearbyCourtsProvider);
     final c = ref.watch(demoCatalogProvider);
     bool matches(String text) =>
-        text.toLowerCase().contains(query.toLowerCase());
-    final facilities = c.facilities.where(
-      (f) => matches('${f.name} ${f.district}'),
-    );
+        text.toLowerCase().contains(query.trim().toLowerCase());
+    final registeredFacilities =
+        (facilitiesAsync.asData?.value ?? const <CourtLocation>[])
+            .where((f) => !f.demo && f.id > 0);
+    final facilities = registeredFacilities
+        .where((f) => matches('${f.name} ${f.address}'))
+        .toList();
     final courses = c.courses.where((l) => matches(l.title));
     final coaches = c.coaches.where((l) => matches(l.title));
     final shops = c.shops.where((s) => matches(s.name));
@@ -353,8 +412,29 @@ class _ExperienceSearchScreenState
               prefixIcon: Icon(Icons.search),
             ),
           ),
-          const DemoNotice(),
-          if (facilities.isEmpty &&
+          const SizedBox(height: 12),
+          if (facilitiesAsync.isLoading)
+            const ExperienceCard(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (facilitiesAsync.hasError)
+            ExperienceCard(
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text('Unable to load courts.'),
+                  ),
+                  TextButton.icon(
+                    key: const Key('search_courts_retry'),
+                    onPressed: () => ref.invalidate(nearbyCourtsProvider),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          if (!facilitiesAsync.isLoading &&
+              facilities.isEmpty &&
               courses.isEmpty &&
               coaches.isEmpty &&
               shops.isEmpty)
@@ -364,10 +444,14 @@ class _ExperienceSearchScreenState
           for (final f in facilities)
             ListTile(
               title: Text(f.name),
-              subtitle: Text('Court · ${f.district}'),
+              subtitle: Text(
+                f.address.trim().isEmpty
+                    ? 'Court'
+                    : 'Court · ${f.address.trim()}',
+              ),
               onTap: () => openExperience(
                 context,
-                DemoCourtDetailScreen(facilityId: f.id),
+                CourtPreviewScreen(location: f),
               ),
             ),
           for (final l in courses)

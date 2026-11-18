@@ -1,3 +1,4 @@
+import '../../court_map/widgets/facility_gallery.dart';
 import '../../../core/theme/app_motion_widgets.dart';
 
 import 'package:flutter/material.dart';
@@ -174,11 +175,10 @@ class BookingDetailScreen extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: photoAsset != null
-                ? Image.asset(
-                    photoAsset!,
+                ? SizedBox(
                     width: 92,
                     height: 62,
-                    fit: BoxFit.cover,
+                    child: FacilityPhoto(photoAsset!),
                   )
                 : SvgPicture.asset(
                     BookingIcons.courtThumbnail,

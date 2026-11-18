@@ -122,7 +122,9 @@ class FacilityService {
   }
 
   /// Xóa cơ sở (cascade xóa tất cả sân con)
-  Future<({bool success, String? message})> deleteFacility(int facilityId) async {
+  Future<({bool success, String? message})> deleteFacility(
+    int facilityId,
+  ) async {
     try {
       final token = await _client.ensureOwnerToken();
       if (token == null) {
@@ -153,8 +155,8 @@ class FacilityService {
       errorMsg ??= (e.response?.statusCode == 403
           ? 'Bạn không có quyền xóa cơ sở này (cơ sở thuộc chủ sân khác).'
           : e.response?.statusCode == 404
-              ? 'Không tìm thấy cơ sở cần xóa.'
-              : 'Lỗi máy chủ (${e.response?.statusCode ?? e.message})');
+          ? 'Không tìm thấy cơ sở cần xóa.'
+          : 'Lỗi máy chủ (${e.response?.statusCode ?? e.message})');
       debugPrint('[DELETE FACILITY ERROR] $errorMsg');
       return (success: false, message: errorMsg);
     } catch (e) {
@@ -235,6 +237,27 @@ class FacilityService {
       return res.statusCode == 200;
     } catch (e) {
       debugPrint('Lỗi khóa/mở khung giờ: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateTimeSlotPrice({
+    required int facilityId,
+    required int courtId,
+    required int slotId,
+    required double price,
+  }) async {
+    try {
+      final token = _client.token;
+      if (token == null) return false;
+      final response = await _client.dio.patch(
+        '/facilities/$facilityId/courts/$courtId/time-slots/$slotId/pricing',
+        options: Options(extra: {'expectedAuthToken': token}),
+        data: {'price': price},
+      );
+      return _client.token == token && response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Lỗi cập nhật giá khung giờ: $e');
       return false;
     }
   }

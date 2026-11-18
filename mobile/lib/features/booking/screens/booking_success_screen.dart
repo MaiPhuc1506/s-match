@@ -1,3 +1,4 @@
+import '../../court_map/widgets/facility_gallery.dart';
 import '../../../core/theme/app_motion.dart';
 import 'booking_history_screen.dart';
 
@@ -127,11 +128,10 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
         height: 110,
         child: Center(
           child: widget.photoAsset != null
-              ? Image.asset(
-                  widget.photoAsset!,
+              ? SizedBox(
                   width: 86,
                   height: 58,
-                  fit: BoxFit.cover,
+                  child: FacilityPhoto(widget.photoAsset!),
                 )
               : SvgPicture.asset(
                   BookingIcons.successBadge,
