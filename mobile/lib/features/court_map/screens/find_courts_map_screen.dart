@@ -1,6 +1,16 @@
+import '../../booking/screens/booking_facility_schedule_screen.dart';
+import '../facility_images.dart';
+import '../widgets/facility_gallery.dart';
+
+import 'package:geolocator/geolocator.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
+
+import '../services/routing_service.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -63,8 +73,24 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
   final _playersKey = GlobalKey<PlayerDiscoveryOverlayState>();
   List<NearbyPlayer> _visiblePlayers = const [];
   // --- UI States (Initial prototype values from Figma collection) ---
+  final _routing = RoutingService();
+  CourtLocation? _routeDestination;
+  RoutePreview? _route;
+  String? _routeError;
+  bool _routeLoading = false, _settingsNeeded = false;
+  int _routeRequest = 0;
   bool _selection = true; // Sky Badminton bubble selected by default
   CourtLocation? _selectedCourt;
+  CourtLocation? _previewCourt;
+  bool _previewExpanded = false;
+  double _previewDrag = 0;
+  Future<void> _mapOperations = Future.value();
+  Future<void> _mapOperation(Future<void> Function() action) {
+    final next = _mapOperations.catchError((Object _) {}).then((_) => action());
+    _mapOperations = next;
+    return next;
+  }
+
   String _query = '';
   List<CourtLocation> get _allCourts =>
       ref.read(nearbyCourtsProvider).asData?.value ?? [];
@@ -154,6 +180,547 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
   _SheetSnapState _sheetState = _SheetSnapState.collapsed;
   double _sheetDragDelta = 0;
 
+  Future<void> _startDirections(CourtLocation court) async {
+    final request = ++_routeRequest;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _searchOpen = false;
+      _filtersOpen = false;
+      _layersOpen = false;
+      _previewCourt = null;
+      _routeDestination = court;
+      _routeLoading = true;
+      _routeError = null;
+      _route = null;
+      _settingsNeeded = false;
+    });
+    await _mapOperation(() async => _courtMapController?.clearRoute());
+    if (!mounted || request != _routeRequest) return;
+    try {
+      if (!court.hasCoordinates ||
+          (court.latitude == 0 && court.longitude == 0)) {
+        throw StateError('Destination coordinates are unavailable.');
+      }
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw StateError(
+          'Location services are disabled. Enable them in Settings.',
+        );
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever) {
+        _settingsNeeded = true;
+        throw StateError(
+          'Location permission is permanently denied. Open Settings to allow it.',
+        );
+      }
+      if (permission == LocationPermission.denied) {
+        throw StateError('Location permission was denied.');
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+      if (!position.accuracy.isFinite || position.accuracy > 200) {
+        throw StateError(
+          'Location is not accurate enough. Move to an open area and retry.',
+        );
+      }
+      if (!mounted || request != _routeRequest) return;
+      final route = await _routing.route(
+        LatLng(position.latitude, position.longitude),
+        LatLng(court.latitude!, court.longitude!),
+      );
+      if (!mounted || request != _routeRequest) return;
+      final map = _courtMapController;
+      if (map == null) throw StateError('Map is not ready. Please retry.');
+      await _mapOperation(() async {
+        if (mounted && request == _routeRequest) await map.showRoute(route);
+      });
+      if (!mounted || request != _routeRequest) return;
+      setState(() {
+        _route = route;
+        _routeLoading = false;
+      });
+    } catch (error) {
+      if (!mounted || request != _routeRequest) return;
+      setState(() {
+        _routeLoading = false;
+        _routeError = error is StateError
+            ? error.message.toString()
+            : 'Could not load directions. Check your connection and try again.';
+      });
+    }
+  }
+
+  void _exitDirections() {
+    _routeRequest++;
+    _mapOperation(() async => _courtMapController?.clearRoute());
+    if (_selectedCourt != null) {
+      _courtMapController?.moveToCourt(_selectedCourt!);
+    }
+    setState(() {
+      _routeDestination = null;
+      _route = null;
+      _routeError = null;
+      _routeLoading = false;
+    });
+  }
+
+  Widget _directionsSheet() => Material(
+    color: Colors.white,
+    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+    child: SafeArea(
+      top: false,
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: Builder(
+                      builder: (_) {
+                        final f = _routeDestination!;
+                        final photos = FacilityImages.resolve(
+                          name: f.name,
+                          address: f.address,
+                          photos: f.photos,
+                        );
+                        return photos.isEmpty
+                            ? const ColoredBox(
+                                color: Color(0xFFE9F3EE),
+                                child: Icon(CupertinoIcons.photo),
+                              )
+                            : FacilityPhoto(
+                                photos.first,
+                                key: ValueKey('${f.id}:${photos.first}'),
+                              );
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _routeDestination!.name,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'From your current location · Driving\nLocation is sent to the routing service for this preview.',
+            ),
+            const SizedBox(height: 10),
+            if (_routeLoading)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEDF7F2),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CupertinoActivityIndicator(radius: 8),
+                    SizedBox(width: 8),
+                    Text(
+                      'Finding the best route…',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF05644F)),
+                    ),
+                  ],
+                ),
+              ),
+            if (_routeError != null)
+              Text(_routeError!, style: const TextStyle(color: Colors.red)),
+            if (_route != null)
+              Text(
+                '${(_route!.distance / 1000).toStringAsFixed(1)} km · ${(_route!.duration / 60).ceil()} min',
+                style: const TextStyle(
+                  color: Color(0xFF05644F),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            Wrap(
+              spacing: 8,
+              children: [
+                if (_route != null)
+                  TextButton.icon(
+                    onPressed: () => _courtMapController?.fitRoute(),
+                    icon: const Icon(Icons.my_location),
+                    label: const Text('Fit route'),
+                  ),
+                if (_routeError != null)
+                  TextButton(
+                    onPressed: () => _startDirections(_routeDestination!),
+                    child: const Text('Retry'),
+                  ),
+                if (_settingsNeeded)
+                  TextButton(
+                    onPressed: Geolocator.openAppSettings,
+                    child: const Text('Open Settings'),
+                  ),
+                TextButton(
+                  onPressed: _exitDirections,
+                  child: const Text('Exit directions'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  void _selectMarker(CourtLocation court) {
+    _courtMapController?.focusCourt(court);
+    _routeRequest++;
+    _mapOperation(() async => _courtMapController?.clearRoute());
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _routeDestination = null;
+      _route = null;
+      _routeError = null;
+      _routeLoading = false;
+      _selectedCourt = court;
+      _previewCourt = court;
+      _previewExpanded = false;
+      _selection = true;
+      _searchOpen = false;
+      _filtersOpen = false;
+      _layersOpen = false;
+    });
+  }
+
+  Widget _compactCourtPreview(CourtLocation selected) {
+    final detail = ref.watch(facilityDetailProvider(selected.id));
+    final f = detail.valueOrNull ?? selected;
+    final photos = FacilityImages.resolve(
+      name: f.name,
+      address: f.address,
+      photos: f.photos,
+    );
+    final courts = f.courts
+        .where((c) => c['status'] == null || c['status'] == 'ACTIVE')
+        .toList();
+    final rates = <num>[];
+    for (final court in courts) {
+      for (final slot in (court['timeSlots'] as List? ?? [])) {
+        if (slot is Map && slot['isActive'] != false) {
+          if (slot['hourlyRate'] is num) {
+            rates.add(slot['hourlyRate'] as num);
+          } else if (slot['price'] is num &&
+              slot['startTime'] is String &&
+              slot['endTime'] is String) {
+            int minutes(String time) {
+              final parts = time.split(':');
+              return (int.tryParse(parts.first) ?? -1000) * 60 +
+                  (parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0);
+            }
+
+            if (minutes(slot['endTime'] as String) -
+                    minutes(slot['startTime'] as String) ==
+                60) {
+              rates.add(slot['price'] as num);
+            }
+          }
+        }
+      }
+    }
+    rates.sort();
+    return Material(
+      color: Colors.white,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+      child: GestureDetector(
+        onVerticalDragEnd: (details) {
+          final velocity = details.primaryVelocity ?? 0;
+          if (velocity.abs() > 100) {
+            setState(() {
+              if (velocity > 0 && !_previewExpanded) {
+                _previewCourt = null;
+              } else {
+                _previewExpanded = velocity < 0;
+              }
+            });
+          }
+        },
+        child: AnimatedSize(
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.bottomCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.57,
+            ),
+            child: SingleChildScrollView(
+              physics:
+                  MediaQuery.textScalerOf(context).scale(1) > 1.1 ||
+                      MediaQuery.sizeOf(context).height < 750
+                  ? const ClampingScrollPhysics()
+                  : const NeverScrollableScrollPhysics(),
+              child: SafeArea(
+                top: false,
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Semantics(
+                        button: true,
+                        label: _previewExpanded
+                            ? 'Collapse facility preview'
+                            : 'Expand facility preview',
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onVerticalDragStart: (_) => _previewDrag = 0,
+                          onVerticalDragUpdate: (details) =>
+                              _previewDrag += details.delta.dy,
+                          onVerticalDragEnd: (_) {
+                            if (_previewDrag.abs() > 20) {
+                              setState(() {
+                                if (_previewDrag > 0 && !_previewExpanded) {
+                                  _previewCourt = null;
+                                } else {
+                                  _previewExpanded = _previewDrag < 0;
+                                }
+                              });
+                            }
+                          },
+                          onTap: () => setState(
+                            () => _previewExpanded = !_previewExpanded,
+                          ),
+                          child: SizedBox(
+                            height: 30,
+                            width: double.infinity,
+                            child: Center(
+                              child: Container(
+                                width: 40,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFD4DEDA),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (_previewExpanded) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 150,
+                            child: photos.isEmpty
+                                ? const ColoredBox(
+                                    color: Color(0xFFE9F3EE),
+                                    child: Icon(
+                                      Icons.sports_tennis,
+                                      color: Color(0xFF05644F),
+                                    ),
+                                  )
+                                : FacilityPhoto(
+                                    photos.first,
+                                    fadeIn: true,
+                                    key: ValueKey('${f.id}:${photos.first}'),
+                                  ),
+                          ),
+                        ),
+                        if (photos.length > 1) ...[
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            height: 60,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: photos.length - 1,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(width: 8),
+                              itemBuilder: (context, index) => ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: SizedBox(
+                                  width: 84,
+                                  child: FacilityPhoto(
+                                    photos[index + 1],
+                                    fadeIn: true,
+                                    key: ValueKey(
+                                      '${f.id}:${photos[index + 1]}',
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                      ],
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (!_previewExpanded)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: SizedBox(
+                                width: 80,
+                                height: 80,
+                                child: photos.isEmpty
+                                    ? const ColoredBox(
+                                        color: Color(0xFFE9F3EE),
+                                        child: Icon(
+                                          Icons.sports_tennis,
+                                          color: Color(0xFF05644F),
+                                        ),
+                                      )
+                                    : FacilityPhoto(
+                                        photos.first,
+                                        fadeIn: true,
+                                        key: ValueKey(
+                                          '${f.id}:${photos.first}',
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          if (!_previewExpanded) const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  f.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  f.address.isEmpty
+                                      ? 'Address unavailable'
+                                      : f.address,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                Text(
+                                  f.operatingHoursText ??
+                                      (detail.isLoading
+                                          ? 'Loading hours…'
+                                          : 'Hours unavailable'),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                Text(
+                                  '${courts.isEmpty ? 'Court count unavailable' : '${courts.length} courts'} · ${rates.isEmpty ? 'Price unavailable' : 'From ${rates.first.toStringAsFixed(0)} VND / hour'}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF05644F),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Close preview',
+                            onPressed: () =>
+                                setState(() => _previewCourt = null),
+                            icon: const Icon(Icons.close, size: 20),
+                          ),
+                        ],
+                      ),
+                      if (_previewExpanded &&
+                          f.description != null &&
+                          f.description!.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            f.description!,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF61716B),
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FilledButton(
+                              key: const Key('preview-directions'),
+                              onPressed: () => _startDirections(f),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF05644F),
+                              ),
+                              child: const Text('Directions'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton(
+                              key: const Key('preview-book'),
+                              onPressed: () => Navigator.of(context).push(
+                                explorationRoute<void>(
+                                  BookingFacilityScheduleScreen(
+                                    facilityId: f.id,
+                                  ),
+                                  '/facility-booking',
+                                ),
+                              ),
+                              child: const Text('Book Court'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_previewExpanded)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            key: const Key('preview-details'),
+                            onPressed: _openCourtPreview,
+                            icon: const Icon(
+                              CupertinoIcons.chevron_right,
+                              size: 16,
+                            ),
+                            label: const Text('View Details'),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _openCourtPreview() {
     if (_currentCourt == null) return;
     if (widget.onSelectCourtPreview != null) {
@@ -164,7 +731,13 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
       Navigator.of(context)
           .push(
             explorationRoute<void>(
-              CourtPreviewScreen(location: _currentCourt),
+              CourtPreviewScreen(
+                location: _currentCourt,
+                onDirections: (court) {
+                  Navigator.of(context).pop();
+                  _startDirections(court);
+                },
+              ),
               '/court-preview',
             ),
           )
@@ -198,9 +771,14 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
 
   void _dismissOverlays() {
     FocusManager.instance.primaryFocus?.unfocus();
-    if (_selection || _searchOpen || _filtersOpen || _layersOpen) {
+    if (_selection ||
+        _searchOpen ||
+        _filtersOpen ||
+        _layersOpen ||
+        _previewCourt != null) {
       setState(() {
         _selection = false;
+        _previewCourt = null;
         _searchOpen = false;
         _filtersOpen = false;
         _layersOpen = false;
@@ -291,7 +869,9 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
                 ),
 
               // LAYER 3A: MAP CONTROLS (Location & Layers buttons)
-              if (!_playersMode && _sheetState != _SheetSnapState.expanded)
+              if (!_playersMode &&
+                  _routeDestination == null &&
+                  _sheetState != _SheetSnapState.expanded)
                 Positioned(
                   right: 16,
                   bottom: navHeight + sheetHeight + 16,
@@ -299,7 +879,9 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
                 ),
 
               // LAYER 3B: NEARBY COURTS BOTTOM SHEET
-              if (!_playersMode)
+              if (!_playersMode &&
+                  _routeDestination == null &&
+                  _previewCourt == null)
                 Positioned(
                   left: 0,
                   right: 0,
@@ -308,6 +890,22 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
                   child: _buildNearbyCourtsSheet(screenWidth, sheetHeight),
                 ),
 
+              if (!_playersMode &&
+                  _previewCourt != null &&
+                  _routeDestination == null)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: navHeight,
+                  child: _compactCourtPreview(_previewCourt!),
+                ),
+              if (_routeDestination != null)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: navHeight,
+                  child: _directionsSheet(),
+                ),
               // LAYER 4: FIXED BOTTOM NAVIGATION (0, screenHeight - 84, width, 84)
               Positioned(
                 left: 0,
@@ -371,25 +969,22 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
         selectedCourt: _currentCourt,
         showPins: _pins && !_playersMode,
         showAccuracy:
+            _routeDestination == null &&
             _accuracy &&
             (_playersMode
                 ? _visiblePlayers.any((p) => p.demo)
                 : _courts.any((court) => court.demo)),
         showCluster: _cluster,
-        showSelection: _selection && !_playersMode,
+        showSelection:
+            _routeDestination == null &&
+            _previewCourt == null &&
+            _selection &&
+            !_playersMode,
         onMapReady: (controller) {
           _courtMapController = controller;
           _centerOnFirstCourt();
         },
-        onCourtSelected: (court) {
-          setState(() {
-            _selectedCourt = court;
-            _selection = true;
-            _searchOpen = false;
-            _filtersOpen = false;
-            _layersOpen = false;
-          });
-        },
+        onCourtSelected: _selectMarker,
         onCourtPreview: _openCourtPreview,
         onClusterTap: () {
           setState(() {

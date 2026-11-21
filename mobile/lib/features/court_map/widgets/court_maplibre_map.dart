@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../exploration_data.dart';
+import '../services/routing_service.dart';
 import 'native_court_layers.dart';
 import 'native_player_layers.dart';
 
@@ -17,6 +18,10 @@ import 'native_player_layers.dart';
 abstract class CourtMapController {
   Future<void> recenter();
   Future<void> moveToCourt(CourtLocation court);
+  Future<void> focusCourt(CourtLocation court);
+  Future<void> showRoute(RoutePreview route);
+  Future<void> clearRoute();
+  Future<void> fitRoute();
   Future<void> zoomIn();
   Future<void> zoomOut();
   LatLng? get center;
@@ -98,6 +103,10 @@ class CourtMapLibreMapState extends State<CourtMapLibreMap>
   Size? _viewportSize;
   double? _trackpadZoom;
   bool _installingSimulatorPinch = false;
+  RoutePreview? _route;
+  bool _routeLayers = false;
+  int _featureTapGeneration = 0;
+  DateTime? _lastFeatureTap;
 
   @override
   LatLng get center => _currentCamera.target;
@@ -180,10 +189,12 @@ class CourtMapLibreMapState extends State<CourtMapLibreMap>
     if (controller == null) return;
     _nativeLayers?.disposed = true;
     _nativePlayers?.disposed = true;
+    _routeLayers = false;
     _nativeLayers = NativeCourtLayers(controller);
     _nativePlayers = NativePlayerLayers(controller);
     unawaited(_installSimulatorPinch());
     unawaited(_syncNative());
+    if (_route != null) unawaited(showRoute(_route!));
     unawaited(_refreshCallout());
   }
 
@@ -223,6 +234,8 @@ class CourtMapLibreMapState extends State<CourtMapLibreMap>
     String layerId,
     Annotation? annotation,
   ) {
+    _featureTapGeneration++;
+    _lastFeatureTap = DateTime.now();
     if (layerId == NativePlayerLayers.layer) {
       if (!widget.showPlayers) return;
       for (final player in widget.players) {
@@ -326,6 +339,120 @@ class CourtMapLibreMapState extends State<CourtMapLibreMap>
   }
 
   @override
+  Future<void> focusCourt(CourtLocation court) async {
+    if (!court.hasCoordinates) return;
+    final camera = CameraUpdate.newLatLng(
+      LatLng(court.latitude!, court.longitude!),
+    );
+    if (MediaQuery.disableAnimationsOf(context)) {
+      await _mapLibreController?.moveCamera(camera);
+    } else {
+      await _mapLibreController?.animateCamera(
+        camera,
+        duration: const Duration(milliseconds: 450),
+      );
+    }
+  }
+
+  @override
+  Future<void> showRoute(RoutePreview route) async {
+    _route = route;
+    final c = _mapLibreController;
+    if (c == null) return;
+    final geo = {
+      'type': 'FeatureCollection',
+      'features': [
+        {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'LineString',
+            'coordinates': route.points
+                .map((p) => [p.longitude, p.latitude])
+                .toList(),
+          },
+          'properties': <String, dynamic>{},
+        },
+      ],
+    };
+    final markers = {
+      'type': 'FeatureCollection',
+      'features': [
+        for (final p in [route.points.first, route.points.last])
+          {
+            'type': 'Feature',
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [p.longitude, p.latitude],
+            },
+            'properties': <String, dynamic>{},
+          },
+      ],
+    };
+    if (!_routeLayers) {
+      await c.addGeoJsonSource('smatch-route', geo);
+      await c.addLineLayer(
+        'smatch-route',
+        'smatch-route-line',
+        const LineLayerProperties(
+          lineColor: '#05644F',
+          lineWidth: 6,
+          lineOpacity: 0.9,
+        ),
+        enableInteraction: false,
+      );
+      await c.addGeoJsonSource('smatch-route-points', markers);
+      await c.addCircleLayer(
+        'smatch-route-points',
+        'smatch-route-markers',
+        const CircleLayerProperties(
+          circleColor: '#05644F',
+          circleRadius: 7,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: 3,
+        ),
+        enableInteraction: false,
+      );
+      _routeLayers = true;
+    } else {
+      await c.setGeoJsonSource('smatch-route', geo);
+      await c.setGeoJsonSource('smatch-route-points', markers);
+    }
+    await fitRoute();
+  }
+
+  @override
+  Future<void> clearRoute() async {
+    _route = null;
+    final c = _mapLibreController;
+    if (c == null || !_routeLayers) return;
+    await c.removeLayer('smatch-route-line');
+    await c.removeLayer('smatch-route-markers');
+    await c.removeSource('smatch-route');
+    await c.removeSource('smatch-route-points');
+    _routeLayers = false;
+  }
+
+  @override
+  Future<void> fitRoute() async {
+    final route = _route;
+    if (route == null) return;
+    final latitudes = route.points.map((p) => p.latitude).toList()..sort();
+    final longitudes = route.points.map((p) => p.longitude).toList()..sort();
+    await _mapLibreController?.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(latitudes.first, longitudes.first),
+          northeast: LatLng(latitudes.last, longitudes.last),
+        ),
+        left: 55,
+        right: 55,
+        top: 130,
+        bottom: 250,
+      ),
+    );
+  }
+
+  @override
   Future<void> zoomIn() async {
     await _mapLibreController?.animateCamera(CameraUpdate.zoomIn());
   }
@@ -395,7 +522,19 @@ class CourtMapLibreMapState extends State<CourtMapLibreMap>
                 onCameraMoveStarted: (_) => _beginCameraMove(),
                 onCameraMove: _onCameraMove,
                 onCameraIdle: _onCameraIdle,
-                onMapClick: (_, _) => widget.onBackgroundTap?.call(),
+                onMapClick: (_, _) {
+                  final generation = _featureTapGeneration;
+                  Future<void>.delayed(const Duration(milliseconds: 150), () {
+                    if (!mounted || generation != _featureTapGeneration) return;
+                    final lastTap = _lastFeatureTap;
+                    if (lastTap != null &&
+                        DateTime.now().difference(lastTap) <
+                            const Duration(milliseconds: 300)) {
+                      return;
+                    }
+                    widget.onBackgroundTap?.call();
+                  });
+                },
               ),
             ),
           ),

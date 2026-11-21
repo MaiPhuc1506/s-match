@@ -163,10 +163,65 @@ class PlayerHomeScreen extends ConsumerWidget {
                             ),
                           ),
                         ),
-                        _heading(
-                          context,
-                          'Explore Courts',
-                          const ExploreCourtsScreen(),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8, bottom: 12),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final mapAction = TextButton(
+                                key: const Key('home-view-courts-map'),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                ),
+                                onPressed: () => openExperience(
+                                  context,
+                                  const FindCourtsMapScreen(),
+                                ),
+                                child: const Text(
+                                  'View on Map  ›',
+                                  style: TextStyle(color: mint, fontSize: 12),
+                                ),
+                              );
+                              final allAction = TextButton(
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                ),
+                                onPressed: () => openExperience(
+                                  context,
+                                  const ExploreCourtsScreen(),
+                                ),
+                                child: const Text('See all'),
+                              );
+                              const title = Text(
+                                'Explore Courts',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              );
+                              if (constraints.maxWidth < 340 ||
+                                  MediaQuery.textScalerOf(context).scale(1) >
+                                      1.1) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    title,
+                                    Wrap(children: [mapAction, allAction]),
+                                  ],
+                                );
+                              }
+                              return Row(
+                                children: [
+                                  const Expanded(child: title),
+                                  mapAction,
+                                  allAction,
+                                ],
+                              );
+                            },
+                          ),
                         ),
                         facilitiesAsync.when(
                           loading: () => const ExperienceCard(
@@ -391,8 +446,9 @@ class _ExperienceSearchScreenState
     bool matches(String text) =>
         text.toLowerCase().contains(query.trim().toLowerCase());
     final registeredFacilities =
-        (facilitiesAsync.asData?.value ?? const <CourtLocation>[])
-            .where((f) => !f.demo && f.id > 0);
+        (facilitiesAsync.asData?.value ?? const <CourtLocation>[]).where(
+          (f) => !f.demo && f.id > 0,
+        );
     final facilities = registeredFacilities
         .where((f) => matches('${f.name} ${f.address}'))
         .toList();
@@ -421,9 +477,7 @@ class _ExperienceSearchScreenState
             ExperienceCard(
               child: Row(
                 children: [
-                  const Expanded(
-                    child: Text('Unable to load courts.'),
-                  ),
+                  const Expanded(child: Text('Unable to load courts.')),
                   TextButton.icon(
                     key: const Key('search_courts_retry'),
                     onPressed: () => ref.invalidate(nearbyCourtsProvider),
@@ -449,10 +503,8 @@ class _ExperienceSearchScreenState
                     ? 'Court'
                     : 'Court · ${f.address.trim()}',
               ),
-              onTap: () => openExperience(
-                context,
-                CourtPreviewScreen(location: f),
-              ),
+              onTap: () =>
+                  openExperience(context, CourtPreviewScreen(location: f)),
             ),
           for (final l in courses)
             ListTile(

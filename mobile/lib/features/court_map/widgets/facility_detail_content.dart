@@ -18,7 +18,9 @@ class FacilityDetailContent extends ConsumerStatefulWidget {
     required this.onFavorite,
     required this.favorite,
     required this.onShare,
+    this.onDirections,
   });
+  final ValueChanged<CourtLocation>? onDirections;
   final CourtLocation initial;
   final void Function([int? courtId]) onBook;
   final VoidCallback onFavorite, onShare;
@@ -296,6 +298,27 @@ class _FacilityDetailContentState extends ConsumerState<FacilityDetailContent> {
                         'Location',
                         CupertinoIcons.placemark,
                         f.address.isEmpty ? 'Address unavailable' : f.address,
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          key: const Key('facility-directions'),
+                          onPressed: () {
+                            if (widget.onDirections != null) {
+                              widget.onDirections!(f);
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Open this court from the Map to view directions.',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(CupertinoIcons.location, size: 18),
+                          label: const Text('Directions'),
+                        ),
                       ),
                       const SizedBox(height: 4),
                       _label(

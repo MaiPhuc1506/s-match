@@ -349,6 +349,8 @@ void main() {
 
       // 1. Home shows the real facility
       expect(find.text('CLB Cầu Lông Hải Châu Live'), findsOneWidget);
+      await tester.ensureVisible(find.text('CLB Cầu Lông Hải Châu Live'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('CLB Cầu Lông Hải Châu Live'));
       await tester.pumpAndSettle();
 
@@ -389,6 +391,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // 4. Open Explore Map from Home and verify Map has the exact same facilities [31, 32]
+      await tester.ensureVisible(find.text('Explore Map'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Explore Map'));
       await tester.pumpAndSettle();
       expect(find.byType(FindCourtsMapScreen), findsOneWidget);

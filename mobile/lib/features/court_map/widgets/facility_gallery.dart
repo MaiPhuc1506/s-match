@@ -14,9 +14,15 @@ ButtonStyle facilityPrimaryStyle() => FilledButton.styleFrom(
 
 /// Both uploaded remote photos and approved local illustrations share one renderer.
 class FacilityPhoto extends StatefulWidget {
-  const FacilityPhoto(this.path, {super.key, this.fit = BoxFit.cover});
+  const FacilityPhoto(
+    this.path, {
+    super.key,
+    this.fit = BoxFit.cover,
+    this.fadeIn = false,
+  });
   final String path;
   final BoxFit fit;
+  final bool fadeIn;
   @override
   State<FacilityPhoto> createState() => _FacilityPhotoState();
 }
@@ -39,13 +45,25 @@ class _FacilityPhotoState extends State<FacilityPhoto> {
             ),
           ),
         );
-    Widget frame(BuildContext context, Widget child, int? frame, bool sync) =>
-        sync || frame != null
-        ? child
-        : const ColoredBox(
-            color: exploreLight,
-            child: Center(child: CupertinoActivityIndicator()),
-          );
+    Widget frame(BuildContext context, Widget child, int? frame, bool sync) {
+      final loaded = sync || frame != null;
+      if (!widget.fadeIn || MediaQuery.disableAnimationsOf(context)) {
+        return loaded ? child : const ColoredBox(color: exploreLight);
+      }
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          const ColoredBox(color: exploreLight),
+          AnimatedOpacity(
+            opacity: loaded ? 1 : 0,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            child: child,
+          ),
+        ],
+      );
+    }
+
     return path.startsWith('http')
         ? Image.network(
             path,

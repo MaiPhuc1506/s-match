@@ -20,9 +20,15 @@ final courtFavoriteByIdProvider = StateProvider.family<bool, int>(
 );
 
 class CourtPreviewScreen extends ConsumerStatefulWidget {
-  const CourtPreviewScreen({super.key, this.onViewCourts, this.location});
+  const CourtPreviewScreen({
+    super.key,
+    this.onViewCourts,
+    this.location,
+    this.onDirections,
+  });
   final CourtLocation? location;
   final VoidCallback? onViewCourts;
+  final ValueChanged<CourtLocation>? onDirections;
   @override
   ConsumerState<CourtPreviewScreen> createState() => _CourtPreviewScreenState();
 }
@@ -123,6 +129,7 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
     if (location != null && !location.demo && location.id > 0) {
       return FacilityDetailContent(
         initial: location,
+        onDirections: widget.onDirections,
         onBook: _viewCourts,
         onFavorite: () =>
             ref.read(_favorite.notifier).state = !ref.read(_favorite),
