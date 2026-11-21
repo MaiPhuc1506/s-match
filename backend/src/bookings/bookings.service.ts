@@ -115,17 +115,20 @@ export class BookingsService {
       // 5. Giá được tính toán an toàn phía server
       const configured = await tx.timeSlot.findMany({
         where: { courtId: dto.courtId, dayOfWeek: startInfo.dayOfWeek, isActive: true,
-          startTime: { gte: startInfo.time }, endTime: { lte: endInfo.time } },
+          startTime: { lt: endInfo.time }, endTime: { gt: startInfo.time } },
         orderBy: { startTime: 'asc' },
       });
       let cursor = startInfo.time;
       let totalPrice = 0;
       for (const slot of configured) {
-        if (slot.startTime !== cursor || slot.endTime <= cursor || !Number.isFinite(slot.price) || slot.price < 0) {
+        const coveredStart = slot.startTime < startInfo.time ? startInfo.time : slot.startTime;
+        const coveredEnd = slot.endTime > endInfo.time ? endInfo.time : slot.endTime;
+        if (coveredStart !== cursor || coveredEnd <= cursor || !Number.isFinite(slot.price) || slot.price < 0) {
           throw new BadRequestException('Khung giờ đặt sân chưa có giá hợp lệ');
         }
-        totalPrice += slot.price; // TimeSlot.price is the price of the entire slot.
-        cursor = slot.endTime;
+        const minutes = (time: string) => { const [h, m] = time.split(':').map(Number); return h * 60 + m; };
+        totalPrice += slot.price * (minutes(coveredEnd) - minutes(coveredStart)) / (minutes(slot.endTime) - minutes(slot.startTime));
+        cursor = coveredEnd;
       }
       if (!configured.length || cursor !== endInfo.time) {
         throw new BadRequestException('Khung giờ chưa được cấu hình hoặc đã ngừng nhận đặt');

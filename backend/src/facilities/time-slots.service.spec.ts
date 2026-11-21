@@ -117,7 +117,7 @@ describe('TimeSlotsService', () => {
       ]);
 
       const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
-      expect(result).toHaveLength(1);
+      expect(result).toHaveLength(2);
     });
   });
 
@@ -129,7 +129,7 @@ describe('TimeSlotsService', () => {
     ]);
     prisma.booking.findMany.mockResolvedValue([{ startTime: new Date('2026-10-04T23:00:00Z'), endTime: new Date('2026-10-05T00:00:00Z') }]);
     const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
-    expect(result.map((s) => [s.price, s.isBooked])).toEqual([[120000, true], [140000, false]]);
+    expect(result.map((s) => [s.price, s.isBooked])).toEqual([[60000, true], [60000, true], [70000, false], [70000, false]]);
   });
 
   it('preserves booked slots after closing as non-bookable, but omits unbooked ones', async () => {
@@ -143,7 +143,7 @@ describe('TimeSlotsService', () => {
     ]);
     operatingHoursService.isWithinOperatingHours.mockResolvedValue(false);
     const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
-    expect(result).toEqual([expect.objectContaining({ id: 1, isBooked: true, isActive: false })]);
+    expect(result).toEqual([expect.objectContaining({ id: 1, isBooked: true, isActive: false }), expect.objectContaining({ id: 1, isBooked: true, isActive: false })]);
   });
 
   it('returns booked and genuinely locked inactive slots', async () => {
@@ -158,6 +158,8 @@ describe('TimeSlotsService', () => {
     const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
     expect(result).toEqual([
       expect.objectContaining({ id: 1, isBooked: true, isActive: false, status: 'BOOKED' }),
+      expect.objectContaining({ id: 1, isBooked: true, isActive: false, status: 'BOOKED' }),
+      expect.objectContaining({ id: 2, isBooked: false, isActive: false, status: 'LOCKED' }),
       expect.objectContaining({ id: 2, isBooked: false, isActive: false, status: 'LOCKED' }),
     ]);
   });
@@ -172,7 +174,7 @@ describe('TimeSlotsService', () => {
       { startTime: new Date('2026-10-05T11:00:00Z'), endTime: new Date('2026-10-05T12:00:00Z') },
     ]);
     const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
-    expect(result).toEqual([expect.objectContaining({ id: 1, isBooked: true })]);
+    expect(result).toEqual([expect.objectContaining({ id: 1, isBooked: true }), expect.objectContaining({ id: 1, isBooked: true })]);
   });
 
   it('retains a historical booking when the overlapping active slot does not cover it', async () => {
@@ -199,8 +201,10 @@ describe('TimeSlotsService', () => {
     operatingHoursService.findAllForFacility.mockResolvedValue([{ dayOfWeek: 1, closeTime: '23:00' }]);
     const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
     expect(result).toEqual([
-      expect.objectContaining({ id: 1, status: 'AVAILABLE' }),
-      expect.objectContaining({ startTime: '23:00', endTime: '24:00', status: 'LOCKED', isActive: false }),
+      expect.objectContaining({ id: 1, startTime: '22:00', status: 'AVAILABLE', price: 45000 }),
+      expect.objectContaining({ id: 1, startTime: '22:30', status: 'AVAILABLE', price: 45000 }),
+      expect.objectContaining({ startTime: '23:00', endTime: '23:30', status: 'LOCKED', isActive: false }),
+      expect.objectContaining({ startTime: '23:30', endTime: '24:00', status: 'LOCKED', isActive: false }),
     ]);
   });
 

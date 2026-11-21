@@ -6,6 +6,7 @@ import '../../../core/theme/app_motion.dart';
 import 'package:flutter/services.dart';
 
 import '../models/chat_message.dart';
+import 'court_chat_card.dart';
 import '../platform_view/bot_avatar_view.dart';
 
 /// Compact Messenger-style assistant card.
@@ -23,6 +24,7 @@ class CompactChatPopup extends StatefulWidget {
   final double maxHeight;
   final bool live;
   final Future<String> Function(String) replyFor;
+  final Future<ChatMessage> Function(String)? richReplyFor;
 
   const CompactChatPopup({
     super.key,
@@ -30,6 +32,7 @@ class CompactChatPopup extends StatefulWidget {
     required this.onStateChanged,
     required this.onClose,
     required this.replyFor,
+    this.richReplyFor,
     this.live = false,
     this.autoFocusInput = false,
     this.maxHeight = 400.0,
@@ -56,6 +59,8 @@ class _CompactChatPopupState extends State<CompactChatPopup>
   bool _reducedMotion = false;
   late List<ChatMessage> _messages;
   bool _isBotTyping = false;
+  bool _quickActionsExpanded = true;
+  double _lastBottomInset = 0;
 
   static const List<_QuickAction> _quickActions = [
     _QuickAction('Court Information', CupertinoIcons.search),
@@ -94,6 +99,11 @@ class _CompactChatPopupState extends State<CompactChatPopup>
     super.didChangeDependencies();
     _reducedMotion = AppMotion.reduced(context);
     _syncTypingAnimation();
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    if (bottomInset > _lastBottomInset && _messages.length > 1) {
+      _scrollToBottom();
+    }
+    _lastBottomInset = bottomInset;
   }
 
   void _syncTypingAnimation() {
@@ -125,13 +135,18 @@ class _CompactChatPopupState extends State<CompactChatPopup>
   }
 
   void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    void jumpOrAnimate() {
       if (!mounted || !_scrollController.hasClients) return;
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent + 60,
-        duration: const Duration(milliseconds: 240),
+        duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
       );
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      jumpOrAnimate();
+      WidgetsBinding.instance.addPostFrameCallback((_) => jumpOrAnimate());
     });
   }
 
@@ -151,6 +166,7 @@ class _CompactChatPopupState extends State<CompactChatPopup>
     setState(() {
       _messages.add(userMsg);
       _isBotTyping = true;
+      _quickActionsExpanded = false;
     });
     _syncTypingAnimation();
     _scrollToBottom();
@@ -162,7 +178,10 @@ class _CompactChatPopupState extends State<CompactChatPopup>
       );
       await _phaseController.forward(from: 0).orCancel;
       widget.onStateChanged(BotAvatarState.working);
-      final reply = await widget.replyFor(query);
+      final richReply = widget.richReplyFor != null
+          ? await widget.richReplyFor!(query)
+          : null;
+      final reply = richReply?.text ?? await widget.replyFor(query);
       _phaseController.duration = Duration(
         milliseconds: _reducedMotion ? 1 : 350,
       );
@@ -175,6 +194,7 @@ class _CompactChatPopupState extends State<CompactChatPopup>
             text: reply,
             isUser: false,
             avatarState: BotAvatarState.defaultState,
+            courtResults: richReply?.courtResults ?? const [],
           ),
         );
         _isBotTyping = false;
@@ -226,20 +246,39 @@ class _CompactChatPopupState extends State<CompactChatPopup>
             children: [
               _buildHeader(context),
               Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
-                  itemCount: _messages.length + (_isBotTyping ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == _messages.length && _isBotTyping) {
-                      return _buildTypingIndicator();
-                    }
-                    final msg = _messages[index];
-                    final showAvatar =
-                        !msg.isUser &&
-                        (index == 0 || _messages[index - 1].isUser);
-                    return _buildMessageRow(msg, showAvatar: showAvatar);
-                  },
+                child: ClipRect(
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                    itemCount: _messages.length + (_isBotTyping ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _messages.length && _isBotTyping) {
+                        return _buildTypingIndicator();
+                      }
+                      final msg = _messages[index];
+                      final showAvatar =
+                          !msg.isUser &&
+                          (index == 0 || _messages[index - 1].isUser);
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildMessageRow(
+                            msg.courtResults.isNotEmpty
+                                ? ChatMessage(
+                                    id: msg.id,
+                                    text:
+                                        'Found ${msg.courtResults.length} matching facilities:',
+                                    isUser: false,
+                                  )
+                                : msg,
+                            showAvatar: showAvatar,
+                          ),
+                          for (final court in msg.courtResults)
+                            CourtChatCard(data: court),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
               _buildQuickActions(),
@@ -406,17 +445,48 @@ class _CompactChatPopupState extends State<CompactChatPopup>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (showAvatar) ...[
-            BotAvatarWidget(
-              state: msg.avatarState ?? BotAvatarState.defaultState,
-              colorHex: '#35B96C',
-              size: 32,
-              interactive: false,
-            ),
-            const SizedBox(width: 6),
-          ],
+          if (showAvatar) ...[_buildMessageAvatar(), const SizedBox(width: 6)],
           bubble,
         ],
+      ),
+    );
+  }
+
+  Widget _buildMessageAvatar() {
+    return Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const RadialGradient(
+          center: Alignment(-0.22, -0.38),
+          radius: 0.95,
+          colors: [Color(0xFF35B96C), Color(0xFF17553F)],
+        ),
+        border: Border.all(
+          color: const Color(0xFF8CE9B0).withValues(alpha: 0.65),
+          width: 1,
+        ),
+      ),
+      child: Center(
+        child: Container(
+          width: 18,
+          height: 7,
+          decoration: BoxDecoration(
+            color: CupertinoColors.white,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          alignment: Alignment.center,
+          child: const Text(
+            'S',
+            style: TextStyle(
+              color: Color(0xFFD62828),
+              fontSize: 6.5,
+              height: 1.0,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -427,12 +497,7 @@ class _CompactChatPopupState extends State<CompactChatPopup>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          const BotAvatarWidget(
-            state: BotAvatarState.thinking,
-            colorHex: '#35B96C',
-            size: 32,
-            interactive: false,
-          ),
+          _buildMessageAvatar(),
           const SizedBox(width: 6),
           Container(
             height: 36,
@@ -485,6 +550,53 @@ class _CompactChatPopupState extends State<CompactChatPopup>
   }
 
   Widget _buildQuickActions() {
+    final hasStartedConversation = _messages.any((m) => m.isUser);
+    final showFullGrid = !hasStartedConversation && _quickActionsExpanded;
+
+    if (!showFullGrid) {
+      return Container(
+        height: 38,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          itemCount: _quickActions.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 6),
+          itemBuilder: (context, index) {
+            final action = _quickActions[index];
+            return GestureDetector(
+              onTap: () => _handleSendMessage(action.label),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.white,
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: _hairline, width: 1),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(action.icon, size: 13.5, color: _accentGreen),
+                    const SizedBox(width: 5),
+                    Text(
+                      action.label,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: -0.1,
+                        color: Color(0xFF1B1C1E),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: Column(

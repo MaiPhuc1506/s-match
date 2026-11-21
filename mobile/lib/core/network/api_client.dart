@@ -7,15 +7,22 @@ class ApiClient {
   static final ApiClient instance = ApiClient._internal();
   late final Dio dio;
   String? _token;
+  String? _refreshToken;
+  Future<bool>? _refreshInFlight;
 
   String? get token => _token;
+  String? get refreshToken => _refreshToken;
 
-  void setToken(String? token) {
+  void setToken(String? token, {String? refreshToken}) {
     _token = token;
+    if (refreshToken != null) {
+      _refreshToken = refreshToken;
+    }
   }
 
   void clearToken() {
     _token = null;
+    _refreshToken = null;
   }
 
   ApiClient._internal() {
@@ -56,8 +63,62 @@ class ApiClient {
           }
           return handler.next(options);
         },
+        onError: (err, handler) async {
+          final isAuthEndpoint = err.requestOptions.path.startsWith('/auth/');
+          final alreadyRetried = err.requestOptions.extra['authRetried'] == true;
+          if (err.response?.statusCode == 401 &&
+              !isAuthEndpoint &&
+              !alreadyRetried &&
+              _refreshToken != null) {
+            final refreshed = await tryRefreshSession();
+            if (refreshed && _token != null) {
+              final opts = err.requestOptions;
+              opts.extra['authRetried'] = true;
+              opts.headers['Authorization'] = 'Bearer $_token';
+              try {
+                final retryRes = await dio.fetch<dynamic>(opts);
+                return handler.resolve(retryRes);
+              } on DioException catch (retryErr) {
+                return handler.next(retryErr);
+              }
+            }
+          }
+          return handler.next(err);
+        },
       ),
     );
+  }
+
+  Future<bool> tryRefreshSession() async {
+    final rt = _refreshToken;
+    if (rt == null || rt.trim().isEmpty) return false;
+    if (_refreshInFlight != null) return _refreshInFlight!;
+
+    final future = () async {
+      try {
+        final res = await dio.post<Map<String, dynamic>>(
+          '/auth/refresh',
+          data: {'refreshToken': rt},
+        );
+        final newAccess = res.data?['accessToken'] as String?;
+        final newRefresh = res.data?['refreshToken'] as String?;
+        if (newAccess != null && newAccess.isNotEmpty) {
+          _token = newAccess;
+          if (newRefresh != null && newRefresh.isNotEmpty) {
+            _refreshToken = newRefresh;
+          }
+          return true;
+        }
+      } catch (_) {}
+      return false;
+    }();
+
+    _refreshInFlight = future;
+    try {
+      return await future;
+    } finally {
+      _refreshInFlight = null;
+    }
   }
 
   /// Đăng nhập bằng tài khoản Demo Court Owner đã có sẵn trong Seed

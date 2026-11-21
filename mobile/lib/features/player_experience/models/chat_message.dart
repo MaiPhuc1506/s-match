@@ -6,6 +6,7 @@ class ChatMessage {
   final bool isUser;
   final DateTime timestamp;
   final BotAvatarState? avatarState;
+  final List<Map<String, dynamic>> courtResults;
 
   ChatMessage({
     required this.id,
@@ -13,6 +14,7 @@ class ChatMessage {
     required this.isUser,
     DateTime? timestamp,
     this.avatarState,
+    this.courtResults = const [],
   }) : timestamp = timestamp ?? DateTime.now();
 
   static List<ChatMessage> initialMockMessages() {

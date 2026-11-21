@@ -18,5 +18,6 @@ import { MatchmakingController } from './matchmaking.controller';
   providers: [MatchmakingService, FastApiClient,
     { provide: FASTAPI_HTTP, useFactory: () => axios.create() },
     { provide: CANDIDATE_PROVIDER, useClass: DatabaseCandidateProvider }],
+  exports: [MatchmakingService],
 })
 export class MatchmakingModule {}

@@ -245,6 +245,21 @@ describe('BookingsService', () => {
       expect(prisma.booking.create.mock.calls[0][0].data.totalPrice).toBe(275000);
     });
 
+    it('prices half-hour endpoints across two tariff bands', async () => {
+      prisma.court.findUnique.mockResolvedValue(mockCourt);
+      prisma.timeSlot.findMany.mockResolvedValue([
+        { startTime: '15:00', endTime: '16:00', price: 120000 },
+        { startTime: '16:00', endTime: '17:00', price: 160000 },
+      ]);
+      const start = new Date(validStartTime);
+      start.setUTCMinutes(30);
+      const end = new Date(validEndTime);
+      end.setUTCMinutes(30);
+      end.setUTCHours(end.getUTCHours() - 1);
+      await service.create(1, { courtId: 1, startTime: start.toISOString(), endTime: end.toISOString() });
+      expect(prisma.booking.create.mock.calls[0][0].data.totalPrice).toBe(140000);
+    });
+
     it('rejects a court outside the selected facility', async () => {
       prisma.court.findUnique.mockResolvedValue(mockCourt);
       await expect(service.create(1, { courtId: 1, facilityId: 99, startTime: validStartTime, endTime: validEndTime })).rejects.toThrow(BadRequestException);

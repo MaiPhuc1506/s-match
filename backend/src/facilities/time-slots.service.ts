@@ -86,7 +86,27 @@ export class TimeSlotsService {
         endTime: '24:00', price: null, isActive: false, isBooked: false, status: 'LOCKED',
       });
     }
-    return result;
+    // Expose half-hour discovery cells while keeping weekly tariff templates intact.
+    const cells = result.flatMap((slot) => {
+      const cells: typeof result = [];
+      const startMinute = timeToMinutes(slot.startTime);
+      const endMinute = timeToMinutes(slot.endTime);
+      for (let minute = startMinute; minute < endMinute; minute += 30) {
+        const finish = Math.min(minute + 30, endMinute);
+        const clock = (value: number) => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
+        const startTime = clock(minute), endTime = clock(finish);
+        const start = new Date(`${date}T${startTime}:00+07:00`);
+        const end = new Date(`${date}T${endTime}:00+07:00`);
+        const isBooked = bookings.some((b) => b.startTime < end && b.endTime > start);
+        cells.push({ ...slot, startTime, endTime,
+          price: slot.price == null ? null : slot.price * (finish - minute) / (endMinute - startMinute),
+          isBooked, status: isBooked ? 'BOOKED' : slot.isActive ? 'AVAILABLE' : 'LOCKED' });
+      }
+      return cells;
+    });
+    return cells.filter((cell) => !cells.some((other) =>
+      other !== cell && other.isActive && !cell.isActive &&
+      other.startTime === cell.startTime && other.endTime === cell.endTime));
   }
 
   async create(ownerId: number, facilityId: number, courtId: number, dto: CreateTimeSlotDto, userRole?: string) {

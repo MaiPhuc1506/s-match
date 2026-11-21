@@ -35,6 +35,7 @@ class FindCourtsMapScreen extends ConsumerStatefulWidget {
   final bool startWithPlayers;
   final VoidCallback? onSwitchToCourts;
   final ValueChanged<NearbyPlayer>? onPlayerDetail;
+  final int? initialFacilityId;
   final double initialMapZoom;
   final bool centerOnFirstCourt;
   final VoidCallback? onCourtPreview;
@@ -50,6 +51,7 @@ class FindCourtsMapScreen extends ConsumerStatefulWidget {
     this.startWithPlayers = false,
     this.onSwitchToCourts,
     this.onPlayerDetail,
+    this.initialFacilityId,
     this.initialMapZoom = 14,
     this.centerOnFirstCourt = true,
     this.onCourtPreview,
@@ -144,7 +146,10 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
   CourtMapController? _courtMapController;
   bool _hasCentered = false;
   void _centerOnFirstCourt() {
-    final court = _currentCourt;
+    final matches = _allCourts.where((c) => c.id == widget.initialFacilityId);
+    final court = widget.initialFacilityId == null
+        ? _currentCourt
+        : (matches.isEmpty ? null : matches.first);
     if (_playersMode ||
         !widget.centerOnFirstCourt ||
         _hasCentered ||
@@ -155,6 +160,11 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
     }
     _hasCentered = true;
     _courtMapController!.moveToCourt(court);
+    if (widget.initialFacilityId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _selectMarker(court);
+      });
+    }
   }
 
   bool _searchOpen = false;
@@ -326,6 +336,28 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
             const SizedBox(height: 6),
             const Text(
               'From your current location · Driving\nLocation is sent to the routing service for this preview.',
+            ),
+            const SizedBox(height: 8),
+            const Wrap(
+              spacing: 16,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.circle, color: Color(0xFF1677E8), size: 10),
+                    SizedBox(width: 5),
+                    Text('Your location', style: TextStyle(fontSize: 12)),
+                  ],
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.circle, color: Color(0xFFE87D24), size: 10),
+                    SizedBox(width: 5),
+                    Text('Destination', style: TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             if (_routeLoading)

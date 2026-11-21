@@ -1,3 +1,4 @@
+import '../services/live_booking_service.dart';
 import '../../court_map/facility_images.dart';
 import '../../../core/theme/app_motion_widgets.dart';
 
@@ -349,14 +350,23 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   // 2. Thẻ Booking Card (345×116, shadow nhẹ)
   Widget _buildBookingCard(BookingHistoryItem booking) {
     return InkWell(
-      onTap: () {
+      onTap: () async {
         if (widget.onSelectBooking != null) {
           widget.onSelectBooking!(booking);
         } else {
-          Navigator.of(context).push(
+          await Navigator.of(context).push(
             AppMotion.route(
               BookingDetailScreen(
                 bookingId: booking.id,
+                onCancelBooking:
+                    widget.live &&
+                        booking.source != null &&
+                        [
+                          'PENDING',
+                          'CONFIRMED',
+                        ].contains(booking.source!['status'])
+                    ? () => LiveBookingService().cancel(int.parse(booking.id))
+                    : null,
                 photoAsset: booking.source?['photoAsset'] as String?,
                 facilityName: booking.facilityName,
                 courtName: booking.courtName,
@@ -384,6 +394,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
               name: '/booking-detail-preview',
             ),
           );
+          if (mounted && widget.live) await _loadBookings();
         }
       },
       borderRadius: BorderRadius.circular(12),

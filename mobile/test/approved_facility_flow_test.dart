@@ -329,7 +329,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(slot);
         await tester.pumpAndSettle();
-        expect(find.byIcon(CupertinoIcons.check_mark), findsOneWidget);
+        expect(find.byIcon(CupertinoIcons.check_mark), findsNothing);
         expect(find.text('100,000 VND'), findsOneWidget);
         expect(
           tester

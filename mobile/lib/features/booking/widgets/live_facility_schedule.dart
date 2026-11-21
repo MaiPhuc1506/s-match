@@ -62,7 +62,7 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
   }
 
   bool selectable(Map<String, dynamic> slot) =>
-      bookableDuration(slot) &&
+      (slot['parts'] != null || bookableDuration(slot)) &&
       future(slot) &&
       (widget.demo || slot['isBooked'] == false) &&
       slot['isBooked'] != true &&
@@ -331,17 +331,15 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                         day,
                       );
                       if (!summaryContext.mounted) return;
-                      final stillAvailable = refreshed.any(
-                        (candidate) =>
-                            candidate['id'] == slot['id'] &&
-                            candidate['startTime'] == slot['startTime'] &&
-                            candidate['endTime'] == slot['endTime'] &&
-                            candidate['price'] == slot['price'] &&
-                            candidate['isActive'] != false &&
-                            (widget.demo || candidate['isBooked'] == false) &&
-                            (candidate['status'] == null ||
-                                candidate['status'] == 'AVAILABLE') &&
-                            future(candidate),
+                      final parts = (slot['parts'] as List?) ?? [slot];
+                      final stillAvailable = parts.every(
+                        (part) => refreshed.any(
+                          (candidate) =>
+                              candidate['startTime'] == part['startTime'] &&
+                              candidate['endTime'] == part['endTime'] &&
+                              candidate['price'] == part['price'] &&
+                              selectable(candidate),
+                        ),
                       );
                       if (!stillAvailable) {
                         conflicted = true;
@@ -564,7 +562,9 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                 final isSelected =
                     canSelect &&
                     id == courtId &&
-                    selected?['id'] == slot['id'] &&
+                    minute(slot['startTime']) >=
+                        minute(selected?['startTime']) &&
+                    minute(slot['endTime']) <= minute(selected?['endTime']) &&
                     selected != null;
                 final color = isSelected
                     ? BookingColors.primary
@@ -581,8 +581,8 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                   height: 44,
                   width: cellWidth,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 3,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSelected ? 0 : 3,
                       vertical: 2,
                     ),
                     child: Semantics(
@@ -606,11 +606,70 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                         onTap: canSelect
                             ? () => setState(() {
                                 selectionExpiry?.cancel();
+                                final previous = selected;
+                                final sameCourt =
+                                    courtId == id && previous != null;
+                                final from = sameCourt
+                                    ? (minute(previous['startTime']) <
+                                              minute(slot['startTime'])
+                                          ? previous['startTime']
+                                          : slot['startTime'])
+                                    : slot['startTime'];
+                                final to = sameCourt
+                                    ? (minute(previous['endTime']) >
+                                              minute(slot['endTime'])
+                                          ? previous['endTime']
+                                          : slot['endTime'])
+                                    : slot['endTime'];
+                                final parts =
+                                    entries
+                                        .where(
+                                          (entry) =>
+                                              minute(entry['startTime']) >=
+                                                  minute(from) &&
+                                              minute(entry['endTime']) <=
+                                                  minute(to),
+                                        )
+                                        .toList()
+                                      ..sort(
+                                        (a, b) => minute(a['startTime'])
+                                            .compareTo(minute(b['startTime'])),
+                                      );
+                                var cursor = minute(from);
+                                var valid = parts.isNotEmpty;
+                                for (final part in parts) {
+                                  if (!selectable(part) ||
+                                      minute(part['startTime']) != cursor) {
+                                    valid = false;
+                                  }
+                                  cursor = minute(part['endTime']);
+                                }
+                                valid = valid && cursor == minute(to);
                                 courtId = id;
-                                selected = isSelected ? null : slot;
+                                // Tapping inside the current range clears it.
+                                selected = isSelected
+                                    ? null
+                                    : valid
+                                    ? {
+                                        ...slot,
+                                        'startTime': from,
+                                        'endTime': to,
+                                        'price': parts.fold<num>(
+                                          0,
+                                          (total, part) =>
+                                              total + (part['price'] as num),
+                                        ),
+                                        'parts': parts,
+                                      }
+                                    : {
+                                        ...slot,
+                                        'parts': [slot],
+                                      };
                                 if (selected != null) {
                                   final startsAt = DateTime.parse(
-                                    timestamp(slot['startTime'].toString()),
+                                    timestamp(
+                                      selected!['startTime'].toString(),
+                                    ),
                                   );
                                   selectionExpiry = Timer(
                                     startsAt.difference(now),
@@ -629,7 +688,19 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             color: color,
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: isSelected
+                                ? BorderRadius.horizontal(
+                                    left:
+                                        slot['startTime'] ==
+                                            selected?['startTime']
+                                        ? const Radius.circular(8)
+                                        : Radius.zero,
+                                    right:
+                                        slot['endTime'] == selected?['endTime']
+                                        ? const Radius.circular(8)
+                                        : Radius.zero,
+                                  )
+                                : BorderRadius.circular(8),
                             border: isSelected
                                 ? Border.all(
                                     color: BookingColors.slotSelectedBorder,
@@ -640,11 +711,7 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                                 : null,
                           ),
                           child: isSelected
-                              ? const Icon(
-                                  CupertinoIcons.check_mark,
-                                  color: Colors.white,
-                                  size: 14,
-                                )
+                              ? const SizedBox.shrink()
                               : available
                               ? const SizedBox.shrink()
                               : Text(
@@ -824,7 +891,7 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  'Choose one available time slot to continue.',
+                  'Choose consecutive time slots on one court.',
                   style: BookingTypography.jakarta(
                     fontSize: 11,
                     color: BookingColors.textSecondary,

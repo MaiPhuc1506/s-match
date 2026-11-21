@@ -98,7 +98,52 @@ class SelectionFake extends LiveBookingService {
   ];
 }
 
+class HalfHourFake extends SelectionFake {
+  @override
+  Future<List<Map<String, dynamic>>> slots(
+    int facilityId,
+    int courtId,
+    String date,
+  ) async => [
+    for (var i = 0; i < 4; i++)
+      {
+        'id': i ~/ 2,
+        'startTime': '${18 + i ~/ 2}:${i.isEven ? '00' : '30'}',
+        'endTime': '${18 + (i + 1) ~/ 2}:${i.isEven ? '30' : '00'}',
+        'price': i < 2 ? 30000 : 45000,
+        'isActive': true,
+        'isBooked': false,
+        'status': 'AVAILABLE',
+      },
+  ];
+}
+
 void main() {
+  testWidgets('Half-hour cells extend into one priced range and summary', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LiveFacilitySchedule(
+          facilityId: 45,
+          service: HalfHourFake(),
+          now: () => DateTime.utc(2026, 11, 9, 1),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('slot-51-18:30 – 19:00')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('slot-51-19:30 – 20:00')));
+    await tester.pump();
+    expect(find.text('Court 1 · 18:30–20:00'), findsOneWidget);
+    expect(find.text('120,000 VND'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('booking-continue')));
+    await tester.pumpAndSettle();
+    expect(find.text('90 minutes'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   test('Booking sends only the authenticated existing API contract', () async {
     final dio = Dio();
     final paths = <String>[];
@@ -460,16 +505,16 @@ void main() {
 
     await tester.tap(later);
     await tester.pump();
-    expect(cellColor(second), Colors.white);
+    expect(cellColor(second), BookingColors.primary);
     expect(cellColor(later), BookingColors.primary);
-    expect(find.text('Court 2 · 19:00–20:00'), findsOneWidget);
-    expect(find.text('110,000 VND'), findsOneWidget);
+    expect(find.text('Court 2 · 18:00–20:00'), findsOneWidget);
+    expect(find.text('205,000 VND'), findsOneWidget);
 
     await tester.tap(later);
     await tester.pump();
     expect(cellColor(later), Colors.white);
     expect(
-      find.text('Choose one available time slot to continue.'),
+      find.text('Choose consecutive time slots on one court.'),
       findsOneWidget,
     );
     expect(find.text('110,000 VND'), findsNothing);

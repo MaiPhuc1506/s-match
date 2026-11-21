@@ -1,10 +1,13 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_motion.dart';
 import '../../court_map/exploration_data.dart';
 import '../data/demo_catalog.dart';
+import '../models/chat_message.dart';
 import '../platform_view/bot_avatar_view.dart';
+import '../services/smash_scot_chat_service.dart';
 import 'compact_chat_popup.dart';
 import 'floating_mascot_bubble.dart';
 
@@ -115,6 +118,7 @@ class SmashScotChat extends ConsumerStatefulWidget {
 class _SmashScotChatState extends ConsumerState<SmashScotChat> {
   late final ValueNotifier<BotAvatarState> state =
       widget.avatarState ?? ValueNotifier(BotAvatarState.defaultState);
+  final List<ChatMessage> _conversationHistory = [];
 
   @override
   void dispose() {
@@ -122,7 +126,94 @@ class _SmashScotChatState extends ConsumerState<SmashScotChat> {
     super.dispose();
   }
 
+  Future<ChatMessage> richReplyFor(String query) async {
+    final service = ref.read(smashScotChatServiceProvider);
+    if (service.hasActiveSession) {
+      try {
+        final reply = await service.sendRichMessage(
+          query,
+          history: List.unmodifiable(_conversationHistory),
+        );
+        _conversationHistory.add(
+          ChatMessage(id: 'u', text: query, isUser: true),
+        );
+        _conversationHistory.add(reply);
+        return reply;
+      } on DioException catch (e) {
+        final message = switch (e.response?.statusCode) {
+          401 => 'Your session has expired. Please sign in again to use live Smash Scot AI.',
+          403 => 'Access denied: your account role does not have permission for that request.',
+          429 => 'You are sending messages too quickly. Please wait a moment and try again.',
+          _ => 'Smash Scot could not reach the S-Match AI service right now. Please try again.',
+        };
+        return ChatMessage(id: 'error', text: message, isUser: false);
+      } catch (_) {
+        return ChatMessage(
+          id: 'error',
+          text: 'Smash Scot could not reach the S-Match AI service right now. Please try again.',
+          isUser: false,
+        );
+      }
+    }
+    if (RegExp(
+      r'\d+(?:[.,]\d+)?\s*(km|kilometers?|kilometres?)\b',
+      caseSensitive: false,
+    ).hasMatch(query)) {
+      return ChatMessage(
+        id: 'location',
+        text:
+            'Please sign in and allow location access to find courts near you.',
+        isUser: false,
+      );
+    }
+    return ChatMessage(id: 'demo', text: await replyFor(query), isUser: false);
+  }
+
   Future<String> replyFor(String query) async {
+    final chatService = ref.read(smashScotChatServiceProvider);
+    final useLiveBackend = widget.live || chatService.hasActiveSession;
+
+    if (useLiveBackend) {
+      try {
+        final reply = await chatService.sendMessage(
+          query,
+          history: List.unmodifiable(_conversationHistory),
+        );
+        _conversationHistory.add(
+          ChatMessage(
+            id: 'u_${DateTime.now().microsecondsSinceEpoch}',
+            text: query,
+            isUser: true,
+          ),
+        );
+        _conversationHistory.add(
+          ChatMessage(
+            id: 'a_${DateTime.now().microsecondsSinceEpoch}',
+            text: reply,
+            isUser: false,
+          ),
+        );
+        return reply;
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 401) {
+          return 'Your session has expired. Please sign in again to use live Smash Scot AI.';
+        }
+        if (e.response?.statusCode == 403) {
+          return 'Access denied: your account role does not have permission for that request.';
+        }
+        if (e.response?.statusCode == 429) {
+          return 'You are sending messages too quickly. Please wait a moment and try again.';
+        }
+        if (!widget.live) {
+          return 'Smash Scot could not reach the S-Match AI service right now. Please try again in a moment.';
+        }
+      } catch (_) {
+        if (!widget.live) {
+          return 'Smash Scot could not reach the S-Match AI service right now. Please try again in a moment.';
+        }
+      }
+    }
+
     final key = query.toLowerCase();
     if (key.contains('review')) {
       return 'Demo response: No real reviews are available. Reviews will appear when a verified review service is connected.';
@@ -157,22 +248,46 @@ class _SmashScotChatState extends ConsumerState<SmashScotChat> {
 
   @override
   Widget build(BuildContext context) {
+    final chatService = ref.watch(smashScotChatServiceProvider);
+    final isLive = widget.live || chatService.hasActiveSession;
     if (widget.live) ref.watch(nearbyCourtsProvider);
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: ValueListenableBuilder<BotAvatarState>(
-        valueListenable: state,
-        builder: (context, avatar, _) => Center(
-          heightFactor: 1,
-          child: CompactChatPopup(
-            avatarState: avatar,
-            onStateChanged: (next) => state.value = next,
-            onClose: () => Navigator.pop(context),
-            replyFor: replyFor,
-            live: widget.live,
-            maxHeight: (MediaQuery.sizeOf(context).height * .7).clamp(
-              0.0,
-              500.0,
+    final media = MediaQuery.of(context);
+    final bottomInset = media.viewInsets.bottom;
+    final topSafe = media.padding.top;
+    final bottomSafe = media.padding.bottom;
+    final availableHeight =
+        media.size.height -
+        topSafe -
+        bottomInset -
+        (bottomInset > 0 ? 16 : bottomSafe + 24);
+    final popupHeight = availableHeight.clamp(220.0, 500.0);
+
+    return SafeArea(
+      bottom: bottomInset == 0,
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.fromLTRB(
+          12,
+          8,
+          12,
+          bottomInset > 0 ? bottomInset + 8 : 12,
+        ),
+        child: ValueListenableBuilder<BotAvatarState>(
+          valueListenable: state,
+          builder: (context, avatar, _) => Align(
+            alignment: bottomInset > 0
+                ? Alignment.bottomCenter
+                : Alignment.center,
+            heightFactor: 1,
+            child: CompactChatPopup(
+              avatarState: avatar,
+              onStateChanged: (next) => state.value = next,
+              onClose: () => Navigator.pop(context),
+              replyFor: replyFor,
+              richReplyFor: richReplyFor,
+              live: isLive,
+              maxHeight: popupHeight,
             ),
           ),
         ),

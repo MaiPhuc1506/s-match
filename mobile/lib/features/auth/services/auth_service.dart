@@ -65,7 +65,7 @@ class AuthService {
         final user = data['user'] as Map<String, dynamic>?;
 
         if (accessToken != null) {
-          _client.setToken(accessToken);
+          _client.setToken(accessToken, refreshToken: refreshToken);
           _refreshToken = refreshToken;
           currentUser = user;
         }

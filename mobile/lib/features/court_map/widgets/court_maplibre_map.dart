@@ -377,14 +377,17 @@ class CourtMapLibreMapState extends State<CourtMapLibreMap>
     final markers = {
       'type': 'FeatureCollection',
       'features': [
-        for (final p in [route.points.first, route.points.last])
+        for (final entry in [
+          MapEntry('origin', route.points.first),
+          MapEntry('destination', route.points.last),
+        ])
           {
             'type': 'Feature',
             'geometry': {
               'type': 'Point',
-              'coordinates': [p.longitude, p.latitude],
+              'coordinates': [entry.value.longitude, entry.value.latitude],
             },
-            'properties': <String, dynamic>{},
+            'properties': <String, dynamic>{'kind': entry.key},
           },
       ],
     };
@@ -405,11 +408,32 @@ class CourtMapLibreMapState extends State<CourtMapLibreMap>
         'smatch-route-points',
         'smatch-route-markers',
         const CircleLayerProperties(
-          circleColor: '#05644F',
+          circleColor: '#1677E8',
           circleRadius: 7,
           circleStrokeColor: '#ffffff',
           circleStrokeWidth: 3,
         ),
+        filter: [
+          '==',
+          ['get', 'kind'],
+          'origin',
+        ],
+        enableInteraction: false,
+      );
+      await c.addCircleLayer(
+        'smatch-route-points',
+        'smatch-route-destination',
+        const CircleLayerProperties(
+          circleColor: '#E87D24',
+          circleRadius: 8,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: 3,
+        ),
+        filter: [
+          '==',
+          ['get', 'kind'],
+          'destination',
+        ],
         enableInteraction: false,
       );
       _routeLayers = true;
@@ -427,6 +451,7 @@ class CourtMapLibreMapState extends State<CourtMapLibreMap>
     if (c == null || !_routeLayers) return;
     await c.removeLayer('smatch-route-line');
     await c.removeLayer('smatch-route-markers');
+    await c.removeLayer('smatch-route-destination');
     await c.removeSource('smatch-route');
     await c.removeSource('smatch-route-points');
     _routeLayers = false;
