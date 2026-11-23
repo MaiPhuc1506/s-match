@@ -25,6 +25,7 @@ describe('RatingsService', () => {
   const endedMatch = (overrides: Record<string, unknown> = {}) => ({
     id: 10,
     status: MatchState.COMPLETED,
+    startTime: new Date(Date.now() - 3 * HOUR),
     endTime: new Date(Date.now() - 2 * HOUR),
     participants: [{ userId: 1 }, { userId: 2 }],
     ...overrides,
@@ -163,12 +164,20 @@ describe('RatingsService', () => {
       expect(prisma.playerRating.create).not.toHaveBeenCalled();
     });
 
-    it('rejects matches that have not ended yet', async () => {
+    it('rejects matches that have not started yet', async () => {
       prisma.match.findUnique.mockResolvedValue(
-        endedMatch({ endTime: new Date(Date.now() + HOUR) }),
+        endedMatch({ startTime: new Date(Date.now() + HOUR) }),
       );
-      await expect(service.create(1, dto)).rejects.toThrow(/chưa kết thúc/);
+      await expect(service.create(1, dto)).rejects.toThrow(/chưa bắt đầu/);
       expect(prisma.playerRating.create).not.toHaveBeenCalled();
+    });
+
+    it('creates ratings immediately for a completed match before its scheduled end', async () => {
+      prisma.match.findUnique.mockResolvedValue(endedMatch({ endTime: new Date(Date.now() + HOUR) }));
+      prisma.playerRating.create.mockResolvedValue({ id: 20 });
+      prisma.playerRating.aggregate.mockResolvedValue({ _avg: { score: 5 }, _count: { _all: 1 } });
+      await expect(service.create(1, dto)).resolves.toMatchObject({ id: 20 });
+      expect(prisma.ratingHistory.create).toHaveBeenCalledTimes(1);
     });
 
     it('rejects ratings after the rating window has closed', async () => {
@@ -334,7 +343,7 @@ describe('RatingsService', () => {
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({ matchId: 10, players: [{ id: 3, fullName: 'C' }] });
       const where = prisma.match.findMany.mock.calls[0][0].where;
-      expect(where.status).toEqual({ not: MatchState.CANCELLED });
+      expect(where.status).toBe(MatchState.COMPLETED);
       expect(where.participants).toEqual({ some: { userId: 1, status: 'ACCEPTED' } });
     });
   });

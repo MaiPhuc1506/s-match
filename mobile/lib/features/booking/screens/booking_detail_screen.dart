@@ -20,6 +20,7 @@ class BookingDetailScreen extends StatefulWidget {
   final String priceText;
   final String statusText;
   final Future<void> Function()? onCancelBooking;
+  final VoidCallback? onOrganizeMatch;
 
   const BookingDetailScreen({
     super.key,
@@ -36,6 +37,7 @@ class BookingDetailScreen extends StatefulWidget {
     this.priceText = '100,000 VND',
     this.statusText = 'Confirmed',
     this.onCancelBooking,
+    this.onOrganizeMatch,
   });
 
   @override
@@ -85,6 +87,16 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
               if (cancelling) const Center(child: CircularProgressIndicator()),
               if ((!readOnly || onCancelBooking != null) && canCancel)
                 _buildCancelButton(context),
+              if (widget.onOrganizeMatch != null && !cancelled) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: widget.onOrganizeMatch,
+                    child: const Text('Organize Open Match'),
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
             ],
           ),

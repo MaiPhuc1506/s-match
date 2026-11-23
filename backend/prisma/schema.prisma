@@ -34,6 +34,7 @@ model Role {
 
 model User {
   id                Int                @id @default(autoincrement())
+  googleIdentity    GoogleIdentity?
   email             String             @unique
   password          String
   fullName          String?
@@ -49,6 +50,7 @@ model User {
   bookings          Booking[]
   hostedMatches      Match[]            @relation("HostedMatches")
   matchParticipants  MatchParticipant[]
+  notifications      MatchNotification[]
   sentFeedback       Feedback[]         @relation("FeedbackSender")
   receivedFeedback   Feedback[]         @relation("FeedbackRecipient")
 
@@ -63,6 +65,12 @@ model User {
 
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
+}
+
+model GoogleIdentity {
+  subject String @id
+  userId Int @unique
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model RefreshSession {
@@ -336,6 +344,18 @@ model MatchParticipant {
   @@unique([matchId, userId])
   @@index([userId])
   @@index([status])
+}
+
+model MatchNotification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  matchId   Int
+  kind      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 // SMM-34 / SMM-36 shared raw feedback. Aggregation/history are separate concerns.

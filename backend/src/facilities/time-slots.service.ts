@@ -48,14 +48,14 @@ export class TimeSlotsService {
       this.prisma.booking.findMany({
         where: { courtId, status: { in: [BookingStatus.PENDING, BookingStatus.CONFIRMED] },
           startTime: { lt: day.end }, endTime: { gt: day.start } },
-        select: { startTime: true, endTime: true },
+        select: { startTime: true, endTime: true, status: true, match: { select: { id: true, privacy: true, status: true, maxPlayers: true, _count: { select: { participants: { where: { status: 'ACCEPTED' } } } } } } },
       }),
       this.operatingHoursService.findAllForFacility(facilityId),
     ]);
     const result: Array<{
       id: number | null; courtId: number; dayOfWeek: number;
       startTime: string; endTime: string; price: number | null;
-      isActive: boolean; isBooked: boolean; status: string;
+      isActive: boolean; isBooked: boolean; status: string; openMatchId?: number; openMatchPlayers?: number; openMatchCapacity?: number;
     }> = [];
     for (const slot of slots) {
       const start = new Date(`${date}T${slot.startTime}:00+07:00`);
@@ -97,8 +97,12 @@ export class TimeSlotsService {
         const startTime = clock(minute), endTime = clock(finish);
         const start = new Date(`${date}T${startTime}:00+07:00`);
         const end = new Date(`${date}T${endTime}:00+07:00`);
-        const isBooked = bookings.some((b) => b.startTime < end && b.endTime > start);
+        const overlaps = bookings.filter((b) => b.startTime < end && b.endTime > start);
+        const isBooked = overlaps.length > 0;
+        // Public Open Match metadata is additive: the slot remains BOOKED.
+        const openMatch = overlaps.find((b) => b.status === BookingStatus.CONFIRMED && b.match?.privacy === 'OPEN' && (b.match.status === 'OPEN' || b.match.status === 'FULL'))?.match;
         cells.push({ ...slot, startTime, endTime,
+          ...(openMatch ? { openMatchId: openMatch.id, openMatchPlayers: openMatch._count?.participants, openMatchCapacity: openMatch.maxPlayers } : {}),
           price: slot.price == null ? null : slot.price * (finish - minute) / (endMinute - startMinute),
           isBooked, status: isBooked ? 'BOOKED' : slot.isActive ? 'AVAILABLE' : 'LOCKED' });
       }

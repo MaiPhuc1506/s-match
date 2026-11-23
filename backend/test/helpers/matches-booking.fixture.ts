@@ -8,8 +8,8 @@ export function bookingUniqueError(target: string | string[] = ['bookingId']) {
 }
 
 // In-memory persistence and uniqueness checks; never instantiates PrismaClient.
-export function makeMatchBookingFixture() {
-  const fixture = makeMatchSecurityFixture();
+export function makeMatchBookingFixture(date?: Date) {
+  const fixture = makeMatchSecurityFixture(date);
   const { prisma, rows, privateMatch, openMatch } = fixture;
   openMatch.hostId = 20;
   openMatch.bookingId = 101;

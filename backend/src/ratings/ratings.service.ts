@@ -58,6 +58,7 @@ export class RatingsService {
       select: {
         id: true,
         status: true,
+        startTime: true,
         endTime: true,
         participants: {
           where: {
@@ -88,8 +89,8 @@ export class RatingsService {
     }
     const now = Date.now();
     const endedAt = match.endTime.getTime();
-    if (endedAt > now) {
-      throw new BadRequestException('Trận đấu chưa kết thúc, chưa thể đánh giá');
+    if (match.startTime.getTime() > now) {
+      throw new BadRequestException('Trận đấu chưa bắt đầu, chưa thể đánh giá');
     }
     if (now - endedAt > RATING_WINDOW_DAYS * DAY_MS) {
       throw new BadRequestException(
@@ -209,8 +210,9 @@ export class RatingsService {
 
     const matches = await this.prisma.match.findMany({
       where: {
-        status: { not: MatchState.CANCELLED },
-        endTime: { lte: now, gte: windowStart },
+        status: MatchState.COMPLETED,
+        startTime: { lte: now },
+        endTime: { gte: windowStart },
         participants: { some: { userId, status: ParticipantStatus.ACCEPTED } },
       },
       select: {

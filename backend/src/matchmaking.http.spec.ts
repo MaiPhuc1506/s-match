@@ -229,7 +229,7 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
       fullName: null, nickname: 'Seven', avatarUrl: 'https://example.test/avatar.png', skillLevel: 'BEGINNER',
     } }], totalCandidatesProcessed: 2 });
     expect(prisma.playerProfile.findMany.mock.calls[0][0].select).toEqual({
-      userId: true, nickname: true, avatarUrl: true, skillLevel: true, user: { select: { fullName: true } },
+      userId: true, nickname: true, avatarUrl: true, skillLevel: true, skill: true, user: { select: { fullName: true } },
     });
   });
   it('excludes candidates who revoke sharing while ranking is in progress', async () => {

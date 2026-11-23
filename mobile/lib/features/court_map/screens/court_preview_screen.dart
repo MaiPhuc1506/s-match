@@ -63,14 +63,10 @@ class _CourtPreviewScreenState extends ConsumerState<CourtPreviewScreen> {
       return;
     }
     if (widget.location != null) {
-      Navigator.of(context).push(
-        explorationRoute<void>(
-          BookingFacilityScheduleScreen(
-            facilityId: widget.location!.id,
-            courtId: courtId,
-          ),
-          '/facility-booking',
-        ),
+      BookingFacilityScheduleScreen.open(
+        context,
+        facilityId: widget.location!.id,
+        courtId: courtId,
       );
       return;
     }

@@ -208,6 +208,15 @@ describe('TimeSlotsService', () => {
     ]);
   });
 
+  it('keeps a public open match slot booked while exposing its match ID', async () => {
+    prisma.court.findUnique.mockResolvedValue(mockCourt);
+    prisma.timeSlot.findMany.mockResolvedValue([{ id: 1, courtId: 5, dayOfWeek: 1, startTime: '06:00', endTime: '07:00', price: 120000, isActive: true }]);
+    prisma.booking.findMany.mockResolvedValue([{ startTime: new Date('2026-10-04T23:00:00Z'), endTime: new Date('2026-10-05T00:00:00Z'), status: 'CONFIRMED', match: { id: 77, privacy: 'OPEN', status: 'OPEN' } }]);
+    const cells = await service.getAvailabilityForDate(10, 5, '2026-10-05');
+    expect(cells).toHaveLength(2);
+    expect(cells.every((cell) => cell.isBooked && cell.status === 'BOOKED' && cell.openMatchId === 77)).toBe(true);
+  });
+
   it.each(['invalid', '2026-02-30', '2026-10-05T00:00:00Z', undefined])('rejects invalid availability date %s', async (date) => {
     await expect(service.getAvailabilityForDate(10, 5, date as string)).rejects.toThrow(BadRequestException);
   });

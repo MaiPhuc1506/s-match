@@ -9,20 +9,20 @@ class ApiClient {
   String? _token;
   String? _refreshToken;
   Future<bool>? _refreshInFlight;
+  int _sessionVersion = 0;
 
   String? get token => _token;
   String? get refreshToken => _refreshToken;
 
   void setToken(String? token, {String? refreshToken}) {
+    _sessionVersion++;
+    _refreshInFlight = null;
     _token = token;
-    if (refreshToken != null) {
-      _refreshToken = refreshToken;
-    }
+    _refreshToken = refreshToken;
   }
 
   void clearToken() {
-    _token = null;
-    _refreshToken = null;
+    setToken(null);
   }
 
   ApiClient._internal() {
@@ -45,6 +45,7 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
+          options.extra['sessionVersion'] = _sessionVersion;
           // Mutations tied to a screen/account must not adopt a newer account's
           // token while waiting in Dio's request interceptor queue.
           final expected = options.extra['expectedAuthToken'];
@@ -65,15 +66,22 @@ class ApiClient {
         },
         onError: (err, handler) async {
           final isAuthEndpoint = err.requestOptions.path.startsWith('/auth/');
-          final alreadyRetried = err.requestOptions.extra['authRetried'] == true;
+          final alreadyRetried =
+              err.requestOptions.extra['authRetried'] == true;
           if (err.response?.statusCode == 401 &&
+              err.requestOptions.extra['sessionVersion'] == _sessionVersion &&
               !isAuthEndpoint &&
               !alreadyRetried &&
               _refreshToken != null) {
             final refreshed = await tryRefreshSession();
-            if (refreshed && _token != null) {
+            if (refreshed &&
+                _token != null &&
+                err.requestOptions.extra['sessionVersion'] == _sessionVersion) {
               final opts = err.requestOptions;
               opts.extra['authRetried'] = true;
+              if (opts.extra['expectedAuthToken'] != null) {
+                opts.extra['expectedAuthToken'] = _token;
+              }
               opts.headers['Authorization'] = 'Bearer $_token';
               try {
                 final retryRes = await dio.fetch<dynamic>(opts);
@@ -91,6 +99,7 @@ class ApiClient {
 
   Future<bool> tryRefreshSession() async {
     final rt = _refreshToken;
+    final session = _sessionVersion;
     if (rt == null || rt.trim().isEmpty) return false;
     if (_refreshInFlight != null) return _refreshInFlight!;
 
@@ -102,6 +111,7 @@ class ApiClient {
         );
         final newAccess = res.data?['accessToken'] as String?;
         final newRefresh = res.data?['refreshToken'] as String?;
+        if (_sessionVersion != session) return false;
         if (newAccess != null && newAccess.isNotEmpty) {
           _token = newAccess;
           if (newRefresh != null && newRefresh.isNotEmpty) {
@@ -117,7 +127,7 @@ class ApiClient {
     try {
       return await future;
     } finally {
-      _refreshInFlight = null;
+      if (identical(_refreshInFlight, future)) _refreshInFlight = null;
     }
   }
 

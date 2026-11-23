@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+
+import 'dart:convert';
+import 'dart:io';
 
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
@@ -126,18 +130,59 @@ class _DevTestingHubState extends State<DevTestingHub> {
       targetScreen = const PlayerWelcomeScreen();
     }
 
-    Navigator.push(
+    Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (ctx) => targetScreen),
+      (route) => false,
     ).then((_) {
       if (mounted) setState(() {});
     });
   }
 
-  void _triggerLoginForAccount(DevAccount account) {
+  Future<void> _triggerLoginForAccount(DevAccount account) async {
+    if (!kDebugMode) return;
+    final key = switch (account.email.toLowerCase()) {
+      'player@smatch.dev' => 'DEV_PLAYER_1_PASSWORD',
+      'player2@smatch.dev' => 'DEV_PLAYER_2_PASSWORD',
+      'player3@smatch.dev' => 'DEV_PLAYER_3_PASSWORD',
+      'owner@smatch.dev' => 'DEV_OWNER_PASSWORD',
+      'admin@smatch.dev' => 'DEV_ADMIN_PASSWORD',
+      _ => '',
+    };
+    var password = switch (account.email.toLowerCase()) {
+      'player@smatch.dev' => const String.fromEnvironment(
+        'DEV_PLAYER_1_PASSWORD',
+      ),
+      'player2@smatch.dev' => const String.fromEnvironment(
+        'DEV_PLAYER_2_PASSWORD',
+      ),
+      'player3@smatch.dev' => const String.fromEnvironment(
+        'DEV_PLAYER_3_PASSWORD',
+      ),
+      'owner@smatch.dev' => const String.fromEnvironment('DEV_OWNER_PASSWORD'),
+      'admin@smatch.dev' => const String.fromEnvironment('DEV_ADMIN_PASSWORD'),
+      _ => '',
+    };
+    if (key.isNotEmpty) {
+      try {
+        final file = File(
+          '${Directory.systemTemp.parent.path}/Documents/smatch_dev_quick_login.json',
+        );
+        if (await file.exists()) {
+          final data = jsonDecode(await file.readAsString());
+          if (data is Map && data[key] is String) {
+            password = data[key] as String;
+          }
+        }
+      } catch (_) {
+        // Missing development configuration falls back to the normal login dialog.
+      }
+    }
+    if (!mounted) return;
     DevAccountSelector.showQuickLoginDialog(
       context: context,
       account: account,
+      initialPassword: password,
       onLogin: (email, pass) => _handleLogin(email, pass),
       onSuccess: (role) => _navigateToRoleScreen(role),
     );
@@ -497,11 +542,20 @@ class _DevTestingHubState extends State<DevTestingHub> {
       );
     }
 
-    return ListView.separated(
+    return ReorderableListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
+      buildDefaultDragHandles: false,
       itemCount: _accounts.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      onReorder: (oldIndex, newIndex) async {
+        setState(() {
+          final target = newIndex > oldIndex ? newIndex - 1 : newIndex;
+          _accounts = [..._accounts];
+          final account = _accounts.removeAt(oldIndex);
+          _accounts.insert(target, account);
+        });
+        await _repo.reorderAccounts(oldIndex, newIndex);
+      },
       itemBuilder: (context, index) {
         final acc = _accounts[index];
         final isActive =
@@ -509,6 +563,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
             currentEmail.toLowerCase() == acc.email.toLowerCase();
 
         return Card(
+          key: ValueKey(acc.id),
           elevation: 0.5,
           color: Colors.white,
           shape: RoundedRectangleBorder(
@@ -625,6 +680,21 @@ class _DevTestingHubState extends State<DevTestingHub> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: const Tooltip(
+                        message: 'Drag to reorder',
+                        child: SizedBox(
+                          width: 36,
+                          height: 48,
+                          child: Icon(
+                            Icons.drag_handle_rounded,
+                            color: Colors.grey,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
                     IconButton(
                       icon: const Icon(
                         Icons.flash_on_rounded,

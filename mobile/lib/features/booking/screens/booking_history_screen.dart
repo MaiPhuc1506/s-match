@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_motion.dart';
 import 'booking_detail_screen.dart';
+import '../../match/screens/open_match_setup_screen.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -358,6 +359,28 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
             AppMotion.route(
               BookingDetailScreen(
                 bookingId: booking.id,
+                onOrganizeMatch:
+                    widget.live &&
+                        booking.source?['status'] == 'CONFIRMED' &&
+                        booking.source?['match'] == null &&
+                        (DateTime.tryParse('${booking.source?['startTime']}')
+                                ?.isAfter(DateTime.now()) ??
+                            false)
+                    ? () async {
+                        final navigator = Navigator.of(context);
+                        await navigator.push(
+                          AppMotion.route(
+                            OpenMatchSetupScreen(
+                              bookingId: int.parse(booking.id),
+                              courtLabel:
+                                  '${booking.facilityName} · ${booking.courtName}',
+                              timeLabel: booking.dateTimeText,
+                            ),
+                            name: '/open-match-setup',
+                          ),
+                        );
+                      }
+                    : null,
                 onCancelBooking:
                     widget.live &&
                         booking.source != null &&

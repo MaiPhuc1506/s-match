@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { assessmentScore, effectiveSkillLevel } from './skill-assessment';
 
 @Injectable()
 export class PlayersService {
@@ -15,7 +16,7 @@ export class PlayersService {
         fullName: true,
         phone: true,
         role: { select: { name: true } },
-        playerProfile: true,
+        playerProfile: { include: { skill: true } },
       },
     });
 
@@ -27,10 +28,14 @@ export class PlayersService {
       const newProfile = await this.prisma.playerProfile.create({
         data: { userId },
       });
-      return { ...user, playerProfile: newProfile };
+      return { ...user, playerProfile: { ...newProfile, skill: null, overallSkillScore: null } };
     }
 
-    return user;
+    const overallSkillScore = assessmentScore(user.playerProfile.skill);
+    return { ...user, playerProfile: {
+      ...user.playerProfile, overallSkillScore,
+      skillLevel: effectiveSkillLevel(overallSkillScore, user.playerProfile.skillLevel),
+    } };
   }
 
   async updateMyProfile(userId: number, dto: UpdateProfileDto) {

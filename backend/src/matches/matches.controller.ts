@@ -51,6 +51,24 @@ export class MatchesController {
     return this.matchesService.findOpenMatches();
   }
 
+  @Get('mine')
+  @Roles(Role.PLAYER)
+  async findMyMatches(@Request() req: any) {
+    return this.matchesService.findMyMatches(this.extractUserId(req));
+  }
+
+  @Get('notifications')
+  @Roles(Role.PLAYER)
+  notifications(@Request() req: any) {
+    return this.matchesService.notifications(this.extractUserId(req));
+  }
+
+  @Patch('notifications/:id/read')
+  @Roles(Role.PLAYER)
+  markNotificationRead(@Request() req: any, @Param('id', ParseIntPipe) id: number) {
+    return this.matchesService.markNotificationRead(this.extractUserId(req), id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Xem chi tiết trận đấu và danh sách người tham gia' })
   @ApiResponse({ status: 200, description: 'Thông tin trận đấu.' })
@@ -84,13 +102,13 @@ export class MatchesController {
   }
 
   @Patch(':id/complete')
-  @ApiOperation({ summary: 'Host hoàn thành trận khi đã đến thời điểm kết thúc' })
+  @ApiOperation({ summary: 'Host hoàn thành trận từ thời điểm bắt đầu' })
   @ApiResponse({ status: 200, description: 'Match đã COMPLETED; dùng projection an toàn dành cho Host.' })
   @ApiResponse({ status: 400, description: 'Match ID không hợp lệ.' })
   @ApiResponse({ status: 401, description: 'Token hoặc phiên đăng nhập không hợp lệ.' })
   @ApiResponse({ status: 403, description: 'Chỉ Host được hoàn thành trận, không có ADMIN override.' })
   @ApiResponse({ status: 404, description: 'Không tìm thấy Match.' })
-  @ApiResponse({ status: 409, description: 'Chưa đến giờ kết thúc hoặc trạng thái không cho phép.' })
+  @ApiResponse({ status: 409, description: 'Chưa đến giờ bắt đầu hoặc trạng thái không cho phép.' })
   completeMatch(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
     return this.matchesService.completeMatch(id, req.user.sub);
   }
@@ -110,6 +128,7 @@ export class MatchesController {
 
   // --- INVITATIONS & JOIN REQUESTS ---
   @Post(':id/invite')
+  @Roles(Role.PLAYER)
   @ApiOperation({ summary: 'Host gửi lời mời một người chơi tham gia trận' })
   @ApiResponse({ status: 201, description: 'Đã gửi lời mời tham gia trận.' })
   @ApiResponse({ status: 400, description: 'Người chơi đã tham gia hoặc trận đã đầy.' })
@@ -125,6 +144,7 @@ export class MatchesController {
   }
 
   @Post(':id/join-request')
+  @Roles(Role.PLAYER)
   @ApiOperation({ summary: 'Người chơi gửi yêu cầu xin tham gia Open Match' })
   @ApiResponse({ status: 201, description: 'Gửi yêu cầu tham gia thành công.' })
   @ApiResponse({ status: 400, description: 'Trận không nhận thêm yêu cầu hoặc đã đủ người.' })
@@ -135,6 +155,7 @@ export class MatchesController {
   }
 
   @Patch(':id/invitations/accept')
+  @Roles(Role.PLAYER)
   @ApiOperation({ summary: 'Người chơi chấp nhận lời mời từ Host' })
   @ApiResponse({ status: 200, description: 'Chấp nhận lời mời thành công.' })
   @ApiResponse({ status: 403, description: 'Bạn không có lời mời tham gia trận này.' })
@@ -145,6 +166,7 @@ export class MatchesController {
   }
 
   @Patch(':id/invitations/reject')
+  @Roles(Role.PLAYER)
   @ApiOperation({ summary: 'Người chơi từ chối lời mời từ Host' })
   @ApiResponse({ status: 200, description: 'Đã từ chối lời mời.' })
   @ApiResponse({ status: 403, description: 'Bạn không có lời mời tham gia trận này.' })

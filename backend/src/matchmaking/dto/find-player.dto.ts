@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayNotEmpty, IsArray, IsDateString, IsDefined, IsInt, IsNumber, IsObject,
-  IsString, Matches, Max, Min, ValidateIf, ValidateNested,
+  IsIn, IsString, Matches, Max, Min, ValidateIf, ValidateNested,
 } from 'class-validator';
 
 export class FindPlayerLocationDto {
@@ -20,6 +20,18 @@ export class FindPlayerLocationDto {
 }
 
 export class FindPlayerDto {
+  @ApiPropertyOptional({ enum: ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'] })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsIn(['BEGINNER', 'INTERMEDIATE', 'ADVANCED'])
+  skillCategory?: string;
+
+  @ApiPropertyOptional({ description: 'Restrict recommendations to this host’s open match' })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
+  matchId?: number;
+
   @ApiProperty({ type: [String], example: ['2026-10-20T18:00:00Z'] })
   @IsArray()
   @ArrayNotEmpty()

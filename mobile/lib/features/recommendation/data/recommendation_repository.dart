@@ -27,11 +27,18 @@ class ApiRecommendationRepository extends RecommendationRepository {
       value is String && value.trim().isNotEmpty ? value.trim() : null;
 
   @override
-  Future<List<RecommendedPlayer>> search(RecommendationQuery query) async {
+  Future<List<RecommendedPlayer>> search(
+    RecommendationQuery query, {
+    int? matchId,
+    String? expectedToken,
+  }) async {
+    final options = Options(extra: {'expectedAuthToken': ?expectedToken});
     try {
       // Use actual saved location/availability, not the schematic Map's fixtures.
-      final me = (await dio.get<Map<String, dynamic>>('/players/profile/me'))
-          .data!;
+      final me = (await dio.get<Map<String, dynamic>>(
+        '/players/profile/me',
+        options: options,
+      )).data!;
       final rawProfile = me['playerProfile'];
       final profile = rawProfile is Map
           ? Map<String, dynamic>.from(rawProfile)
@@ -46,6 +53,7 @@ class ApiRecommendationRepository extends RecommendationRepository {
           (await dio.get<List<dynamic>>(
             '/availability/${me['id']}/upcoming-slots',
             queryParameters: {'days': 7},
+            options: options,
           )).data ??
           [];
       if (slots.isEmpty) {
@@ -53,10 +61,10 @@ class ApiRecommendationRepository extends RecommendationRepository {
           'Add upcoming availability before searching for players.',
         );
       }
-      final bounds = switch (query.level) {
-        'Beginner' => (1, 2),
-        'Intermediate' => (3, 4),
-        'Advanced' => (5, 5),
+      final category = switch (query.level) {
+        'Beginner' => 'BEGINNER',
+        'Intermediate' => 'INTERMEDIATE',
+        'Advanced' => 'ADVANCED',
         _ => null,
       };
       final style = switch (query.style) {
@@ -67,12 +75,13 @@ class ApiRecommendationRepository extends RecommendationRepository {
       };
       final response = await dio.post<Map<String, dynamic>>(
         '/matchmaking/recommend',
+        options: options,
         data: {
           'availableTimeSlots': slots,
           'location': {'latitude': latitude, 'longitude': longitude},
           'maxDistanceKm': query.distanceKm,
-          if (bounds != null) 'minSkillLevel': bounds.$1,
-          if (bounds != null) 'maxSkillLevel': bounds.$2,
+          'matchId': ?matchId,
+          'skillCategory': ?category,
           if (style != null) 'playingStyles': [style],
         },
       );
@@ -88,6 +97,7 @@ class ApiRecommendationRepository extends RecommendationRepository {
         final nearby = await dio.get<Map<String, dynamic>>(
           '/candidates/nearby',
           queryParameters: {'radiusKm': query.distanceKm, 'limit': 100},
+          options: options,
         );
         for (final row in (nearby.data?['candidates'] as List? ?? [])) {
           final candidate = Map<String, dynamic>.from(row as Map);

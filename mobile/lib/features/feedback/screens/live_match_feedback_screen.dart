@@ -94,7 +94,9 @@ class _LiveMatchFeedbackScreenState extends State<LiveMatchFeedbackScreen> {
               )
             else if (match != null)
               Text(
-                'The host must complete this match before feedback can be submitted.',
+                match?['status'] == 'COMPLETED'
+                    ? 'Feedback is available to accepted participants.'
+                    : 'The host must complete this match before feedback can be submitted.',
                 style: feedbackText(14),
               ),
             TextButton(onPressed: load, child: const Text('Refresh')),

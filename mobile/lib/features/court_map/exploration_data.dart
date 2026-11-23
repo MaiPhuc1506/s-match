@@ -176,6 +176,80 @@ class CourtLocation {
   String get distanceText => distanceKm == null
       ? (demo ? 'Distance unavailable' : 'Chưa có khoảng cách')
       : '${distanceKm!.toStringAsFixed(1)} km';
+  double? get startingHourlyRate {
+    double? result;
+    for (final court in courts) {
+      if (court['status'] != null && court['status'] != 'ACTIVE') continue;
+      for (final slot in (court['timeSlots'] as List? ?? []).whereType<Map>()) {
+        if (slot['isActive'] == false) continue;
+        final hourly = slot['hourlyRate'];
+        final price = slot['price'];
+        double? rate;
+        if (hourly is num) {
+          rate = hourly.toDouble();
+        } else if (price is num) {
+          final start = _clockMinutes(slot['startTime']);
+          final end = _clockMinutes(slot['endTime']);
+          if (start != null && end != null && end > start) {
+            rate = price * 60 / (end - start);
+          }
+        }
+        if (rate != null &&
+            rate.isFinite &&
+            rate > 0 &&
+            (result == null || rate < result)) {
+          result = rate;
+        }
+      }
+    }
+    return result;
+  }
+
+  static int? _clockMinutes(Object? value) {
+    final parts = value?.toString().split(':');
+    if (parts == null || parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null ||
+        minute == null ||
+        hour < 0 ||
+        hour > 24 ||
+        minute < 0 ||
+        minute > 59 ||
+        (hour == 24 && minute != 0)) {
+      return null;
+    }
+    return hour * 60 + minute;
+  }
+
+  /// Facility schedules use Asia/Ho_Chi_Minh (UTC+7), independent of device zone.
+  bool? isOpenAt(DateTime instant) {
+    if (isOpen != null) return isOpen;
+    final local = instant.toUtc().add(const Duration(hours: 7));
+    final day = local.weekday % 7;
+    final minute = local.hour * 60 + local.minute;
+    var hasToday = false;
+    for (final hours in operatingHours) {
+      final start = _clockMinutes(hours['openTime']);
+      final end = _clockMinutes(hours['closeTime']);
+      if (start == null || end == null) continue;
+      if (hours['dayOfWeek'] == day) {
+        hasToday = true;
+        if (end > start && minute >= start && minute < end) return true;
+        if (end < start && minute >= start) return true;
+      }
+      if (hours['dayOfWeek'] == (day + 6) % 7 && end < start && minute < end) {
+        return true;
+      }
+    }
+    return hasToday ? false : null;
+  }
+
+  bool? get currentlyOpen => isOpenAt(DateTime.now());
+  String? get discoveryPriceBand => startingHourlyRate != null
+      ? (startingHourlyRate! <= 100000 ? r'$' : r'$$')
+      : (priceRange == r'$' || priceRange == r'$$' ? priceRange : null);
+
   String? get priceSummary {
     if (priceRange != null && priceRange!.trim().isNotEmpty) {
       return priceRange;
@@ -229,9 +303,9 @@ class CourtLocation {
 
   String get mapSubtitle =>
       [if (distanceKm != null) distanceText, ?priceSummary].join(' · ');
-  String get availabilityText => isOpen == null
+  String get availabilityText => currentlyOpen == null
       ? (demo ? 'Demo availability' : 'Chưa rõ giờ mở cửa')
-      : isOpen!
+      : currentlyOpen!
       ? 'Open now'
       : 'Closed';
 

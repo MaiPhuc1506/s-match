@@ -6,9 +6,18 @@ import 'auth_service.dart';
 /// Fields supported by GET/PATCH /players/profile/me for the Edit Profile form.
 /// Location, dominant hand and preferred mode are not part of UpdateProfileDto.
 class OwnPlayerProfile {
-  const OwnPlayerProfile({required this.fullName, required this.bio});
+  const OwnPlayerProfile({
+    required this.fullName,
+    required this.bio,
+    this.skillLevel,
+    this.skill,
+    this.overallSkillScore,
+  });
   final String fullName;
   final String bio;
+  final String? skillLevel;
+  final Map<String, dynamic>? skill;
+  final double? overallSkillScore;
 
   factory OwnPlayerProfile.fromJson(Map<String, dynamic> json) {
     final rawProfile = json['playerProfile'];
@@ -24,6 +33,11 @@ class OwnPlayerProfile {
     return OwnPlayerProfile(
       fullName: json['fullName'] as String,
       bio: bio as String? ?? '',
+      skillLevel: rawProfile['skillLevel'] as String?,
+      overallSkillScore: (rawProfile['overallSkillScore'] as num?)?.toDouble(),
+      skill: rawProfile['skill'] is Map
+          ? Map<String, dynamic>.from(rawProfile['skill'] as Map)
+          : null,
     );
   }
 }

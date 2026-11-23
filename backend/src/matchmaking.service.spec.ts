@@ -42,7 +42,7 @@ describe('MatchmakingService (dependency mocks only)', () => {
     expect(prisma.playerProfile.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.playerProfile.findMany).toHaveBeenCalledWith({
       where: { userId: { in: [7, 3] }, locationSharingEnabled: true, user: { role: { name: 'PLAYER' } } },
-      select: { userId: true, nickname: true, avatarUrl: true, skillLevel: true, user: { select: { fullName: true } } },
+      select: { userId: true, nickname: true, avatarUrl: true, skillLevel: true, skill: true, user: { select: { fullName: true } } },
     });
     expect(result.matchedUsers.map((row) => [row.userId, row.matchScore, row.profile.fullName])).toEqual([
       ['7', 85, 'Fixture player 7'], ['3', 80, 'Fixture player 3'],

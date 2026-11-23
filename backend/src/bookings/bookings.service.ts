@@ -161,6 +161,7 @@ export class BookingsService {
       where: { userId },
       orderBy: { startTime: 'desc' },
       include: {
+        match: { select: { id: true, status: true } },
         court: {
           include: {
             facility: true,
@@ -224,9 +225,13 @@ export class BookingsService {
   }
 
   async cancel(id: number, currentUserId: number, currentUserRole: string) {
-    const booking = await this.prisma.booking.findUnique({
+    return this.prisma.$transaction(async (db) => {
+    // Serialize with creation of a match linked to this booking.
+    await db.$queryRaw`SELECT id FROM "Booking" WHERE id = ${id} FOR UPDATE`;
+    const booking = await db.booking.findUnique({
       where: { id },
       include: {
+        match: { select: { id: true, status: true } },
         court: {
           include: {
             facility: true,
@@ -255,12 +260,20 @@ export class BookingsService {
       throw new BadRequestException('Không thể hủy đơn đặt sân đã hoàn tất');
     }
 
-    return this.prisma.booking.update({
+    if (booking.match && booking.match.status !== 'CANCELLED' && booking.match.status !== 'COMPLETED') {
+      await db.$queryRaw`SELECT id FROM "Match" WHERE id = ${booking.match.id} FOR UPDATE`;
+      await db.match.updateMany({
+        where: { id: booking.match.id, status: { notIn: ['CANCELLED', 'COMPLETED'] } },
+        data: { status: 'CANCELLED' },
+      });
+    }
+    return db.booking.update({
       where: { id },
       data: { status: BookingStatus.CANCELLED },
       include: {
         court: true,
       },
+    });
     });
   }
 }

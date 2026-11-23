@@ -9,6 +9,7 @@ export function matchesWhere(row: any, where: any = {}): boolean {
     if (value && typeof value === 'object' && 'in' in value) return value.in.includes(row[key]);
     if (value && typeof value === 'object' && 'not' in value) return row[key] !== value.not;
     if (value && typeof value === 'object' && 'lte' in value) return row[key] <= value.lte;
+    if (value && typeof value === 'object' && 'gt' in value) return row[key] > value.gt;
     return row[key] === value;
   });
 }
@@ -29,8 +30,7 @@ export function projectMatch(row: any, select?: any): any {
   }));
 }
 
-export function makeMatchSecurityFixture() {
-  const date = new Date('2026-10-20T18:00:00Z');
+export function makeMatchSecurityFixture(date = new Date('2026-10-20T18:00:00Z')) {
   const statuses = ['ACCEPTED', 'ACCEPTED', 'INVITED', 'REQUESTED', 'REJECTED', 'CANCELLED'];
   const ids = [10, 30, 40, 50, 60, 70];
   const privateMatch = {
@@ -85,6 +85,12 @@ export function makeMatchSecurityFixture() {
       create: jest.fn(async ({ data, select }) => projectMatch({ ...privateMatch, ...data, participants: privateMatch.participants }, select)),
     },
     booking: { findUnique: jest.fn(async () => ({ ...privateMatch.booking, court: privateMatch.booking.court, match: null })) },
+    playerProfile: { findFirst: jest.fn(async ({ where }) => ({
+      userId: where.userId, latitude: 16.05, longitude: 108.2, skill: null,
+      user: { availabilities: [{ dayOfWeek: 1, startTime: '18:00' }] },
+    })) },
+    user: { findFirst: jest.fn(async ({ where }) => ({ id: where.id })) },
+    matchNotification: { create: jest.fn(async ({ data }) => ({ id: 1, ...data })) },
     matchParticipant: {
       findUnique: jest.fn(async ({ where }) => {
         const pair = where.matchId_userId;

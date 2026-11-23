@@ -3,6 +3,7 @@ import '../../../core/theme/app_motion.dart';
 import 'booking_summary_screen.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../booking_theme.dart';
@@ -13,13 +14,31 @@ class BookingFacilityScheduleScreen extends StatefulWidget {
   final VoidCallback? onContinue;
   final int? facilityId;
   final int? courtId;
+  final VoidCallback? onViewFacility;
 
   const BookingFacilityScheduleScreen({
     super.key,
     this.onContinue,
     this.facilityId,
     this.courtId,
+    this.onViewFacility,
   });
+
+  static Future<void> open(
+    BuildContext context, {
+    required int facilityId,
+    int? courtId,
+    VoidCallback? onViewFacility,
+  }) => Navigator.of(context).push<void>(
+    AppMotion.route<void>(
+      BookingFacilityScheduleScreen(
+        facilityId: facilityId,
+        courtId: courtId,
+        onViewFacility: onViewFacility,
+      ),
+      name: '/facility-booking',
+    ),
+  );
 
   @override
   State<BookingFacilityScheduleScreen> createState() =>
@@ -160,9 +179,20 @@ class _BookingFacilityScheduleScreenState
   @override
   Widget build(BuildContext context) {
     if (widget.facilityId != null) {
-      return LiveFacilitySchedule(
-        facilityId: widget.facilityId!,
-        initialCourtId: widget.courtId,
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          key: const Key('booking-schedule-page'),
+          backgroundColor: BookingColors.background,
+          body: SafeArea(
+            child: LiveFacilitySchedule(
+              facilityId: widget.facilityId!,
+              initialCourtId: widget.courtId,
+              compact: true,
+              onViewFacility: widget.onViewFacility,
+            ),
+          ),
+        ),
       );
     }
     return Scaffold(

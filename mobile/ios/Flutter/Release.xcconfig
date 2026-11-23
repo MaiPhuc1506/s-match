@@ -1,1 +1,3 @@
 #include "Generated.xcconfig"
+GOOGLE_IOS_REVERSED_CLIENT_ID = com.smatch.google-unconfigured
+#include? "GoogleOAuth.local.xcconfig"

@@ -173,11 +173,17 @@ class CourtChatCard extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 minimumSize: const Size(44, 44),
                 color: const Color(0xFF05644F),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        BookingFacilityScheduleScreen(facilityId: id),
-                  ),
+                onPressed: () => BookingFacilityScheduleScreen.open(
+                  context,
+                  facilityId: id,
+                  onViewFacility: facility == null
+                      ? null
+                      : () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                CourtPreviewScreen(location: facility),
+                          ),
+                        ),
                 ),
                 child: const Text(
                   'Book now',

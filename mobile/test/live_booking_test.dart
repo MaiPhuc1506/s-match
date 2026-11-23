@@ -118,7 +118,54 @@ class HalfHourFake extends SelectionFake {
   ];
 }
 
+class EveningBoundaryFake extends SelectionFake {
+  @override
+  Future<List<Map<String, dynamic>>> slots(
+    int facilityId,
+    int courtId,
+    String date,
+  ) async => [
+    for (var i = 0; i < 4; i++)
+      {
+        'id': i,
+        'startTime': '${20 + i ~/ 2}:${i.isEven ? '00' : '30'}',
+        'endTime': '${20 + (i + 1) ~/ 2}:${i.isEven ? '30' : '00'}',
+        'price': 45000,
+        'isActive': true,
+        'isBooked': false,
+        'status': 'AVAILABLE',
+      },
+  ];
+}
+
 void main() {
+  testWidgets(
+    'At 20:30 Vietnam time only earlier slots are disabled, later slots remain bookable',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LiveFacilitySchedule(
+            facilityId: 45,
+            service: EveningBoundaryFake(),
+            now: () => DateTime.utc(2026, 11, 22, 13, 30),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (final court in [51, 52]) {
+        for (final time in ['20:00 – 20:30', '20:30 – 21:00']) {
+          final cell = find.byKey(ValueKey('slot-$court-$time'));
+          expect(tester.widget<InkWell>(cell).onTap, isNull);
+        }
+        for (final time in ['21:00 – 21:30', '21:30 – 22:00']) {
+          final cell = find.byKey(ValueKey('slot-$court-$time'));
+          expect(tester.widget<InkWell>(cell).onTap, isNotNull);
+        }
+      }
+      expect(find.text('Past'), findsNothing);
+    },
+  );
+
   testWidgets('Half-hour cells extend into one priced range and summary', (
     tester,
   ) async {
@@ -139,6 +186,8 @@ void main() {
     expect(find.text('Court 1 · 18:30–20:00'), findsOneWidget);
     expect(find.text('120,000 VND'), findsOneWidget);
     await tester.tap(find.byKey(const Key('booking-continue')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Normal Booking'));
     await tester.pumpAndSettle();
     expect(find.text('90 minutes'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -446,13 +495,14 @@ void main() {
     expect(cellColor(locked), BookingColors.slotLocked);
     expect(cellColor(event), BookingColors.slotEvent);
     expect(find.text('Past'), findsNothing);
-    expect(find.text('Selected'), findsOneWidget);
     expect(tester.widget<InkWell>(booked).onTap, isNull);
     expect(tester.widget<InkWell>(available).onTap, isNotNull);
     expect(tester.widget<InkWell>(past).onTap, isNull);
     expect(tester.widget<InkWell>(actualLock).onTap, isNull);
     expect(tester.widget<InkWell>(locked).onTap, isNull);
     expect(tester.widget<InkWell>(event).onTap, isNull);
+    expect(find.text('Past'), findsNothing);
+    expect(find.text('Selected'), findsOneWidget);
   });
 
   testWidgets('Selection toggles, switches courts and uses the API price', (
@@ -567,6 +617,8 @@ void main() {
       await tester.pump();
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Normal Booking'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Confirm Booking'));
       await tester.pump();
       fake.submitted.completeError(
@@ -577,7 +629,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(BookingSuccessScreen), findsNothing);
-      expect(find.textContaining('kiểm tra lịch sử đặt sân'), findsOneWidget);
+      expect(find.textContaining('Check booking history'), findsOneWidget);
       expect(fake.calls, 1);
       expect(tester.takeException(), isNull);
     },
@@ -605,6 +657,8 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('slot-51-18:00 – 19:00')));
         await tester.pump();
         await tester.tap(find.text('Continue'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Normal Booking'));
         await tester.pumpAndSettle();
         expect(find.byType(BookingSummaryScreen), findsOneWidget);
         expect(find.text('Selected Court'), findsOneWidget);
@@ -716,6 +770,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('slot-51-18:00 – 19:00')));
     await tester.pump();
     await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Normal Booking'));
     await tester.pumpAndSettle();
     expect(find.byType(BookingSummaryScreen), findsOneWidget);
     fake.booked = true;

@@ -9,12 +9,12 @@ import { makeMatchBookingFixture } from '../../test/helpers/matches-booking.fixt
 describe('Match validation and participant responses 2D (Prisma mock)', () => {
   let fixture: ReturnType<typeof makeMatchBookingFixture>;
   let service: MatchesService;
-  const create = { title: 'Fixture', startTime: '2026-10-20T18:00:00Z', endTime: '2026-10-20T19:00:00Z' };
-  const open = { mode: 'DOUBLES', purpose: 'CASUAL', neededPlayers: 2, minSkillLevel: 1, maxSkillLevel: 5 } as const;
+  const create = { title: 'Fixture', startTime: '2099-10-20T18:00:00Z', endTime: '2099-10-20T19:00:00Z' };
+  const open = { mode: 'DOUBLES', purpose: 'CASUAL', neededPlayers: 3, minSkillLevel: 1, maxSkillLevel: 5 } as const;
   const pipe = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true });
   const keys = ['id', 'matchId', 'role', 'status', 'userId'];
   beforeEach(() => {
-    fixture = makeMatchBookingFixture();
+    fixture = makeMatchBookingFixture(new Date('2099-10-20T18:00:00Z'));
     service = new MatchesService(fixture.prisma);
   });
   function noWrites() {
@@ -87,10 +87,10 @@ describe('Match validation and participant responses 2D (Prisma mock)', () => {
     noWrites();
   });
   it.each([
-    { startTime: '2026-10-20T19:00:00Z' }, { startTime: '2026-10-20T20:00:00Z' },
-    { endTime: '2026-10-20T18:00:00Z' }, { endTime: '2026-10-20T17:00:00Z' },
+    { startTime: '2099-10-20T19:00:00Z' }, { startTime: '2099-10-20T20:00:00Z' },
+    { endTime: '2099-10-20T18:00:00Z' }, { endTime: '2099-10-20T17:00:00Z' },
     { startTime: null }, { endTime: null }, { startTime: 'invalid' },
-    { startTime: '2026-10-21T20:00:00Z', endTime: '2026-10-21T19:00:00Z' },
+    { startTime: '2099-10-21T20:00:00Z', endTime: '2099-10-21T19:00:00Z' },
   ])('checks final merged PATCH times before mutation: %j', async (body) => {
     const before = JSON.stringify(fixture.rows);
     await expect(service.updateMatch(11, 10, body as any)).rejects.toBeInstanceOf(BadRequestException);
@@ -98,9 +98,9 @@ describe('Match validation and participant responses 2D (Prisma mock)', () => {
     expect(JSON.stringify(fixture.rows)).toBe(before);
   });
   it.each([
-    { startTime: '2026-10-20T18:30:00Z' }, { endTime: '2026-10-20T19:30:00Z' },
-    { startTime: '2026-10-21T18:00:00Z', endTime: '2026-10-21T19:00:00Z' },
-    { startTime: '2026-10-20T20:00:00+02:00', endTime: '2026-10-20T18:30:00Z' },
+    { startTime: '2099-10-20T18:30:00Z' }, { endTime: '2099-10-20T19:30:00Z' },
+    { startTime: '2099-10-21T18:00:00Z', endTime: '2099-10-21T19:00:00Z' },
+    { startTime: '2099-10-20T20:00:00+02:00', endTime: '2099-10-20T18:30:00Z' },
   ])('accepts valid merged times and writes only supplied fields: %j', async (body) => {
     await service.updateMatch(11, 10, body);
     const data = fixture.prisma.match.update.mock.calls[0][0].data;
@@ -155,8 +155,8 @@ describe('Match validation and participant responses 2D (Prisma mock)', () => {
     await expect(service.createFromBooking(10, 102, { ...open, neededPlayers } as any)).rejects.toBeInstanceOf(BadRequestException);
     noWrites();
   });
-  it.each([1, 2147483646])('accepts neededPlayers boundary %s without overflow', async (neededPlayers) => {
-    const dto = await pipe.transform({ ...open, neededPlayers }, { type: 'body', metatype: CreateOpenMatchDto });
+  it.each([[1, 'SINGLES'], [3, 'DOUBLES']] as const)('accepts capacity %s for %s', async (neededPlayers, mode) => {
+    const dto = await pipe.transform({ ...open, mode, neededPlayers }, { type: 'body', metatype: CreateOpenMatchDto });
     expect(await service.createFromBooking(10, 102, dto)).toMatchObject({ maxPlayers: neededPlayers + 1 });
   });
 });

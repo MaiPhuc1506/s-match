@@ -9,10 +9,11 @@ import { DatabaseCandidateProvider } from './matchmaking/database-candidate-prov
 import { FASTAPI_HTTP, FastApiClient } from './matchmaking/fastapi.client';
 import { MatchmakingService } from './matchmaking.service';
 import { MatchmakingController } from './matchmaking.controller';
+import { AvailabilityPreferenceModule } from './availability-preference/availability-preference.module';
 
 @Module({
   imports: [
-    ConfigModule, AuthModule, CandidatesModule, RecommendationHistoryModule,
+    ConfigModule, AuthModule, CandidatesModule, RecommendationHistoryModule, AvailabilityPreferenceModule,
   ],
   controllers: [MatchmakingController],
   providers: [MatchmakingService, FastApiClient,

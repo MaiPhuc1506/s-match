@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../core/theme/app_colors.dart';
 import '../data/dev_saved_accounts_repository.dart';
 
@@ -10,10 +11,11 @@ class DevAccountSelector {
   static Future<void> showQuickLoginDialog({
     required BuildContext context,
     required DevAccount account,
+    String initialPassword = '',
     required Future<bool> Function(String email, String password) onLogin,
     required void Function(String role) onSuccess,
   }) async {
-    final passwordController = TextEditingController(text: 'Password123!');
+    final passwordController = TextEditingController(text: initialPassword);
     bool obscurePassword = true;
     bool isLoading = false;
     String? errorMessage;
@@ -106,10 +108,7 @@ class DevAccountSelector {
                       const SizedBox(height: 10),
                       Text(
                         errorMessage!,
-                        style: const TextStyle(
-                          color: Colors.red,
-                          fontSize: 12,
-                        ),
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
                       ),
                     ],
                   ],
@@ -133,7 +132,9 @@ class DevAccountSelector {
                       : () async {
                           final pass = passwordController.text.trim();
                           if (pass.isEmpty) {
-                            setState(() => errorMessage = 'Vui lòng nhập mật khẩu');
+                            setState(
+                              () => errorMessage = 'Vui lòng nhập mật khẩu',
+                            );
                             return;
                           }
                           setState(() {
@@ -151,8 +152,7 @@ class DevAccountSelector {
                             } else {
                               setState(() {
                                 isLoading = false;
-                                errorMessage =
-                                    'Đăng nhập không thành công. Kiểm tra lại thông tin hoặc kết nối máy chủ.';
+                                errorMessage = 'Đăng nhập không thành công. Kiểm tra lại thông tin hoặc kết nối máy chủ.';
                               });
                             }
                           }
@@ -183,12 +183,15 @@ class DevAccountSelector {
     required Future<void> Function(DevAccount account) onSave,
   }) async {
     final isEditing = initialAccount != null;
-    final labelController =
-        TextEditingController(text: initialAccount?.label ?? '');
-    final emailController =
-        TextEditingController(text: initialAccount?.email ?? '');
-    final noteController =
-        TextEditingController(text: initialAccount?.note ?? '');
+    final labelController = TextEditingController(
+      text: initialAccount?.label ?? '',
+    );
+    final emailController = TextEditingController(
+      text: initialAccount?.email ?? '',
+    );
+    final noteController = TextEditingController(
+      text: initialAccount?.note ?? '',
+    );
     String selectedRole = initialAccount?.role ?? 'PLAYER';
 
     await showDialog(
@@ -295,7 +298,8 @@ class DevAccountSelector {
                     if (label.isEmpty || email.isEmpty) return;
 
                     final updated = DevAccount(
-                      id: initialAccount?.id ??
+                      id:
+                          initialAccount?.id ??
                           'acc_${DateTime.now().millisecondsSinceEpoch}',
                       label: label,
                       email: email,
@@ -333,7 +337,9 @@ class DevAccountSelector {
       builder: (dialogCtx) {
         return AlertDialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: const Text('Đổi tên hiển thị'),
           content: TextField(
             controller: controller,
@@ -381,9 +387,13 @@ class DevAccountSelector {
       builder: (dialogCtx) {
         return AlertDialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: const Text('Xóa tài khoản test'),
-          content: Text('Bạn có chắc chắn muốn xóa "${account.label}" khỏi danh sách lưu?'),
+          content: Text(
+            'Bạn có chắc chắn muốn xóa "${account.label}" khỏi danh sách lưu?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogCtx),
@@ -403,4 +413,3 @@ class DevAccountSelector {
     );
   }
 }
-

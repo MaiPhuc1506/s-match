@@ -6,9 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'core/theme/app_colors.dart';
 import 'dev/presentation/dev_overlay.dart';
 import 'dev/presentation/dev_testing_hub.dart';
+import 'features/auth/services/auth_service.dart';
 import 'main.dart'; // Dùng để fallback an toàn sang ứng dụng thật nếu vô tình chạy release
-import 'features/recommendation/data/recommendation_repository.dart';
-import 'features/recommendation/data/recommendation_fixtures.dart';
 
 /// Entry point dành riêng cho chế độ Developer Testing Hub:
 /// Chạy lệnh: `flutter run -t lib/main_dev.dart`
@@ -23,18 +22,10 @@ void main() {
     return;
   }
 
-  runApp(
-    ProviderScope(
-      overrides: [
-        // UI previews need no login. Opt into the real API explicitly in Dev Mode.
-        if (!const bool.fromEnvironment('SPRINT7_LIVE_API'))
-          recommendationRepositoryProvider.overrideWithValue(
-            const FixtureRecommendationRepository(),
-          ),
-      ],
-      child: const DevTestingHubApp(),
-    ),
-  );
+  // OAuth client IDs are public identifiers, not client secrets.
+  AuthService.instance.devGoogleServerClientId = '873730457312-cbbu48ccp9cmh9trtn7pd8db6ht89vmk.apps.googleusercontent.com';
+  AuthService.instance.devGoogleIosClientId = '873730457312-736dj9i1e29nfvf4ertu4c8408rl5a52.apps.googleusercontent.com';
+  runApp(ProviderScope(child: const DevTestingHubApp()));
 }
 
 class DevTestingHubApp extends StatelessWidget {

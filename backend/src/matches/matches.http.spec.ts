@@ -36,7 +36,7 @@ describe('Match privacy HTTP (no PostgreSQL)', () => {
   afterAll(async () => { await app?.close(); });
 
   beforeEach(() => {
-    fixture = makeMatchSecurityFixture();
+    fixture = makeMatchSecurityFixture(new Date(Date.now() + 7 * 86400000));
     Object.assign(prisma, fixture.prisma);
     sessions.clear();
     prisma.refreshSession.findUnique.mockImplementation(async ({ where }: any) => sessions.get(where.id) ?? null);

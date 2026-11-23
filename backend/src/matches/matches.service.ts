@@ -15,6 +15,7 @@ import { Role } from '../auth/roles.enum';
 import { types } from 'node:util';
 import { SubmitFeedbackDto } from './dto/submit-feedback.dto';
 import { FeedbackResponseDto } from './dto/feedback-response.dto';
+import { eligibleNearbyInvite, invitationProfileSelect } from './invitation-eligibility';
 import {
   MATCH_INVITATION_SELECT, MATCH_MANAGER_SELECT, MATCH_MEMBER_SELECT,
   MATCH_PUBLIC_SELECT, MATCH_PARTICIPANT_MUTATION_SELECT, toMatchResponse,
@@ -28,6 +29,16 @@ export interface MatchActor {
 @Injectable()
 export class MatchesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  notifications(userId: number) {
+    return this.prisma.matchNotification.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 100 });
+  }
+
+  async markNotificationRead(userId: number, id: number) {
+    const updated = await this.prisma.matchNotification.updateMany({ where: { id, userId }, data: { isRead: true } });
+    if (!updated.count) throw new NotFoundException('Notification not found');
+    return { id, isRead: true };
+  }
 
   // All mutations of an existing Match/its roster take the same parent lock.
   // Completion therefore cannot commit between a state check and a roster write.
@@ -54,20 +65,30 @@ export class MatchesService {
     }
     return this.withMatchLock(matchId, async (db) => {
       const match = await db.match.findUnique({
-        where: { id: matchId }, select: { hostId: true, status: true, endTime: true },
+        where: { id: matchId }, select: {
+          hostId: true, status: true, startTime: true,
+          participants: { where: { status: ParticipantStatus.ACCEPTED }, select: { userId: true } },
+        },
       });
       if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
       if (match.hostId !== userId) throw new ForbiddenException('Chỉ Host mới có quyền hoàn thành trận đấu');
       const now = new Date();
       const allowed: MatchState[] = [MatchState.OPEN, MatchState.FULL, MatchState.IN_PROGRESS];
-      if (!allowed.includes(match.status) || match.endTime > now) {
+      if (!allowed.includes(match.status) || match.startTime > now) {
         throw new ConflictException('Trận đấu chưa đủ điều kiện hoàn thành');
       }
       const written = await db.match.updateMany({
-        where: { id: matchId, hostId: userId, status: { in: allowed }, endTime: { lte: now } },
+        where: { id: matchId, hostId: userId, status: { in: allowed }, startTime: { lte: now } },
         data: { status: MatchState.COMPLETED },
       });
       if (written.count !== 1) throw new ConflictException('Trạng thái trận đấu đã thay đổi');
+      // Persist delivery intent in the same transaction as completion.
+      for (const participant of match.participants) {
+        if (participant.userId === userId) continue;
+        await db.matchNotification.create({
+          data: { userId: participant.userId, matchId, kind: 'MATCH_COMPLETED' },
+        });
+      }
       const completed = await db.match.findUnique({ where: { id: matchId }, select: MATCH_MANAGER_SELECT });
       if (!completed) throw new NotFoundException('Không tìm thấy trận đấu');
       return toMatchResponse(completed);
@@ -87,7 +108,7 @@ export class MatchesService {
       const match = await db.match.findUnique({
         where: { id: matchId },
         select: {
-          status: true, endTime: true,
+          status: true, startTime: true,
           participants: {
             where: { userId: { in: [senderUserId, dto.recipientUserId] }, status: ParticipantStatus.ACCEPTED },
             select: { userId: true },
@@ -98,7 +119,7 @@ export class MatchesService {
       if (!match.participants.some((participant) => participant.userId === senderUserId)) {
         throw new ForbiddenException('Chỉ participant ACCEPTED của trận được gửi feedback');
       }
-      if (match.status !== MatchState.COMPLETED || match.endTime > new Date()) {
+      if (match.status !== MatchState.COMPLETED || match.startTime > new Date()) {
         throw new ConflictException('Trận đấu chưa đủ điều kiện nhận feedback');
       }
       if (!match.participants.some((participant) => participant.userId === dto.recipientUserId)) {
@@ -153,6 +174,12 @@ export class MatchesService {
   private requireOpenForAcceptance(status: MatchState) {
     if (status !== MatchState.OPEN) {
       throw new ConflictException('Trận đấu không ở trạng thái cho phép nhận thêm thành viên');
+    }
+  }
+
+  private requireFutureStart(startTime: Date | undefined) {
+    if (startTime && startTime <= new Date()) {
+      throw new ConflictException('This match has already started');
     }
   }
 
@@ -215,6 +242,9 @@ export class MatchesService {
   async createFromBooking(hostUserId: number, bookingId: number, dto: CreateOpenMatchDto) {
     this.assertBookingId(bookingId);
     this.validatePlayerCount(dto.neededPlayers, 1, 2147483646, 'neededPlayers');
+    if ((dto.mode === 'SINGLES' && dto.neededPlayers !== 1) || (dto.mode === 'DOUBLES' && dto.neededPlayers !== 3)) {
+      throw new BadRequestException('Capacity must match singles or doubles format');
+    }
     try {
       return await this.prisma.$transaction(async (tx) => {
         const booking = await this.requireHostBooking(tx, bookingId, hostUserId);
@@ -227,6 +257,7 @@ export class MatchesService {
         const match = await tx.match.create({
           data: {
             title: `Open Match - ${booking.court.facility.name}`,
+            description: dto.description,
             privacy: MatchPrivacy.OPEN,
             status: MatchState.OPEN,
             hostId: hostUserId,
@@ -254,17 +285,37 @@ export class MatchesService {
   }
 
   async findAll(query: QueryOpenMatchDto) {
+    const geo = [query.latitude, query.longitude, query.distanceKm];
+    if (geo.some((v) => v !== undefined) && geo.some((v) => v === undefined)) throw new BadRequestException('Latitude, longitude and distance are required together');
+    let dateStart: Date | undefined;
+    let dateEnd: Date | undefined;
+    if (query.date) {
+      dateStart = new Date(`${query.date}T00:00:00+07:00`);
+      if (!Number.isFinite(dateStart.getTime()) || new Date(dateStart.getTime() + 7 * 3600000).toISOString().slice(0, 10) !== query.date) throw new BadRequestException('Invalid date');
+      dateEnd = new Date(dateStart.getTime() + 86400000);
+    }
     const matches = await this.prisma.match.findMany({
       where: {
         privacy: MatchPrivacy.OPEN,
         status: MatchState.OPEN,
+        startTime: { gt: new Date(), ...(dateStart && { gte: dateStart }), ...(dateEnd && { lt: dateEnd }) },
+        ...(query.skill !== undefined && { minSkillLevel: { lte: query.skill }, maxSkillLevel: { gte: query.skill } }),
         ...(query.mode && { mode: query.mode }),
         ...(query.purpose && { purpose: query.purpose }),
       },
       select: MATCH_PUBLIC_SELECT,
       orderBy: { createdAt: 'desc' },
     });
-    return matches.map(toMatchResponse);
+    return matches.map(toMatchResponse).filter((match) => {
+      if (query.distanceKm === undefined) return true;
+      const facility = match.booking?.court.facility;
+      if (facility?.latitude == null || facility.longitude == null) return false;
+      const rad = Math.PI / 180;
+      const dLat = (facility.latitude - query.latitude!) * rad;
+      const dLon = (facility.longitude - query.longitude!) * rad;
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(query.latitude! * rad) * Math.cos(facility.latitude * rad) * Math.sin(dLon / 2) ** 2;
+      return 12742 * Math.asin(Math.min(1, Math.sqrt(h))) <= query.distanceKm;
+    });
   }
 
   async findOneOrThrow(id: number) {
@@ -371,6 +422,22 @@ export class MatchesService {
     return matches.map(toMatchResponse);
   }
 
+  async findMyMatches(userId: number) {
+    const matches = await this.prisma.match.findMany({
+      where: { privacy: MatchPrivacy.OPEN, OR: [{ hostId: userId }, { participants: { some: { userId } } }] },
+      select: { ...MATCH_PUBLIC_SELECT, participants: { where: { userId }, select: { status: true } } },
+      orderBy: { startTime: 'asc' },
+    });
+    const hostedIds = matches.filter((match) => match.hostId === userId).map((match) => match.id);
+    const pending = hostedIds.length ? await this.prisma.matchParticipant.groupBy({
+      by: ['matchId'], where: { matchId: { in: hostedIds }, status: ParticipantStatus.REQUESTED }, _count: { _all: true },
+    }) : [];
+    const counts = new Map(pending.map((entry) => [entry.matchId, entry._count._all]));
+    return matches.map(({ participants, ...match }) => ({ ...toMatchResponse(match), myStatus: participants[0]?.status ?? null,
+      ...(match.hostId === userId ? { pendingRequestCount: counts.get(match.id) ?? 0 } : {}),
+    }));
+  }
+
   // 3. Xem chi tiết Match
   async findOne(id: number, actor: MatchActor) {
     const access = await this.prisma.match.findUnique({
@@ -413,8 +480,8 @@ export class MatchesService {
       if (!exists) throw new NotFoundException('Không tìm thấy trận đấu');
       throw new ForbiddenException('Bạn không có quyền xem trận đấu này');
     }
-    if (select === MATCH_INVITATION_SELECT) return match;
-    return toMatchResponse(match);
+    if (select === MATCH_INVITATION_SELECT) return { ...match, myStatus: membership ?? null };
+    return { ...toMatchResponse(match), myStatus: membership ?? null };
   }
 
   private async getMatchForParticipation(id: number, db: Prisma.TransactionClient = this.prisma) {
@@ -516,20 +583,49 @@ export class MatchesService {
         throw new ForbiddenException('Chỉ có Host mới có quyền gửi lời mời');
       }
       this.requireNotCompleted(match.status);
+      this.requireOpenForAcceptance(match.status);
+      this.requireFutureStart(match.startTime);
+      if (targetUserId === hostUserId) throw new ConflictException('Organizer cannot invite themselves');
+      if (match.privacy === MatchPrivacy.OPEN) {
+        const profile = (userId: number) => db.playerProfile.findFirst({
+          where: { userId, locationSharingEnabled: true, user: { role: { name: 'PLAYER' } } },
+          select: invitationProfileSelect,
+        });
+        const [host, target] = await Promise.all([profile(hostUserId), profile(targetUserId)]);
+        if (!eligibleNearbyInvite(host, target, match.minSkillLevel, match.maxSkillLevel)) {
+          throw new ForbiddenException('Player is not eligible for nearby invitations');
+        }
+      } else {
+        const target = await db.user.findFirst({
+          where: { id: targetUserId, role: { name: 'PLAYER' } }, select: { id: true },
+        });
+        if (!target) throw new NotFoundException('Player not found');
+      }
+      if (match.participants.filter((participant) => participant.status === ParticipantStatus.ACCEPTED).length >= match.maxPlayers) {
+        throw new ConflictException('This match is full');
+      }
 
       const existing = match.participants.find((p: any) => p.userId === targetUserId);
       if (existing) {
+        if (existing.status === ParticipantStatus.INVITED) {
+          throw new ConflictException('An invitation is already pending');
+        }
+        if (existing.status === ParticipantStatus.REQUESTED) {
+          throw new ConflictException('Bạn đã gửi yêu cầu tham gia trận này');
+        }
         if (existing.status === ParticipantStatus.ACCEPTED) {
           throw new BadRequestException('Người chơi này đã tham gia trận');
         }
-        return db.matchParticipant.update({
+        const invitation = await db.matchParticipant.update({
           where: { id: existing.id },
           data: { status: ParticipantStatus.INVITED },
           select: MATCH_PARTICIPANT_MUTATION_SELECT,
         });
+        await db.matchNotification.create({ data: { userId: targetUserId, matchId, kind: 'INVITATION' } });
+        return invitation;
       }
 
-      return db.matchParticipant.create({
+      const invitation = await db.matchParticipant.create({
         data: {
           matchId,
           userId: targetUserId,
@@ -538,6 +634,8 @@ export class MatchesService {
         },
         select: MATCH_PARTICIPANT_MUTATION_SELECT,
       });
+      await db.matchNotification.create({ data: { userId: targetUserId, matchId, kind: 'INVITATION' } });
+      return invitation;
     });
   }
 
@@ -553,6 +651,8 @@ export class MatchesService {
 
       if (!match) throw new NotFoundException('Không tìm thấy trận đấu');
       this.requireNotCompleted(match.status);
+      if (match.hostId === userId) throw new ConflictException('Organizer cannot request to join their own match');
+      this.requireFutureStart(match.startTime);
       if (match.status !== MatchState.OPEN) {
         throw new BadRequestException('Trận đấu này hiện không mở để tham gia');
       }
@@ -568,17 +668,25 @@ export class MatchesService {
       });
 
       if (existing) {
+        if (existing.status === ParticipantStatus.REQUESTED) {
+          throw new ConflictException('A join request is already pending');
+        }
         if (existing.status === ParticipantStatus.ACCEPTED) {
           throw new BadRequestException('Bạn đã là thành viên của trận này');
         }
-        return db.matchParticipant.update({
+        if (existing.status === ParticipantStatus.INVITED) {
+          throw new ConflictException('Respond to the existing invitation instead');
+        }
+        const request = await db.matchParticipant.update({
           where: { id: existing.id },
           data: { status: ParticipantStatus.REQUESTED },
           select: MATCH_PARTICIPANT_MUTATION_SELECT,
         });
+        await db.matchNotification.create({ data: { userId: match.hostId, matchId, kind: 'JOIN_REQUEST' } });
+        return request;
       }
 
-      return db.matchParticipant.create({
+      const request = await db.matchParticipant.create({
         data: {
           matchId,
           userId,
@@ -587,6 +695,8 @@ export class MatchesService {
         },
         select: MATCH_PARTICIPANT_MUTATION_SELECT,
       });
+      await db.matchNotification.create({ data: { userId: match.hostId, matchId, kind: 'JOIN_REQUEST' } });
+      return request;
     });
   }
 
@@ -603,6 +713,7 @@ export class MatchesService {
       }
 
       this.requireOpenForAcceptance(participant.match.status);
+      this.requireFutureStart(participant.match.startTime);
       if (participant.match.participants.length >= participant.match.maxPlayers) {
         throw new BadRequestException('Trận đấu đã đầy người chơi');
       }
@@ -631,6 +742,7 @@ export class MatchesService {
       }
 
       this.requireNotCompleted(participant.match.status);
+      if (participant.match.status === MatchState.CANCELLED) throw new ConflictException('Trận đấu đã bị hủy');
       return db.matchParticipant.update({
         where: { id: participant.id },
         data: { status: ParticipantStatus.REJECTED },
@@ -652,6 +764,7 @@ export class MatchesService {
         throw new ForbiddenException('Chỉ Host mới có quyền duyệt yêu cầu');
       }
       this.requireOpenForAcceptance(match.status);
+      this.requireFutureStart(match.startTime);
       if (match.participants.length >= match.maxPlayers) {
         throw new BadRequestException('Trận đấu đã đủ người chơi');
       }
@@ -671,6 +784,7 @@ export class MatchesService {
       });
 
       await this.checkAndUpdateMatchFullState(matchId, db);
+      await db.matchNotification.create({ data: { userId: applicantUserId, matchId, kind: 'REQUEST_APPROVED' } });
       return updated;
     });
   }
@@ -693,11 +807,13 @@ export class MatchesService {
         throw new BadRequestException('Không tìm thấy yêu cầu tham gia hợp lệ của người này');
       }
 
-      return db.matchParticipant.update({
+      const rejected = await db.matchParticipant.update({
         where: { id: participant.id },
         data: { status: ParticipantStatus.REJECTED },
         select: MATCH_PARTICIPANT_MUTATION_SELECT,
       });
+      await db.matchNotification.create({ data: { userId: applicantUserId, matchId, kind: 'REQUEST_REJECTED' } });
+      return rejected;
     });
   }
 

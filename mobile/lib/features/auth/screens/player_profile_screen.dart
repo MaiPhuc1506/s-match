@@ -17,6 +17,7 @@ import '../widgets/sprint2_presentation.dart';
 import '../../../core/network/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/player_profile_service.dart';
+import '../../match/services/open_match_service.dart';
 import '../../feedback/data/rating_api.dart';
 import '../../feedback/screens/community_rating_screen.dart';
 import '../../feedback/screens/rating_history_screen.dart';
@@ -45,6 +46,86 @@ class PlayerProfileScreen extends StatefulWidget {
 
 class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
   OwnPlayerProfile? _profile;
+  bool? _googleLinked;
+  bool _googleBusy = false;
+
+  Future<void> _loadGoogleLink() async {
+    final session = ApiClient.instance.token;
+    try {
+      final linked = await AuthService.instance.googleLinked();
+      if (mounted && session == ApiClient.instance.token) {
+        setState(() => _googleLinked = linked);
+      }
+    } catch (_) {
+      if (mounted && session == ApiClient.instance.token) {
+        setState(() => _googleLinked = null);
+      }
+    }
+  }
+
+  Future<void> _linkGoogle() async {
+    if (_googleBusy) return;
+    setState(() => _googleBusy = true);
+    final session = ApiClient.instance.token;
+    final result = await AuthService.instance.linkGoogleAccount();
+    if (!mounted) return;
+    if (session == ApiClient.instance.token && result != null) {
+      if (result.isSuccess) setState(() => _googleLinked = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.isSuccess
+                ? 'Google account linked.'
+                : result.errorMessage ?? 'Unable to link Google.',
+          ),
+        ),
+      );
+    }
+    if (mounted) setState(() => _googleBusy = false);
+  }
+
+  int? _matchCount;
+  int? _completedCount;
+  String? _preferredMode;
+  String get _skillLabel {
+    final value = _profile?.skillLevel;
+    if (value == null || value.isEmpty) return 'Not assessed';
+    final label = value[0].toUpperCase() + value.substring(1).toLowerCase();
+    final score = _profile?.overallSkillScore;
+    return score == null ? label : '$label · ${score.toStringAsFixed(1)}/5';
+  }
+
+  Future<void> _loadActivity() async {
+    final client = ApiClient.instance;
+    final session = client.token;
+    try {
+      final matches = await OpenMatchService().mine();
+      if (!mounted || client.token != session) return;
+      final accepted = matches
+          .where((m) => m['myStatus'] == 'ACCEPTED')
+          .toList();
+      setState(() {
+        _matchCount = accepted.length;
+        _completedCount = accepted
+            .where((m) => m['status'] == 'COMPLETED')
+            .length;
+      });
+    } catch (_) {
+      // Unavailable activity stays unknown; never substitute sample counts.
+    }
+    try {
+      final response = await client.dio.get('/preferences/me');
+      if (!mounted || client.token != session) return;
+      setState(
+        () => _preferredMode = response.data is Map
+            ? response.data['preferredMode'] as String?
+            : null,
+      );
+    } catch (_) {
+      // Missing preferences are displayed as unset.
+    }
+  }
+
   int _profileRequestId = 0;
   RatingSummary? _rating;
   String? _ratingError;
@@ -92,6 +173,8 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
     if (ApiClient.instance.token != null) {
       _loadProfile();
       _loadRating();
+      _loadActivity();
+      _loadGoogleLink();
     }
     ratingRevision.addListener(_loadRating);
   }
@@ -300,6 +383,40 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
         const SizedBox(height: 10),
         _buildHistoryLinks(context),
         const SizedBox(height: 24),
+        if (ApiClient.instance.token != null) ...[
+          Material(
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Color(0xFFD6DCD8)),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.link, color: _primary),
+              title: Text(
+                _googleLinked == true
+                    ? 'Google Account Linked'
+                    : 'Link Google Account',
+                style: _textStyle(
+                  size: 15,
+                  lineHeight: 21,
+                  weight: FontWeight.w600,
+                ),
+              ),
+              subtitle: _googleLinked == null
+                  ? const Text('Check account status')
+                  : null,
+              trailing: _googleBusy
+                  ? const CircularProgressIndicator()
+                  : const Icon(Icons.chevron_right_rounded, color: _primary),
+              onTap: _googleBusy || _googleLinked == true
+                  ? null
+                  : _googleLinked == null
+                  ? _loadGoogleLink
+                  : _linkGoogle,
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         _buildLogoutButton(context),
         const SizedBox(height: 16),
       ],
@@ -377,7 +494,9 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Intermediate',
+                            ApiClient.instance.token == null
+                                ? 'Intermediate'
+                                : _skillLabel,
                             style: _textStyle(
                               size: 12,
                               lineHeight: 17,
@@ -410,7 +529,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '●  Da Nang, Vietnam',
+                  ApiClient.instance.token == null ? '●  Da Nang, Vietnam' : '',
                   style: _textStyle(
                     size: 12,
                     lineHeight: 17,
@@ -546,12 +665,19 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Expanded(
-                child: _StatItem(value: '24', label: 'Matches'),
+              Expanded(
+                child: _StatItem(
+                  value: ApiClient.instance.token == null
+                      ? '24'
+                      : _matchCount?.toString() ?? '—',
+                  label: 'Matches',
+                ),
               ),
               Expanded(
                 child: _StatItem(
-                  value: '18',
+                  value: ApiClient.instance.token == null
+                      ? '18'
+                      : _completedCount?.toString() ?? '—',
                   label: 'Completed',
                   onTap: () {
                     Navigator.of(context).push(
@@ -594,6 +720,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
   }
 
   Widget _buildSkillOverview(BuildContext context) {
+    final scores = ProfileSkillRadar.assessedValues(_profile?.skill);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _navigateDissolve(context, const SkillAssessmentScreen()),
@@ -640,10 +767,27 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
             ),
             SizedBox(
               height: 190 - (PlayerBottomNavigation.heightFor(context) - 84),
-              child: const FittedBox(
-                fit: BoxFit.contain,
-                child: ProfileSkillRadar(refined: true),
-              ),
+              child: ApiClient.instance.token == null
+                  ? const FittedBox(
+                      fit: BoxFit.contain,
+                      child: ProfileSkillRadar(refined: true),
+                    )
+                  : scores != null
+                  ? FittedBox(
+                      fit: BoxFit.contain,
+                      child: ProfileSkillRadar(refined: true, values: scores),
+                    )
+                  : Center(
+                      child: Text(
+                        'No skill assessment recorded yet.',
+                        style: _textStyle(
+                          size: 14,
+                          lineHeight: 20,
+                          weight: FontWeight.w400,
+                          color: _textSecondary,
+                        ),
+                      ),
+                    ),
             ),
           ],
         ),
@@ -686,22 +830,25 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                   ),
                 ),
               ),
-              const Positioned(
+              Positioned(
                 left: 68,
                 top: 38,
                 child: Row(
                   children: [
                     _StyleChip(
-                      label: 'Doubles',
+                      label: ApiClient.instance.token == null
+                          ? 'Doubles'
+                          : _preferredMode ?? 'Not set',
                       background: _primary,
                       foreground: Colors.white,
                     ),
                     SizedBox(width: 8),
-                    _StyleChip(
-                      label: 'Offensive',
-                      background: Color(0xFFF6DEDC),
-                      foreground: Color(0xFF924A45),
-                    ),
+                    if (ApiClient.instance.token == null)
+                      const _StyleChip(
+                        label: 'Offensive',
+                        background: Color(0xFFF6DEDC),
+                        foreground: Color(0xFF924A45),
+                      ),
                   ],
                 ),
               ),

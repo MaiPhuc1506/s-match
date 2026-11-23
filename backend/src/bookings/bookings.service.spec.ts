@@ -35,6 +35,7 @@ describe('BookingsService', () => {
         findUnique: jest.fn(),
       },
       facility: { findUnique: jest.fn() },
+      match: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       timeSlot: { findMany: jest.fn().mockResolvedValue([{ startTime: '15:00', endTime: '17:00', price: 160000 }]) },
       booking: {
         create: jest.fn(),
@@ -459,6 +460,14 @@ describe('BookingsService', () => {
         }),
       );
       expect(result).toEqual(updated);
+    });
+
+    it('cancels an attached active match in the same transaction', async () => {
+      prisma.booking.findUnique.mockResolvedValue({ ...activeBooking, match: { id: 21, status: 'OPEN' } });
+      prisma.booking.update.mockResolvedValue({ ...activeBooking, status: BookingStatus.CANCELLED });
+      await service.cancel(10, 5, 'PLAYER');
+      expect(prisma.match.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 21 }), data: { status: 'CANCELLED' } }));
+      expect(prisma.$transaction).toHaveBeenCalled();
     });
   });
 });

@@ -11,10 +11,13 @@ import '../../court_map/widgets/facility_services.dart';
 
 import '../../../core/theme/app_motion.dart';
 import '../booking_theme.dart';
+import 'booking_month_picker.dart';
 import '../services/live_booking_service.dart';
 import '../screens/booking_summary_screen.dart';
 import '../screens/booking_success_screen.dart';
 import '../screens/booking_history_screen.dart';
+import '../../match/screens/live_open_match_screen.dart';
+import '../../match/screens/open_match_setup_screen.dart';
 
 /// Live content of the existing schedule screen; preview content is preserved.
 class LiveFacilitySchedule extends StatefulWidget {
@@ -25,12 +28,16 @@ class LiveFacilitySchedule extends StatefulWidget {
     this.service,
     this.now,
     this.demo = false,
+    this.compact = false,
+    this.onViewFacility,
     this.onViewBookings,
     this.onBackHome,
   });
   final int facilityId;
   final int? initialCourtId;
   final bool demo;
+  final bool compact;
+  final VoidCallback? onViewFacility;
   final VoidCallback? onViewBookings;
   final VoidCallback? onBackHome;
   final LiveBookingService? service;
@@ -194,7 +201,9 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
           .where((c) => c['status'] == 'ACTIVE')
           .toList();
       if (courtId != null && !available.any((c) => c['id'] == courtId)) {
-        throw StateError('Sân đã chọn không còn hoạt động tại cơ sở này.');
+        throw StateError(
+          'The selected court is no longer active at this facility.',
+        );
       }
       final id = available.any((c) => c['id'] == courtId)
           ? courtId
@@ -233,49 +242,60 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
 
   Future<void> pickDate() async {
     final today = DateUtils.dateOnly(now.toUtc().add(const Duration(hours: 7)));
-    var picked = date.isBefore(today) ? today : date;
-    final result = await showCupertinoModalPopup<DateTime>(
+    final result = await showBookingMonthPicker(
       context: context,
-      builder: (sheetContext) => Container(
-        height: 330,
-        color: BookingColors.background,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  CupertinoButton(
-                    onPressed: () => Navigator.pop(sheetContext),
-                    child: const Text('Cancel'),
-                  ),
-                  CupertinoButton(
-                    onPressed: () => Navigator.pop(sheetContext, picked),
-                    child: const Text('Done'),
-                  ),
-                ],
-              ),
-              Expanded(
-                child: CupertinoDatePicker(
-                  mode: CupertinoDatePickerMode.date,
-                  initialDateTime: DateUtils.dateOnly(picked),
-                  minimumDate: today,
-                  maximumDate: today.add(const Duration(days: 365)),
-                  onDateTimeChanged: (value) => picked = value,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      selectedDate: date.isBefore(today) ? today : date,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 365)),
     );
     if (result == null || !mounted) return;
     date = result;
     await load();
   }
 
-  Future<void> review() async {
+  Future<void> chooseBookingType() async {
+    if (widget.demo) {
+      await review();
+      return;
+    }
+    final openMatch = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('What would you like to do?'),
+        content: const Text('Confirm the court booking first.'),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Normal Booking',
+              style: BookingTypography.jakarta(
+                fontSize: 14,
+                color: BookingColors.primary,
+              ),
+            ),
+          ),
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Organize Open Match',
+              style: BookingTypography.jakarta(
+                fontSize: 14,
+                color: BookingColors.primary,
+              ),
+            ),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (openMatch != null && mounted) await review(organizeMatch: openMatch);
+  }
+
+  Future<void> review({bool organizeMatch = false}) async {
     final slot = selected;
     final id = courtId;
     final f = facility;
@@ -357,6 +377,29 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                         endTime: end,
                       );
                       if (!summaryContext.mounted) return;
+                      if (organizeMatch) {
+                        final bookingId = int.tryParse(
+                          booking['id'].toString(),
+                        );
+                        if (bookingId == null || bookingId <= 0) {
+                          update(() {
+                            submitting = false;
+                            submitError = 'Booking was created, but its ID is unavailable. Check booking history.';
+                          });
+                          return;
+                        }
+                        Navigator.of(summaryContext).pushReplacement(
+                          AppMotion.route<void>(
+                            OpenMatchSetupScreen(
+                              bookingId: bookingId,
+                              courtLabel: '${f['name']} · ${court['name']}',
+                              timeLabel:
+                                  '$day · ${slot['startTime']}–${slot['endTime']}',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
                       Navigator.of(summaryContext).pushReplacement(
                         AppMotion.route<void>(
                           BookingSuccessScreen(
@@ -389,10 +432,11 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                       );
                     } catch (e) {
                       if (!summaryContext.mounted) return;
-                      String message = 'Không đặt được sân. Vui lòng thử lại.';
+                      String message =
+                          'Unable to book this court. Please try again.';
                       if (e is StateError) message = e.message.toString();
                       if (e is DioException && e.response == null) {
-                        message = 'Chưa nhận được xác nhận từ máy chủ. Hãy kiểm tra lịch sử đặt sân trước khi thử lại.';
+                        message = 'No confirmation received from the server. Check booking history before trying again.';
                       }
                       if (e is DioException && e.response?.statusCode == 409) {
                         conflicted = true;
@@ -469,7 +513,7 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                 ),
                 for (final court in courts)
                   SizedBox(
-                    height: 44,
+                    height: 48,
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
@@ -550,6 +594,7 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                 final slot = matches.length == 1 ? matches.single : null;
                 final booked =
                     slot?['status'] == 'BOOKED' || slot?['isBooked'] == true;
+                final openMatchId = (slot?['openMatchId'] as num?)?.toInt();
                 final event = slot?['status'] == 'EVENT';
                 final available =
                     slot != null &&
@@ -568,6 +613,8 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                     selected != null;
                 final color = isSelected
                     ? BookingColors.primary
+                    : openMatchId != null
+                    ? const Color(0xFFE7DCF4)
                     : booked
                     ? BookingColors.slotBooked
                     : event
@@ -578,7 +625,7 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                     ? Colors.transparent
                     : BookingColors.slotLocked;
                 return SizedBox(
-                  height: 44,
+                  height: 48,
                   width: cellWidth,
                   child: Padding(
                     padding: EdgeInsets.symmetric(
@@ -587,11 +634,13 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                     ),
                     child: Semantics(
                       button: true,
-                      enabled: canSelect,
+                      enabled: canSelect || openMatchId != null,
                       selected: isSelected,
                       label:
-                          '${court['name']} · $time · ${booked
-                              ? 'Booked'
+                          '${court['name']} · $time · ${openMatchId != null
+                              ? 'Open Match, booked'
+                              : booked
+                              ? ('Booked')
                               : past
                               ? 'Past; no booking'
                               : event
@@ -603,7 +652,18 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                               : 'Unavailable'}',
                       child: InkWell(
                         key: ValueKey('slot-$id-$time'),
-                        onTap: canSelect
+                        onTap: openMatchId != null
+                            ? () async {
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => LiveOpenMatchScreen(
+                                      matchId: openMatchId,
+                                    ),
+                                  ),
+                                );
+                                if (mounted) await load();
+                              }
+                            : canSelect
                             ? () => setState(() {
                                 selectionExpiry?.cancel();
                                 final previous = selected;
@@ -684,7 +744,7 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                             : null,
                         borderRadius: BorderRadius.circular(8),
                         child: Container(
-                          height: 40,
+                          height: 44,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             color: color,
@@ -715,14 +775,17 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
                               : available
                               ? const SizedBox.shrink()
                               : Text(
-                                  booked
-                                      ? 'Booked'
+                                  openMatchId != null
+                                      ? 'Match\n${slot?['openMatchPlayers'] ?? '–'}/${slot?['openMatchCapacity'] ?? '–'}'
+                                      : booked
+                                      ? ('Booked')
                                       : event
-                                      ? 'Event'
+                                      ? ('Event')
                                       : slot == null
                                       ? '—'
-                                      : 'Locked',
-                                  maxLines: 1,
+                                      : ('Locked'),
+                                  maxLines: 2,
+                                  textAlign: TextAlign.center,
                                   style: BookingTypography.jakarta(
                                     fontSize: 9,
                                     color: isSelected
@@ -749,6 +812,7 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
       _legendItem('Available', Colors.white),
       _legendItem('Selected', BookingColors.primary),
       _legendItem('Booked', BookingColors.slotBooked),
+      _legendItem('Open Match', const Color(0xFFE7DCF4)),
       _legendItem('Locked', BookingColors.slotLocked),
       _legendItem('Event', BookingColors.slotEvent),
     ],
@@ -765,6 +829,8 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
           borderRadius: BorderRadius.circular(4),
           border: color == Colors.white
               ? Border.all(color: BookingColors.borderStat)
+              : widget.compact
+              ? Border.all(color: Colors.white38)
               : null,
         ),
       ),
@@ -773,7 +839,7 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
         label,
         style: BookingTypography.jakarta(
           fontSize: 11,
-          color: BookingColors.textSecondary,
+          color: widget.compact ? Colors.white : BookingColors.textSecondary,
         ),
       ),
     ],
@@ -808,230 +874,506 @@ class _LiveFacilityScheduleState extends State<LiveFacilitySchedule> {
     ),
   );
 
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: BookingColors.background,
-    appBar: AppBar(
-      centerTitle: true,
-      backgroundColor: BookingColors.background,
-      title: const Text('Booking Schedule'),
-      actions: [
-        IconButton(
-          tooltip: 'Refresh availability',
-          onPressed: loading ? null : load,
-          icon: const Icon(
-            CupertinoIcons.refresh,
+  DateTime get _firstDay =>
+      DateUtils.dateOnly(now.toUtc().add(const Duration(hours: 7)));
+  DateTime get _lastDay => _firstDay.add(const Duration(days: 365));
+  bool _validDay(DateTime day) =>
+      !day.isBefore(_firstDay) && !day.isAfter(_lastDay);
+  Future<void> _selectDay(DateTime day) async {
+    if (!_validDay(day) || DateUtils.isSameDay(day, date)) return;
+    date = day;
+    await load();
+  }
+
+  Widget _calendarSchedule() {
+    final day = DateUtils.dateOnly(date);
+    final week = day.subtract(Duration(days: day.weekday - 1));
+    return Material(
+      key: const Key('booking-schedule-content'),
+      color: BookingColors.background,
+      borderRadius: BorderRadius.zero,
+      clipBehavior: Clip.hardEdge,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             color: BookingColors.primary,
-          ),
-        ),
-      ],
-      titleTextStyle: BookingTypography.jakarta(
-        fontSize: 18,
-        fontWeight: FontWeight.w600,
-      ),
-      leading: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: () => Navigator.of(context).maybePop(),
-        child: const Icon(
-          CupertinoIcons.chevron_left,
-          color: BookingColors.primary,
-          size: 20,
-        ),
-      ),
-    ),
-    bottomNavigationBar: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (selected != null)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: BookingColors.borderStat),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.schedule,
-                      size: 18,
-                      color: BookingColors.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${courts.firstWhere((court) => court['id'] == courtId)['name']} · ${selected!['startTime']}–${selected!['endTime']}',
-                        maxLines: 2,
-                        style: BookingTypography.jakarta(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      '${facilityPrice(selected!['price'] as num)} VND',
-                      style: BookingTypography.jakarta(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: BookingColors.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            if (selected == null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'Choose consecutive time slots on one court.',
-                  style: BookingTypography.jakarta(
-                    fontSize: 11,
-                    color: BookingColors.textSecondary,
-                  ),
-                ),
-              ),
-            const SizedBox(height: 8),
-            FilledButton(
-              key: const Key('booking-continue'),
-              onPressed: selected == null || loading || !selectable(selected!)
-                  ? null
-                  : review,
-              style: FilledButton.styleFrom(
-                backgroundColor: BookingColors.primary,
-                minimumSize: const Size.fromHeight(52),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(26),
-                ),
-              ),
-              child: const Text('Continue'),
-            ),
-          ],
-        ),
-      ),
-    ),
-    body: loading
-        ? const Center(child: CupertinoActivityIndicator())
-        : error != null
-        ? Center(
-            child: TextButton(onPressed: load, child: Text(error!)),
-          )
-        : RefreshIndicator(
-            onRefresh: load,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (photo != null) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: SizedBox(height: 74, child: FacilityPhoto(photo!)),
-                  ),
-                  const SizedBox(height: 10),
-                ],
-                Text(
-                  facility?['name']?.toString() ?? '',
-                  style: BookingTypography.jakarta(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  facility?['address']?.toString() ?? '',
-                  style: BookingTypography.jakarta(
-                    fontSize: 12,
-                    color: BookingColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 12),
                 Row(
                   children: [
-                    _stat(
-                      '${courts.length}',
-                      courts.every((c) => c['courtType'] == 'INDOOR')
-                          ? 'Indoor courts'
-                          : 'Active courts',
-                    ),
-                    const SizedBox(width: 8),
-                    if (facility != null) ...[
-                      _stat(
-                        CourtLocation.fromJson(facility!).operatingHoursText ??
-                            '—',
-                        'Opening hours',
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      child: const Icon(
+                        CupertinoIcons.chevron_left,
+                        size: 20,
+                        color: Colors.white,
                       ),
-                      const SizedBox(width: 8),
-                    ],
-                    _stat(bookingUnitLabel, 'Per booking unit'),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'Booking Schedule',
+                        style: BookingTypography.jakarta(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: CupertinoButton(
-                    onPressed: pickDate,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 13,
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          CupertinoIcons.calendar,
-                          size: 20,
-                          color: BookingColors.primary,
+                Row(
+                  children: [
+                    Expanded(
+                      child: CupertinoButton(
+                        key: const Key('booking-month-trigger'),
+                        alignment: Alignment.centerLeft,
+                        padding: EdgeInsets.zero,
+                        onPressed: loading ? null : pickDate,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                bookingMonthLabel(date),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: BookingTypography.jakarta(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(
+                              CupertinoIcons.chevron_down,
+                              size: 12,
+                              color: Colors.white,
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            dateLabel,
-                            style: BookingTypography.jakarta(fontSize: 12),
-                          ),
-                        ),
-                        Text(
-                          isToday ? 'Today' : 'Change',
-                          style: BookingTypography.jakarta(
-                            fontSize: 11,
-                            color: BookingColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _grid(),
-                const SizedBox(height: 12),
-                _legend(),
-                if (isToday)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(
-                      'Past hours cannot be booked. Times are shown in Vietnam time (UTC+7).',
-                      style: BookingTypography.jakarta(
-                        fontSize: 11,
-                        color: BookingColors.textSecondary,
                       ),
                     ),
+                    for (final direction in [-1, 1])
+                      CupertinoButton(
+                        key: ValueKey('booking-week-$direction'),
+                        padding: EdgeInsets.zero,
+                        onPressed:
+                            loading ||
+                                !_validDay(
+                                  day.add(Duration(days: 7 * direction)),
+                                )
+                            ? null
+                            : () => _selectDay(
+                                day.add(Duration(days: 7 * direction)),
+                              ),
+                        child: Icon(
+                          direction < 0
+                              ? CupertinoIcons.chevron_left
+                              : CupertinoIcons.chevron_right,
+                          size: 16,
+                          color:
+                              _validDay(day.add(Duration(days: 7 * direction)))
+                              ? Colors.white
+                              : Colors.white38,
+                        ),
+                      ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    for (var i = 0; i < 7; i++)
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(right: i == 6 ? 0 : 4),
+                          child: _weekDay(week.add(Duration(days: i))),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _legend(),
+                CupertinoButton(
+                  padding: const EdgeInsets.only(top: 8),
+                  alignment: Alignment.centerLeft,
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    widget.onViewFacility?.call();
+                  },
+                  child: Text(
+                    'View facility & pricing',
+                    style:
+                        BookingTypography.jakarta(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: BookingColors.cardBg,
+                        ).copyWith(
+                          decoration: TextDecoration.underline,
+                          decorationColor: BookingColors.cardBg,
+                        ),
                   ),
-                if (widget.demo)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 12),
-                    child: Text(
-                      'Demo only. This booking is stored in this app session and does not reserve a real court.',
-                    ),
-                  ),
+                ),
               ],
             ),
           ),
-  );
+          Expanded(
+            child: loading
+                ? const Center(child: CupertinoActivityIndicator())
+                : error != null
+                ? Center(
+                    child: CupertinoButton(
+                      onPressed: load,
+                      child: const Text('Unable to load schedule. Retry'),
+                    ),
+                  )
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
+                    child: _grid(),
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (selected != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      '${courts.firstWhere((court) => court['id'] == courtId)['name']} · ${selected!['startTime']}–${selected!['endTime']} · ${facilityPrice(selected!['price'] as num)} VND',
+                      style: BookingTypography.jakarta(
+                        fontSize: 12,
+                        color: BookingColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                SizedBox(
+                  width: double.infinity,
+                  child: CupertinoButton(
+                    key: const Key('booking-continue'),
+                    color: BookingColors.primary,
+                    disabledColor: BookingColors.scheduleDisabled,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    borderRadius: BorderRadius.circular(20),
+                    onPressed:
+                        selected == null || loading || !selectable(selected!)
+                        ? null
+                        : chooseBookingType,
+                    child: Text(
+                      'Continue',
+                      key: ValueKey(
+                        selected == null || loading || !selectable(selected!),
+                      ),
+                      style: BookingTypography.jakarta(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color:
+                            selected == null ||
+                                loading ||
+                                !selectable(selected!)
+                            ? BookingColors.textSecondary
+                            : BookingColors.cardBg,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _weekDay(DateTime day) {
+    final chosen = DateUtils.isSameDay(date, day);
+    final today = DateUtils.isSameDay(day, _firstDay);
+    final label = today
+        ? 'Today'
+        : const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][day.weekday -
+              1];
+    final color = chosen
+        ? BookingColors.primary
+        : _validDay(day)
+        ? Colors.white
+        : Colors.white38;
+    Widget line(String value, double size) => SizedBox(
+      height: 15,
+      width: double.infinity,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          value,
+          key: ValueKey('$value-${color.toARGB32()}'),
+          softWrap: false,
+          style: BookingTypography.jakarta(
+            fontSize: size,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ),
+    );
+    return Semantics(
+      selected: chosen,
+      child: CupertinoButton(
+        key: ValueKey('booking-week-day-${day.year}-${day.month}-${day.day}'),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+        minimumSize: const Size(44, 52),
+        color: chosen
+            ? BookingColors.scheduleMint
+            : BookingColors.primaryPressed,
+        borderRadius: BorderRadius.circular(11),
+        onPressed: loading || !_validDay(day) ? null : () => _selectDay(day),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            line(label, today ? 9 : 11),
+            const SizedBox(height: 2),
+            line('${day.day}/${day.month}', 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.compact
+      ? _calendarSchedule()
+      : Scaffold(
+          backgroundColor: BookingColors.background,
+          appBar: AppBar(
+            centerTitle: true,
+            backgroundColor: BookingColors.background,
+            title: const Text('Booking Schedule'),
+            actions: [
+              IconButton(
+                tooltip: 'Refresh availability',
+                onPressed: loading ? null : load,
+                icon: const Icon(
+                  CupertinoIcons.refresh,
+                  color: BookingColors.primary,
+                ),
+              ),
+            ],
+            titleTextStyle: BookingTypography.jakarta(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+            leading: CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () => Navigator.of(context).maybePop(),
+              child: const Icon(
+                CupertinoIcons.chevron_left,
+                color: BookingColors.primary,
+                size: 20,
+              ),
+            ),
+          ),
+          bottomNavigationBar: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (selected != null)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: BookingColors.borderStat),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.schedule,
+                            size: 18,
+                            color: BookingColors.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${courts.firstWhere((court) => court['id'] == courtId)['name']} · ${selected!['startTime']}–${selected!['endTime']}',
+                              maxLines: 2,
+                              style: BookingTypography.jakarta(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '${facilityPrice(selected!['price'] as num)} VND',
+                            style: BookingTypography.jakarta(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: BookingColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (selected == null)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Choose consecutive time slots on one court.',
+                        style: BookingTypography.jakarta(
+                          fontSize: 11,
+                          color: BookingColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    key: const Key('booking-continue'),
+                    onPressed:
+                        selected == null || loading || !selectable(selected!)
+                        ? null
+                        : chooseBookingType,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: BookingColors.primary,
+                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(26),
+                      ),
+                    ),
+                    child: const Text('Continue'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          body: loading
+              ? const Center(child: CupertinoActivityIndicator())
+              : error != null
+              ? Center(
+                  child: TextButton(onPressed: load, child: Text(error!)),
+                )
+              : RefreshIndicator(
+                  onRefresh: load,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                    children: [
+                      if (photo != null) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: SizedBox(
+                            height: 74,
+                            child: FacilityPhoto(photo!),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      Text(
+                        facility?['name']?.toString() ?? '',
+                        style: BookingTypography.jakarta(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        facility?['address']?.toString() ?? '',
+                        style: BookingTypography.jakarta(
+                          fontSize: 12,
+                          color: BookingColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          _stat(
+                            '${courts.length}',
+                            courts.every((c) => c['courtType'] == 'INDOOR')
+                                ? 'Indoor courts'
+                                : 'Active courts',
+                          ),
+                          const SizedBox(width: 8),
+                          if (facility != null) ...[
+                            _stat(
+                              CourtLocation.fromJson(facility!)
+                                      .operatingHoursText ??
+                                  '—',
+                              'Opening hours',
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          _stat(bookingUnitLabel, 'Per booking unit'),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: CupertinoButton(
+                          onPressed: pickDate,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 13,
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                CupertinoIcons.calendar,
+                                size: 20,
+                                color: BookingColors.primary,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  dateLabel,
+                                  style: BookingTypography.jakarta(
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                isToday ? 'Today' : 'Change',
+                                style: BookingTypography.jakarta(
+                                  fontSize: 11,
+                                  color: BookingColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _grid(),
+                      const SizedBox(height: 12),
+                      _legend(),
+                      if (isToday)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Text(
+                            'Times are shown in Vietnam time (UTC+7).',
+                            style: BookingTypography.jakarta(
+                              fontSize: 11,
+                              color: BookingColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      if (widget.demo)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 12),
+                          child: Text(
+                            'Demo only. This booking is stored in this app session and does not reserve a real court.',
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+        );
 }

@@ -95,8 +95,8 @@ describe('SMM-34 Feedback HTTP (real guard/service, mock Prisma)', () => {
     safeError(await send(), 409);
     expect(prisma.feedback.create).not.toHaveBeenCalled();
   });
-  it('rejects a future endTime', async () => {
-    fixture.privateMatch.endTime = new Date(Date.now() + 60000);
+  it('rejects a future startTime', async () => {
+    fixture.privateMatch.startTime = new Date(Date.now() + 60000);
     safeError(await send(), 409);
   });
   it('returns 404 for a missing Match', async () => { safeError(await send(body, 10, Role.PLAYER, '999'), 404); });

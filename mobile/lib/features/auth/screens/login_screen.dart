@@ -68,7 +68,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
     setState(() => _isLoading = false);
+    _handleAuthResult(result);
+  }
 
+  Future<void> _handleGoogleLogin() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    final result = await AuthService.instance.loginWithGoogle();
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    if (result != null) _handleAuthResult(result);
+  }
+
+  void _handleAuthResult(AuthResult result) {
     if (!result.isSuccess) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -201,15 +213,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Google login is planned for a future release.',
-                          ),
-                        ),
-                      );
-                    },
+                    onPressed: _handleGoogleLogin,
                   ),
                   const SizedBox(height: 10),
 

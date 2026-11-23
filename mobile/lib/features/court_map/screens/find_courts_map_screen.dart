@@ -98,9 +98,9 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
       ref.read(nearbyCourtsProvider).asData?.value ?? [];
   bool get _supportsDistance => _allCourts.any((c) => c.distanceKm != null);
   bool _supports(String label) => switch (label) {
-    'Open now' => _allCourts.any((c) => c.isOpen != null),
+    'Open now' => _allCourts.any((c) => c.currentlyOpen != null),
     'Indoor' => _allCourts.any((c) => c.courts.isNotEmpty),
-    r'$' || r'$$' => _allCourts.any((c) => c.priceRange != null),
+    r'$' || r'$$' => _allCourts.any((c) => c.discoveryPriceBand != null),
     _ => true,
   };
   List<CourtLocation> get _courts {
@@ -120,14 +120,14 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
                       double.parse(_selectedDistance.split(' ').first))) {
             return false;
           }
-          if (_openNowSelected && c.isOpen != true) return false;
+          if (_openNowSelected && c.currentlyOpen != true) return false;
           if (_indoorSelected &&
               !c.courts.any((court) => court['courtType'] == 'INDOOR')) {
             return false;
           }
           if ((_price1Selected || _price2Selected) &&
-              !(_price1Selected && c.priceRange == r'$') &&
-              !(_price2Selected && c.priceRange == r'$$')) {
+              !(_price1Selected && c.discoveryPriceBand == r'$') &&
+              !(_price2Selected && c.discoveryPriceBand == r'$$')) {
             return false;
           }
           return true;
@@ -716,14 +716,12 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
                           Expanded(
                             child: OutlinedButton(
                               key: const Key('preview-book'),
-                              onPressed: () => Navigator.of(context).push(
-                                explorationRoute<void>(
-                                  BookingFacilityScheduleScreen(
+                              onPressed: () =>
+                                  BookingFacilityScheduleScreen.open(
+                                    context,
                                     facilityId: f.id,
+                                    onViewFacility: _openCourtPreview,
                                   ),
-                                  '/facility-booking',
-                                ),
-                              ),
                               child: const Text('Book Court'),
                             ),
                           ),
@@ -2142,6 +2140,27 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
               ),
             ],
           ),
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              r'$ ≤ 100,000 VND/hour · $$ > 100,000 VND/hour',
+              style: TextStyle(fontSize: 11, color: Color(0xFF64716D)),
+            ),
+          ),
+          TextButton(
+            onPressed: () => setState(() {
+              _query = '';
+              _filtersApplied = false;
+              _distanceChosen = false;
+              _selectedDistance = '5 km';
+              _openNowSelected = false;
+              _indoorSelected = false;
+              _price1Selected = false;
+              _price2Selected = false;
+              _previewCourt = null;
+            }),
+            child: const Text('Reset filters'),
+          ),
           const SizedBox(height: 16),
 
           // Apply Filters Button (321 × 44, radius 26, #05644F)
@@ -2152,6 +2171,10 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
                 _filtersOpen = false;
                 _filtersApplied = true;
                 _selection = false;
+                if (!_courts.any((court) => court.id == _previewCourt?.id)) {
+                  _previewCourt = null;
+                  _previewExpanded = false;
+                }
               });
             },
             child: Container(
