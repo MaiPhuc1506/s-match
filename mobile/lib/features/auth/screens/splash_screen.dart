@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import '../../../core/theme/app_motion.dart';
@@ -6,6 +7,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile/features/auth/screens/login_screen.dart';
+
+import 'google_onboarding_screen.dart';
+
+import 'package:mobile/features/auth/screens/admin_welcome_screen.dart';
+import 'package:mobile/features/auth/screens/court_owner_welcome_screen.dart';
+import 'package:mobile/features/auth/screens/player_welcome_screen.dart';
+import 'package:mobile/features/auth/services/auth_service.dart';
 import 'package:flutter/services.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -21,6 +29,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   bool _navigated = false;
   bool _assetsPrecached = false;
+  late final Future<bool> _sessionRestore;
 
   // Tổng thời gian chuỗi animation: 4800ms
   static const int _totalDurationMs = 4800;
@@ -50,10 +59,12 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: _totalDurationMs),
     );
 
+    _sessionRestore = AuthService.instance.restoreSession();
+
     _controller.addListener(() {
       final elapsed = _controller.value * _totalDurationMs;
       if (elapsed >= _totalDurationMs && !_navigated) {
-        _navigateToLogin();
+        _navigateNext();
       }
     });
   }
@@ -65,7 +76,7 @@ class _SplashScreenState extends State<SplashScreen>
     if (_assetsPrecached) return;
     _assetsPrecached = true;
     if (AppMotion.reduced(context)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _navigateToLogin());
+      WidgetsBinding.instance.addPostFrameCallback((_) => _navigateNext());
       return;
     }
     _prepareSplash();
@@ -92,14 +103,44 @@ class _SplashScreenState extends State<SplashScreen>
     _controller.forward();
   }
 
-  void _navigateToLogin() {
+  void _navigateNext() {
+    if (_navigated) return;
     _navigated = true;
+    unawaited(_finishNavigation());
+  }
+
+  Future<void> _finishNavigation() async {
+    final restored = await _sessionRestore;
     if (!mounted) return;
+    final role = AuthService.instance.currentUser?['role']
+        ?.toString()
+        .toUpperCase();
+    bool pending = false;
+    if (restored) {
+      try {
+        pending = await AuthService.instance.googleOnboardingPending();
+      } catch (_) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+        return;
+      }
+    }
+    if (!mounted) return;
+    final target = !restored
+        ? const LoginScreen()
+        : pending
+        ? const GoogleOnboardingScreen()
+        : switch (role) {
+            'COURT_OWNER' || 'COURT OWNER' => const CourtOwnerWelcomeScreen(),
+            'ADMIN' => const AdminWelcomeScreen(),
+            _ => const PlayerWelcomeScreen(),
+          };
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: AppMotion.duration(context, 600),
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            const LoginScreen(),
+        pageBuilder: (context, animation, secondaryAnimation) => target,
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -216,7 +257,9 @@ class _SplashScreenState extends State<SplashScreen>
           top: 844 * 0.61,
           child: Container(
             height: 1,
-            color: _paper.withOpacity(audienceOpacity > 0.1 ? 0.14 : 0.02),
+            color: _paper.withValues(
+              alpha: audienceOpacity > 0.1 ? 0.14 : 0.02,
+            ),
           ),
         ),
       ],
@@ -255,7 +298,7 @@ class _SplashScreenState extends State<SplashScreen>
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
-                colors: [_paper.withOpacity(0.14), Colors.transparent],
+                colors: [_paper.withValues(alpha: 0.14), Colors.transparent],
                 stops: const [0.0, 0.70],
               ),
             ),
@@ -575,7 +618,7 @@ class _SplashScreenState extends State<SplashScreen>
                 height: 3,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(2),
-                  color: Colors.white.withOpacity(0.15),
+                  color: Colors.white.withValues(alpha: 0.15),
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(2),
@@ -625,7 +668,7 @@ class _ShuttlecockPainter extends CustomPainter {
       ..close();
 
     final featherPaint = Paint()
-      ..color = featherColor.withOpacity(0.95)
+      ..color = featherColor.withValues(alpha: 0.95)
       ..style = PaintingStyle.fill;
     canvas.drawPath(featherPath, featherPaint);
 

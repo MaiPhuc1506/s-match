@@ -65,7 +65,7 @@ describe('SMM-26 gateway with SMM-28 candidate data', () => {
   it('uses real candidate search and maps backend skills plus request criteria to FastAPI', async () => {
     await expect(gateway.getRecommendedMatches(1, criteria)).resolves.toEqual({
       matchedUsers: [{ userId: '2', matchScore: 90, breakdown: { skill_score: 90, distance_score: 80, time_score: 70, reliability_score: 60, style_score: 50 }, profile: {
-        fullName: 'Fixture player', nickname: null, avatarUrl: null, skillLevel: null,
+        fullName: 'Fixture player', nickname: null, avatarUrl: null, skillLevel: null, playingArea: null,
       } }], totalCandidatesProcessed: 1,
     });
     const payload = http.post.mock.calls[0][1];

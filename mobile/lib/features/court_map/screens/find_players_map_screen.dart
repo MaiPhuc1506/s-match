@@ -13,6 +13,7 @@ import 'find_courts_map_screen.dart';
 import '../../recommendation/models/recommended_player.dart';
 import '../../recommendation/screens/recommendation_list_screen.dart';
 import '../../recommendation/screens/recommended_player_detail_screen.dart';
+import '../../recommendation/widgets/save_discovery_location.dart';
 
 class FindPlayersMapScreen extends StatelessWidget {
   const FindPlayersMapScreen({
@@ -412,6 +413,10 @@ class PlayerDiscoveryOverlayState
                               : 'Could not load nearby players.',
                           onRetry: () => ref.invalidate(nearbyPlayersProvider),
                         ),
+                        if (error is ExplorationLocationRequired)
+                          SaveDiscoveryLocation(
+                            onSaved: () => ref.invalidate(nearbyPlayersProvider),
+                          ),
                       ],
                     ),
                     data: (_) => ListView(

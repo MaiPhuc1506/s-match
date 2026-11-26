@@ -509,7 +509,7 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -564,7 +564,7 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               scrollDirection: Axis.horizontal,
               itemCount: _categories.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
                 final cat = _categories[index];
                 final isSelected = cat == _selectedCategory;
@@ -637,7 +637,9 @@ class _DevScreenExplorerState extends State<DevScreenExplorer> {
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary.withOpacity(0.08),
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.08,
+                                    ),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Icon(

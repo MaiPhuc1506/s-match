@@ -10,6 +10,7 @@ import '../widgets/primary_button.dart';
 import '../widgets/role_card.dart';
 import 'court_owner_welcome_screen.dart';
 import 'player_welcome_screen.dart';
+import 'login_screen.dart';
 import '../services/auth_service.dart';
 
 class CreateAccountScreen extends StatefulWidget {
@@ -91,9 +92,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     );
 
     if (!mounted) return;
-    setState(() => _isLoading = false);
 
     if (!result.isSuccess) {
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(result.errorMessage ?? 'Đăng ký thất bại'),
@@ -103,25 +104,41 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Đăng ký tài khoản thành công!'),
-        backgroundColor: Colors.green,
-      ),
+    // Registration only creates a user; the endpoint does not issue a session.
+    // Clear any previous account before authenticating the newly created user.
+    await AuthService.instance.logout();
+    final login = await AuthService.instance.login(
+      email: email,
+      password: password,
     );
-
-    // Only the backend response determines the authenticated role.
-    Widget targetScreen;
-    if (result.user?['role']?.toString().toUpperCase() == 'COURT_OWNER' ||
-        result.user?['role']?.toString().toUpperCase() == 'COURT OWNER') {
-      targetScreen = const CourtOwnerWelcomeScreen();
-    } else {
-      targetScreen = const PlayerWelcomeScreen();
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    final registeredId = (result.user?['id'] as num?)?.toInt();
+    final loggedInId = (login.user?['id'] as num?)?.toInt();
+    if (!login.isSuccess ||
+        registeredId == null ||
+        loggedInId != registeredId ||
+        login.accessToken == null) {
+      await AuthService.instance.logout();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account created. Please sign in to continue.'),
+        ),
+      );
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (_) => false,
+      );
+      return;
     }
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => targetScreen),
+    final role = login.user?['role']?.toString().toUpperCase();
+    final Widget targetScreen = role == 'COURT_OWNER' || role == 'COURT OWNER'
+        ? const CourtOwnerWelcomeScreen()
+        : const PlayerWelcomeScreen();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => targetScreen),
+      (_) => false,
     );
   }
 

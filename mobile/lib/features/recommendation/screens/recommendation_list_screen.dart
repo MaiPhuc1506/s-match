@@ -6,6 +6,7 @@ import '../../court_map/widgets/exploration_widgets.dart';
 import '../data/recommendation_repository.dart';
 import '../models/recommended_player.dart';
 import '../widgets/recommendation_widgets.dart';
+import '../widgets/save_discovery_location.dart';
 import 'no_recommendations_screen.dart';
 import 'recommended_player_detail_screen.dart';
 
@@ -94,6 +95,12 @@ class RecommendationListScreen extends ConsumerWidget {
                         textAlign: TextAlign.center,
                         style: recommendationText(14),
                       ),
+                      if (error is RecommendationFailure &&
+                          error.message.contains('Save your location'))
+                        SaveDiscoveryLocation(
+                          onSaved: () =>
+                              ref.invalidate(recommendationsProvider(query)),
+                        ),
                       const SizedBox(height: 12),
                       TextButton(
                         onPressed: () =>

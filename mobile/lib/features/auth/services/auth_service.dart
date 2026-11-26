@@ -1,27 +1,38 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/storage/session_store.dart';
 
 class AuthResult {
   final bool isSuccess;
   final String? errorMessage;
   final Map<String, dynamic>? user;
   final String? accessToken;
+  final bool needsOnboarding;
 
   AuthResult._({
     required this.isSuccess,
     this.errorMessage,
     this.user,
     this.accessToken,
+    this.needsOnboarding = false,
   });
 
   factory AuthResult.success({
     Map<String, dynamic>? user,
     String? accessToken,
+    bool needsOnboarding = false,
   }) {
-    return AuthResult._(isSuccess: true, user: user, accessToken: accessToken);
+    return AuthResult._(
+      isSuccess: true,
+      user: user,
+      accessToken: accessToken,
+      needsOnboarding: needsOnboarding,
+    );
   }
 
   factory AuthResult.failure(String errorMessage) {
@@ -79,6 +90,19 @@ class AuthService {
       if (error.code == GoogleSignInExceptionCode.canceled) return null;
       rethrow;
     }
+  }
+
+  Future<bool> googleOnboardingPending() async {
+    final token = _client.token;
+    if (token == null) throw StateError('Please sign in again.');
+    final response = await _client.dio.get<Map<String, dynamic>>(
+      '/auth/google/onboarding',
+      options: Options(extra: {'expectedAuthToken': token}),
+    );
+    if (_client.token != token || response.data?['needsOnboarding'] is! bool) {
+      throw StateError('Could not verify onboarding status.');
+    }
+    return response.data!['needsOnboarding'] as bool;
   }
 
   Future<bool> googleLinked() async {
@@ -184,7 +208,12 @@ class AuthService {
       _client.setToken(access, refreshToken: refresh);
       _refreshToken = refresh;
       currentUser = user;
-      return AuthResult.success(user: user, accessToken: access);
+      _rememberSession(refresh, user);
+      return AuthResult.success(
+        user: user,
+        accessToken: access,
+        needsOnboarding: data?['needsOnboarding'] == true,
+      );
     } on GoogleSignInException catch (error) {
       if (error.code == GoogleSignInExceptionCode.canceled) return null;
       return AuthResult.failure('Google Sign-In could not be completed.');
@@ -220,6 +249,9 @@ class AuthService {
           _client.setToken(accessToken, refreshToken: refreshToken);
           _refreshToken = refreshToken;
           currentUser = user;
+          if (refreshToken != null && user != null) {
+            _rememberSession(refreshToken, user);
+          }
         }
 
         return AuthResult.success(user: user, accessToken: accessToken);
@@ -290,6 +322,33 @@ class AuthService {
     }
   }
 
+  void _rememberSession(String refreshToken, Map<String, dynamic> user) {
+    unawaited(
+      SessionStore.instance.save(refreshToken: refreshToken, user: user),
+    );
+  }
+
+  /// Restores a persisted session on cold start. Returns true only when the
+  /// stored refresh token is still accepted by the backend.
+  Future<bool> restoreSession() async {
+    final saved = await SessionStore.instance.read();
+    if (saved == null) return false;
+    _client.setToken(null, refreshToken: saved.refreshToken);
+    final restored = await _client.tryRefreshSession();
+    final rotated = _client.refreshToken;
+    if (!restored || _client.token == null || rotated == null) {
+      _client.clearToken();
+      _refreshToken = null;
+      currentUser = null;
+      await SessionStore.instance.clear();
+      return false;
+    }
+    _refreshToken = rotated;
+    currentUser = saved.user;
+    await SessionStore.instance.save(refreshToken: rotated, user: saved.user);
+    return true;
+  }
+
   /// Đăng xuất: Thu hồi phiên ở Backend và dọn dẹp sạch dữ liệu phiên ở thiết bị
   Future<void> logout() async {
     try {
@@ -307,6 +366,7 @@ class AuthService {
       _client.clearToken();
       _refreshToken = null;
       currentUser = null;
+      await SessionStore.instance.clear();
     }
   }
 }

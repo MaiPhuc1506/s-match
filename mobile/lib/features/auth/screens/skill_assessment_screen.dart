@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../widgets/sprint2_presentation.dart';
 import '../../../core/network/api_client.dart';
 import '../widgets/profile_skill_radar.dart';
+import 'initial_skill_quiz_screen.dart';
 
 class SkillAssessmentScreen extends StatefulWidget {
   const SkillAssessmentScreen({super.key});
@@ -98,6 +99,7 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
                     button: _buildRetakeButton(),
                     children: [
                       _buildLevelCard(),
+                      if (profile?['skill'] is Map) _buildSkillProgress(),
                       Container(
                         constraints: const BoxConstraints(minHeight: 56),
                         padding: const EdgeInsets.fromLTRB(16, 10, 16, 7),
@@ -137,6 +139,48 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSkillProgress() {
+    final skill = profile!['skill'] as Map;
+    final history = skill['progressHistory'];
+    final axes = history is Map ? history['axes'] : null;
+    var matches = 0, reviewers = 0;
+    if (axes is Map) {
+      for (final axis in axes.values) {
+        final steps = axis is Map ? axis['steps'] : null;
+        if (steps is List && steps.isNotEmpty && steps.last is Map) {
+          final last = steps.last as Map;
+          final m = (last['matchCount'] as num?)?.toInt() ?? 0;
+          final r = (last['reviewerCount'] as num?)?.toInt() ?? 0;
+          if (m > matches) matches = m;
+          if (r > reviewers) reviewers = r;
+        }
+      }
+    }
+    final established =
+        axes is Map &&
+        axes.values.any((axis) {
+          final steps = axis is Map ? axis['steps'] : null;
+          if (steps is! List || steps.isEmpty || steps.last is! Map) {
+            return false;
+          }
+          final last = steps.last as Map;
+          return (last['matchCount'] as num? ?? 0) >= 3 &&
+              (last['reviewerCount'] as num? ?? 0) >= 2;
+        });
+    final source = skill['initialSource'];
+    final label = established
+        ? 'Peer-adjusted skill'
+        : source == 'INITIAL_ESTIMATE'
+        ? 'Initial Skill Estimate'
+        : 'Existing skill baseline';
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Text(
+        '$label · Up to $matches rated matches, $reviewers reviewers per skill. Scores adjust gradually from observed feedback.',
       ),
     );
   }
@@ -370,15 +414,16 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
       width: 345,
       height: 52,
       child: ElevatedButton(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Assessment is a UI preview. Retake Assessment is not connected to an API yet.',
-              ),
-            ),
-          );
-        },
+        onPressed: profile?['skill'] != null
+            ? null
+            : () async {
+                final saved = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(
+                    builder: (_) => const InitialSkillQuizScreen(),
+                  ),
+                );
+                if (saved == true && mounted) await load();
+              },
         style: ElevatedButton.styleFrom(
           elevation: 0,
           backgroundColor: const Color(0xFFE2EEE8),
@@ -399,7 +444,9 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
             ),
             const SizedBox(width: 6),
             Text(
-              'Retake Assessment',
+              profile?['skill'] == null
+                  ? 'Start Initial Estimate'
+                  : 'Assessment recorded',
               style: _style(
                 size: 14,
                 weight: FontWeight.w500,

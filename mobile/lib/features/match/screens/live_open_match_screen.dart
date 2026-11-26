@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 
 import '../../auth/services/auth_service.dart';
 import '../../feedback/data/feedback_repository.dart';
@@ -34,13 +35,26 @@ class _LiveOpenMatchScreenState extends State<LiveOpenMatchScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(successMessage)));
       refresh();
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Unable to update request. Refresh and try again.'),
-          ),
-        );
+        final data = error is DioException ? error.response?.data : null;
+        final message = data is Map ? data['message'] : null;
+        final text = message is String ? message.toLowerCase() : '';
+        final explanation =
+            text.contains('already started') || text.contains('đã bắt đầu')
+            ? 'This match has started. Pending requests can no longer be approved.'
+            : text.contains('skill level')
+            ? message as String
+            : text.contains('full') || text.contains('đủ')
+            ? 'This match is already full.'
+            : text.contains('no longer exists') ||
+                  text.contains('không tìm thấy yêu cầu')
+            ? 'That request was already handled. The list has been refreshed.'
+            : 'Unable to update request. Refresh and try again.';
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(explanation)));
+        // Drop stale request/participant state after a rejected mutation.
+        refresh();
       }
     } finally {
       if (mounted) setState(() => busy = false);
@@ -85,12 +99,17 @@ class _LiveOpenMatchScreenState extends State<LiveOpenMatchScreen> {
             ? 'Schedule unavailable'
             : '${'${MaterialLocalizations.of(context).formatMediumDate(start)} · ${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}'}–${'${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}'}';
         final startsAt = DateTime.tryParse('${m['startTime'] ?? ''}');
+        final started = startsAt != null && !startsAt.isAfter(DateTime.now());
+        final status = '${m['status'] ?? ''}';
+        final participantCount = (m['participantCount'] as num? ?? 0).toInt();
+        final maxPlayers = (m['maxPlayers'] as num? ?? 0).toInt();
         final admissionOpen =
-            m['status'] == 'OPEN' &&
-            startsAt != null &&
-            startsAt.isAfter(DateTime.now()) &&
-            (m['participantCount'] as num? ?? 0) <
-                (m['maxPlayers'] as num? ?? 0);
+            status == 'OPEN' && !started && participantCount < maxPlayers;
+        final canReviewRequests =
+            host &&
+            !started &&
+            (status == 'OPEN' || status == 'FULL') &&
+            participantCount < maxPlayers;
         final requests = (m['participants'] as List? ?? [])
             .whereType<Map>()
             .where((p) => p['status'] == 'REQUESTED');
@@ -116,7 +135,7 @@ class _LiveOpenMatchScreenState extends State<LiveOpenMatchScreen> {
             if (!host && m['myStatus'] != null)
               Text('Your status: ${m['myStatus']}'),
             const SizedBox(height: 16),
-            if (startsAt != null && !startsAt.isAfter(DateTime.now()))
+            if (startsAt != null && started)
               const Text(
                 'This match has started. New participants cannot join.',
               ),
@@ -275,41 +294,51 @@ class _LiveOpenMatchScreenState extends State<LiveOpenMatchScreen> {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               if (requests.isEmpty) const Text('No pending requests.'),
+              if (requests.isNotEmpty && !canReviewRequests)
+                Text(
+                  started
+                      ? 'This match has started. Pending requests can no longer be approved.'
+                      : status == 'FULL' || participantCount >= maxPlayers
+                      ? 'This match is full. Pending requests can no longer be approved.'
+                      : 'This match is no longer accepting participants.',
+                ),
               for (final p in requests)
                 ListTile(
                   title: Text(
                     '${(p['user'] is Map ? p['user']['fullName'] : null) ?? 'Player'}',
                   ),
-                  trailing: Wrap(
-                    children: [
-                      IconButton(
-                        tooltip: 'Reject',
-                        onPressed: busy
-                            ? null
-                            : () => act(
-                                () => service.respond(
-                                  widget.matchId,
-                                  (p['id'] as num).toInt(),
-                                  false,
-                                ),
-                              ),
-                        icon: const Icon(Icons.close),
-                      ),
-                      IconButton(
-                        tooltip: 'Accept',
-                        onPressed: busy
-                            ? null
-                            : () => act(
-                                () => service.respond(
-                                  widget.matchId,
-                                  (p['id'] as num).toInt(),
-                                  true,
-                                ),
-                              ),
-                        icon: const Icon(Icons.check),
-                      ),
-                    ],
-                  ),
+                  trailing: canReviewRequests
+                      ? Wrap(
+                          children: [
+                            IconButton(
+                              tooltip: 'Reject',
+                              onPressed: busy
+                                  ? null
+                                  : () => act(
+                                      () => service.respond(
+                                        widget.matchId,
+                                        (p['id'] as num).toInt(),
+                                        false,
+                                      ),
+                                    ),
+                              icon: const Icon(Icons.close),
+                            ),
+                            IconButton(
+                              tooltip: 'Accept',
+                              onPressed: busy
+                                  ? null
+                                  : () => act(
+                                      () => service.respond(
+                                        widget.matchId,
+                                        (p['id'] as num).toInt(),
+                                        true,
+                                      ),
+                                    ),
+                              icon: const Icon(Icons.check),
+                            ),
+                          ],
+                        )
+                      : Text('${p['status'] ?? ''}'),
                 ),
             ],
           ],

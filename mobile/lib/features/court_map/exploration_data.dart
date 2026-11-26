@@ -263,9 +263,16 @@ class CourtLocation {
       for (final rawSlot in slots) {
         if (rawSlot is! Map) continue;
         if (rawSlot['isActive'] == false) continue;
-        final price = rawSlot['hourlyRate'] ?? rawSlot['price'];
-        if (price is num && price.isFinite && price > 0) {
-          final value = price.toDouble();
+        final hourly = rawSlot['hourlyRate'];
+        final price = rawSlot['price'];
+        final start = _clockMinutes(rawSlot['startTime']);
+        final end = _clockMinutes(rawSlot['endTime']);
+        final double? value = hourly is num
+            ? hourly.toDouble()
+            : price is num && start != null && end != null && end > start
+            ? price * 60 / (end - start)
+            : null;
+        if (value != null && value.isFinite && value > 0) {
           minPrice = minPrice == null
               ? value
               : (value < minPrice ? value : minPrice);

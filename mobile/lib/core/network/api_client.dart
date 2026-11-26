@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+
+import '../storage/session_store.dart';
 
 class ApiClient {
   static final ApiClient instance = ApiClient._internal();
@@ -13,6 +16,7 @@ class ApiClient {
 
   String? get token => _token;
   String? get refreshToken => _refreshToken;
+  int get sessionVersion => _sessionVersion;
 
   void setToken(String? token, {String? refreshToken}) {
     _sessionVersion++;
@@ -116,8 +120,15 @@ class ApiClient {
           _token = newAccess;
           if (newRefresh != null && newRefresh.isNotEmpty) {
             _refreshToken = newRefresh;
+            unawaited(SessionStore.instance.updateRefreshToken(newRefresh));
           }
           return true;
+        }
+      } on DioException catch (error) {
+        if (error.response?.statusCode == 401 && _sessionVersion == session) {
+          _token = null;
+          _refreshToken = null;
+          unawaited(SessionStore.instance.clear());
         }
       } catch (_) {}
       return false;

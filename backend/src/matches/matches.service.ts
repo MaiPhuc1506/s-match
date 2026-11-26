@@ -16,6 +16,7 @@ import { types } from 'node:util';
 import { SubmitFeedbackDto } from './dto/submit-feedback.dto';
 import { FeedbackResponseDto } from './dto/feedback-response.dto';
 import { eligibleNearbyInvite, invitationProfileSelect } from './invitation-eligibility';
+import { assessmentScore } from '../players/skill-assessment';
 import {
   MATCH_INVITATION_SELECT, MATCH_MANAGER_SELECT, MATCH_MEMBER_SELECT,
   MATCH_PUBLIC_SELECT, MATCH_PARTICIPANT_MUTATION_SELECT, toMatchResponse,
@@ -29,6 +30,16 @@ export interface MatchActor {
 @Injectable()
 export class MatchesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async requireEligibleSkill(db: Prisma.TransactionClient, userId: number, min: number, max: number) {
+    // An unrestricted 1–5 match also accepts players without an assessment.
+    if (min === 1 && max === 5) return;
+    const profile = await db.playerProfile.findUnique({ where: { userId }, select: { skill: true } });
+    const score = assessmentScore(profile?.skill);
+    if (score === null || score < min || score > max) {
+      throw new ForbiddenException('Your skill level does not meet this match’s requirements.');
+    }
+  }
 
   notifications(userId: number) {
     return this.prisma.matchNotification.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 100 });
@@ -677,6 +688,7 @@ export class MatchesService {
         if (existing.status === ParticipantStatus.INVITED) {
           throw new ConflictException('Respond to the existing invitation instead');
         }
+        await this.requireEligibleSkill(db, userId, match.minSkillLevel, match.maxSkillLevel);
         const request = await db.matchParticipant.update({
           where: { id: existing.id },
           data: { status: ParticipantStatus.REQUESTED },
@@ -686,6 +698,7 @@ export class MatchesService {
         return request;
       }
 
+      await this.requireEligibleSkill(db, userId, match.minSkillLevel, match.maxSkillLevel);
       const request = await db.matchParticipant.create({
         data: {
           matchId,
@@ -776,6 +789,8 @@ export class MatchesService {
       if (!participant || participant.status !== ParticipantStatus.REQUESTED) {
         throw new BadRequestException('Không tìm thấy yêu cầu tham gia hợp lệ của người này');
       }
+
+      await this.requireEligibleSkill(db, applicantUserId, match.minSkillLevel, match.maxSkillLevel);
 
       const updated = await db.matchParticipant.update({
         where: { id: participant.id },

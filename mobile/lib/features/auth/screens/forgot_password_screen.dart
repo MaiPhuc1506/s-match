@@ -5,6 +5,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:dio/dio.dart';
+
+import '../../../core/network/api_client.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -21,6 +24,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final email = TextEditingController();
   String? error;
+  bool busy = false;
   @override
   void dispose() {
     email.dispose();
@@ -35,17 +39,40 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     description: 'Enter your email and we’ll send you\na verification code.',
     action: 'Send Code',
     error: error,
-    onAction: () {
+    onAction: () async {
+      if (busy) return;
       if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email.text.trim())) {
         setState(() => error = 'Enter a valid email address.');
         return;
       }
-      Navigator.of(context).push(
-        AppMotion.route(
-          VerifyCodeScreen(email: email.text.trim()),
-          name: '/verify-code',
-        ),
-      );
+      setState(() {
+        busy = true;
+        error = null;
+      });
+      try {
+        await ApiClient.instance.dio.post(
+          '/auth/password-recovery/request',
+          data: {'email': email.text.trim()},
+          options: Options(receiveTimeout: const Duration(seconds: 30)),
+        );
+        if (!context.mounted) return;
+        Navigator.of(context).push(
+          AppMotion.route(
+            VerifyCodeScreen(email: email.text.trim()),
+            name: '/verify-code',
+          ),
+        );
+      } on DioException catch (e) {
+        if (mounted) {
+          setState(
+            () => error = e.response?.statusCode == 503
+                ? 'Email recovery is not configured yet.'
+                : 'Unable to send code. Please try again.',
+          );
+        }
+      } finally {
+        if (mounted) setState(() => busy = false);
+      }
     },
     children: [
       CustomTextField(
@@ -71,11 +98,12 @@ class VerifyCodeScreen extends StatefulWidget {
 }
 
 class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
-  final fields = List.generate(4, (_) => TextEditingController());
-  final focus = List.generate(4, (_) => FocusNode());
+  final fields = List.generate(6, (_) => TextEditingController());
+  final focus = List.generate(6, (_) => FocusNode());
   Timer? timer;
-  int seconds = 58;
+  int seconds = 60;
   String? error;
+  bool busy = false;
   @override
   void initState() {
     super.initState();
@@ -111,29 +139,50 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
     title: 'Verify Code',
     illustration: 'shield',
     stage: 3,
-    description: 'Enter the 4-digit code sent\nto your email.',
+    description: 'Enter the 6-digit code sent\nto your email.',
     action: 'Verify',
     error: error,
-    previewMessage: 'UI preview · No email sent · Demo code: 2846',
-    onAction: () {
-      if (fields.map((c) => c.text).join() != '2846') {
-        setState(
-          () => error = 'Use demo code 2846 to preview the next screen.',
-        );
+    onAction: () async {
+      if (busy) return;
+      final code = fields.map((c) => c.text).join();
+      if (code.length != 6 || widget.email.isEmpty) {
+        setState(() => error = 'Enter the 6-digit verification code.');
         return;
       }
-      Navigator.of(context).push(
-        AppMotion.route(const CreateNewPasswordScreen(), name: '/new-password'),
-      );
+      setState(() {
+        busy = true;
+        error = null;
+      });
+      try {
+        final response = await ApiClient.instance.dio.post(
+          '/auth/password-recovery/verify',
+          data: {'email': widget.email, 'code': code},
+        );
+        final token = (response.data as Map)['resetToken'];
+        if (token is! String || token.isEmpty) throw const FormatException();
+        if (!context.mounted) return;
+        Navigator.of(context).push(
+          AppMotion.route(
+            CreateNewPasswordScreen(email: widget.email, resetToken: token),
+            name: '/new-password',
+          ),
+        );
+      } catch (_) {
+        if (mounted) {
+          setState(() => error = 'Invalid or expired code. Please try again.');
+        }
+      } finally {
+        if (mounted) setState(() => busy = false);
+      }
     },
     children: [
       Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          for (var i = 0; i < 4; i++) ...[
-            if (i > 0) const SizedBox(width: 12),
+          for (var i = 0; i < 6; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
             SizedBox(
-              width: 56,
+              width: 38,
               height: 56,
               child: TextField(
                 key: ValueKey('otp-$i'),
@@ -150,7 +199,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                   height: 1.4,
                 ),
                 onChanged: (v) {
-                  if (v.isNotEmpty && i < 3) focus[i + 1].requestFocus();
+                  if (v.isNotEmpty && i < 5) focus[i + 1].requestFocus();
                 },
                 decoration: InputDecoration(
                   filled: true,
@@ -173,9 +222,33 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
       TextButton(
         onPressed: seconds > 0
             ? null
-            : () {
-                setState(() => seconds = 58);
-                _startTimer();
+            : () async {
+                if (busy || widget.email.isEmpty) return;
+                setState(() {
+                  busy = true;
+                  error = null;
+                });
+                try {
+                  await ApiClient.instance.dio.post(
+                    '/auth/password-recovery/request',
+                    data: {'email': widget.email},
+                    options: Options(
+                      receiveTimeout: const Duration(seconds: 30),
+                    ),
+                  );
+                  if (mounted) {
+                    setState(() => seconds = 60);
+                    _startTimer();
+                  }
+                } catch (_) {
+                  if (mounted) {
+                    setState(
+                      () => error = 'Unable to resend code. Please try again.',
+                    );
+                  }
+                } finally {
+                  if (mounted) setState(() => busy = false);
+                }
               },
         child: Text(
           'Didn’t receive a code?  ${seconds > 0 ? 'Resend (${seconds}s)' : 'Resend'}',
@@ -187,7 +260,12 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
 }
 
 class CreateNewPasswordScreen extends StatefulWidget {
-  const CreateNewPasswordScreen({super.key});
+  const CreateNewPasswordScreen({
+    super.key,
+    this.email = '',
+    this.resetToken = '',
+  });
+  final String email, resetToken;
   @override
   State<CreateNewPasswordScreen> createState() =>
       _CreateNewPasswordScreenState();
@@ -196,6 +274,7 @@ class CreateNewPasswordScreen extends StatefulWidget {
 class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
   final password = TextEditingController(), confirm = TextEditingController();
   String? error;
+  bool busy = false;
   @override
   void dispose() {
     password.dispose();
@@ -225,23 +304,51 @@ class _CreateNewPasswordScreenState extends State<CreateNewPasswordScreen> {
         );
         return;
       }
-      await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Preview complete'),
-          content: const Text(
-            'Password recovery has no backend API yet. Your real password has not changed.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Back to Log In'),
+      if (busy || widget.email.isEmpty || widget.resetToken.isEmpty) {
+        if (!busy) setState(() => error = 'Please restart password recovery.');
+        return;
+      }
+      setState(() {
+        busy = true;
+        error = null;
+      });
+      try {
+        await ApiClient.instance.dio.post(
+          '/auth/password-recovery/reset',
+          data: {
+            'email': widget.email,
+            'resetToken': widget.resetToken,
+            'password': password.text,
+          },
+        );
+        if (!context.mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Password updated'),
+            content: const Text(
+              'Your password has been updated. Please sign in again.',
             ),
-          ],
-        ),
-      );
-      if (context.mounted) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Back to Log In'),
+              ),
+            ],
+          ),
+        );
+        if (context.mounted) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
+      } catch (_) {
+        if (mounted) {
+          setState(
+            () => error =
+                'Unable to reset password. The request may have expired.',
+          );
+        }
+      } finally {
+        if (mounted) setState(() => busy = false);
       }
     },
     children: [
@@ -311,10 +418,8 @@ class _RecoveryLayout extends StatelessWidget {
     required this.onAction,
     required this.children,
     this.error,
-    this.previewMessage =
-        'UI preview · Password recovery API is not available yet',
   });
-  final String title, illustration, description, action, previewMessage;
+  final String title, illustration, description, action;
   final int stage;
   final String? error;
   final VoidCallback onAction;
@@ -430,14 +535,6 @@ class _RecoveryLayout extends StatelessWidget {
                               ),
                             ),
                           ),
-                        const SizedBox(height: 12),
-                        Text(
-                          previewMessage,
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.bodySmallRegular.copyWith(
-                            fontSize: 10,
-                          ),
-                        ),
                       ],
                     ),
                   ),

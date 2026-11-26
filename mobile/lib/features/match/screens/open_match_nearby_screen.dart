@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../recommendation/data/recommendation_repository.dart';
 import '../../recommendation/models/recommended_player.dart';
+import '../../recommendation/widgets/save_discovery_location.dart';
 
 class OpenMatchNearbyScreen extends StatefulWidget {
   const OpenMatchNearbyScreen({
@@ -47,7 +48,6 @@ class _OpenMatchNearbyScreenState extends State<OpenMatchNearbyScreen> {
 
   final sending = <int>{};
   final invited = <int>{};
-
   Future<void> locationSettings() async {
     final confirmed = await showCupertinoDialog<bool>(
       context: context,
@@ -148,6 +148,11 @@ class _OpenMatchNearbyScreenState extends State<OpenMatchNearbyScreen> {
                     TextButton(
                       onPressed: locationSettings,
                       child: const Text('Location sharing settings'),
+                    ),
+                  if (snapshot.error is RecommendationFailure &&
+                      '${snapshot.error}'.contains('Save your location'))
+                    SaveDiscoveryLocation(
+                      onSaved: () => setState(() => players = loadPlayers()),
                     ),
                   TextButton(
                     onPressed: () => setState(() {

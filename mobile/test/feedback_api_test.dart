@@ -291,6 +291,53 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  test(
+    'feedback session survives token refresh but rejects account switches',
+    () async {
+      client.dio.interceptors.remove(interceptor);
+      client.setToken('original-access', refreshToken: 'refresh-token');
+      AuthService.instance.currentUser = {'id': 1};
+      final api = RatingApi(userId: 1, token: 'original-access');
+      final fakeRefresh = InterceptorsWrapper(
+        onRequest: (options, handler) {
+          if (options.path == '/auth/refresh') {
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'accessToken': 'rotated-access',
+                  'refreshToken': 'rotated-refresh',
+                },
+              ),
+            );
+          } else {
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: {'ok': true},
+              ),
+            );
+          }
+        },
+      );
+      client.dio.interceptors.add(fakeRefresh);
+      try {
+        expect(await client.tryRefreshSession(), isTrue);
+        expect(await api.request('/ratings/pending'), {'ok': true});
+        AuthService.instance.currentUser = {'id': 2};
+        expect(() => api.checkSession(), throwsA(isA<RatingFailure>()));
+        AuthService.instance.currentUser = {'id': 1};
+        client.setToken('new-login');
+        expect(() => api.checkSession(), throwsA(isA<RatingFailure>()));
+      } finally {
+        client.dio.interceptors.remove(fakeRefresh);
+        client.dio.interceptors.add(interceptor);
+      }
+    },
+  );
+
   testWidgets('host explicitly completes an ended match before celebration', (
     tester,
   ) async {

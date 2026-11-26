@@ -57,6 +57,11 @@ class _FacilityDetailScreenState extends State<FacilityDetailScreen> {
     isOpen: _operatingHours.isNotEmpty,
     contactPhone: _facilityPhone,
     description: _facilityDescription,
+    latitude:
+        (_details?['latitude'] as num?)?.toDouble() ?? widget.facility.latitude,
+    longitude:
+        (_details?['longitude'] as num?)?.toDouble() ??
+        widget.facility.longitude,
   );
 
   @override

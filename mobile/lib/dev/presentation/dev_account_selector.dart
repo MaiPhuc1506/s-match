@@ -36,7 +36,7 @@ class DevAccountSelector {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
+                      color: AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
@@ -240,7 +240,7 @@ class DevAccountSelector {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: selectedRole,
+                      initialValue: selectedRole,
                       decoration: InputDecoration(
                         labelText: 'Vai trò (Role)',
                         border: OutlineInputBorder(

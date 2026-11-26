@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Min, Max } from 'class-validator';
 
 export class UpdateFacilityDto {
   @ApiPropertyOptional({ example: 'Sân Cầu Lông S-Match Đà Nẵng' })
@@ -14,11 +14,15 @@ export class UpdateFacilityDto {
 
   @ApiPropertyOptional({ example: 16.0678 })
   @IsNumber()
+  @Min(-90)
+  @Max(90)
   @IsOptional()
   latitude?: number;
 
   @ApiPropertyOptional({ example: 108.2208 })
   @IsNumber()
+  @Min(-180)
+  @Max(180)
   @IsOptional()
   longitude?: number;
 

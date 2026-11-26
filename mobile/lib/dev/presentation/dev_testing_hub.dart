@@ -29,6 +29,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
 
   List<DevAccount> _accounts = [];
   bool _isLoadingAccounts = true;
+  bool _ownerQuickLoginBusy = false;
   String? _backendPingStatus;
 
   @override
@@ -179,6 +180,20 @@ class _DevTestingHubState extends State<DevTestingHub> {
       }
     }
     if (!mounted) return;
+    if (account.email.toLowerCase() == 'owner@smatch.dev' &&
+        password.isNotEmpty) {
+      if (_ownerQuickLoginBusy) return;
+      _ownerQuickLoginBusy = true;
+      try {
+        final success = await _handleLogin(account.email, password);
+        if (success && mounted) {
+          _navigateToRoleScreen(_auth.currentUser?['role']?.toString() ?? '');
+        }
+      } finally {
+        _ownerQuickLoginBusy = false;
+      }
+      return;
+    }
     DevAccountSelector.showQuickLoginDialog(
       context: context,
       account: account,
@@ -299,7 +314,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
         border: Border.all(color: const Color(0xFFE5EBE7)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -313,7 +328,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
@@ -472,7 +487,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
       color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: color.withOpacity(0.2)),
+        side: BorderSide(color: color.withValues(alpha: 0.2)),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -484,7 +499,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, color: color, size: 22),
@@ -547,12 +562,11 @@ class _DevTestingHubState extends State<DevTestingHub> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: _accounts.length,
-      onReorder: (oldIndex, newIndex) async {
+      onReorderItem: (oldIndex, newIndex) async {
         setState(() {
-          final target = newIndex > oldIndex ? newIndex - 1 : newIndex;
           _accounts = [..._accounts];
           final account = _accounts.removeAt(oldIndex);
-          _accounts.insert(target, account);
+          _accounts.insert(newIndex, account);
         });
         await _repo.reorderAccounts(oldIndex, newIndex);
       },
@@ -581,7 +595,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: _getRoleColor(acc.role).withOpacity(0.1),
+                    color: _getRoleColor(acc.role).withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Center(
@@ -600,27 +614,29 @@ class _DevTestingHubState extends State<DevTestingHub> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
+                      Text(
+                        acc.label,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
                         children: [
-                          Flexible(
-                            child: Text(
-                              acc.label,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 6,
                               vertical: 1.5,
                             ),
                             decoration: BoxDecoration(
-                              color: _getRoleColor(acc.role).withOpacity(0.12),
+                              color: _getRoleColor(acc.role)
+                                  .withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -633,7 +649,6 @@ class _DevTestingHubState extends State<DevTestingHub> {
                             ),
                           ),
                           if (isActive) ...[
-                            const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 6,
@@ -662,6 +677,8 @@ class _DevTestingHubState extends State<DevTestingHub> {
                           fontSize: 12,
                           color: AppColors.textSecondary,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       if (acc.note != null && acc.note!.isNotEmpty) ...[
                         const SizedBox(height: 2),
@@ -779,7 +796,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
       color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: AppColors.primary.withOpacity(0.2)),
+        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.2)),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -796,7 +813,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(

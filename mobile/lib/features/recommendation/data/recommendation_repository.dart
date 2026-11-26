@@ -135,6 +135,7 @@ class ApiRecommendationRepository extends RecommendationRepository {
                   _displayText(publicProfile['fullName']),
               level: _displayText(publicProfile['skillLevel']),
               avatarUrl: _displayText(publicProfile['avatarUrl']),
+              location: _displayText(publicProfile['playingArea']),
               distanceKm: (c?['distanceKm'] as num?)?.toDouble(),
             );
           })

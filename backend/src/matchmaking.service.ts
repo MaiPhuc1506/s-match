@@ -45,7 +45,7 @@ export class MatchmakingService {
     const profiles = await this.prisma.playerProfile.findMany({
       where: { userId: { in: userIds }, locationSharingEnabled: true, user: { role: { name: RoleName.PLAYER } } },
       select: {
-        userId: true, nickname: true, avatarUrl: true, skillLevel: true, skill: true,
+        userId: true, nickname: true, avatarUrl: true, skillLevel: true, skill: true, playingArea: true,
         user: { select: { fullName: true } },
       },
     }).catch(() => {
@@ -62,6 +62,7 @@ export class MatchmakingService {
           profile: {
             fullName: profile.user.fullName ?? null,
             nickname: profile.nickname ?? null,
+            playingArea: profile.playingArea ?? null,
             avatarUrl: profile.avatarUrl ?? null,
             skillLevel: effectiveSkillLevel(assessmentScore(profile.skill), profile.skillLevel ?? null),
           },

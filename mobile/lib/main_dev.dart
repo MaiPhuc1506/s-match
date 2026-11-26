@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'core/theme/app_colors.dart';
 import 'dev/presentation/dev_overlay.dart';
-import 'dev/presentation/dev_testing_hub.dart';
+import 'features/auth/screens/splash_screen.dart';
 import 'features/auth/services/auth_service.dart';
 import 'main.dart'; // Dùng để fallback an toàn sang ứng dụng thật nếu vô tình chạy release
 
@@ -67,7 +67,7 @@ class DevTestingHubApp extends StatelessWidget {
           ),
         );
       },
-      home: const DevTestingHub(),
+      home: const SplashScreen(),
     );
   }
 }

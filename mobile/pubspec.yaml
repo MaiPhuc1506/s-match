@@ -43,9 +43,12 @@ dependencies:
   url_launcher: ^6.3.3
   geolocator: ^14.0.2
   google_sign_in: ^7.2.0
+  flutter_secure_storage: ^9.2.4
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to
@@ -60,6 +63,8 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
+  config:
+    enable-swift-package-manager: false
   uses-material-design: true
 
   assets:

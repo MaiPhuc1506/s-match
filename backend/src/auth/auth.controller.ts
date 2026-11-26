@@ -35,6 +35,13 @@ export class AuthController {
     return this.authService.loginGoogle(dto.idToken);
   }
 
+  @Get('google/onboarding')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  googleOnboardingStatus(@Req() req: any) {
+    return this.authService.googleOnboardingStatus(req.user.sub);
+  }
+
   @Get('google/link')
   @ApiBearerAuth()
   @UseGuards(RolesGuard)

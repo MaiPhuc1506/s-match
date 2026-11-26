@@ -795,6 +795,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ],
       ),
       _gap(),
+      DashboardMetric(
+        _isToday ? "Today's booked value" : 'Booked value · $_shortDate',
+        _currency(data.bookedValue),
+        live
+            ? 'Confirmed & completed bookings · selected day'
+            : 'Confirmed & completed bookings · sample day',
+        palette: p,
+        icon: 'metric.value',
+        onTap: () => _select(2),
+      ),
+      _gap(),
       Row(
         children: [
           Expanded(
@@ -1699,13 +1710,20 @@ class OwnerBookingDetailScreen extends StatelessWidget {
                       ),
                       ('detail.imgVector', booking.player),
                       if (booking.facilityName != null)
-                        ('detail.imgVector1', booking.facilityName!),
+                        ('facility', booking.facilityName!),
                     ])
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 7),
                         child: Row(
                           children: [
-                            DashboardAsset(row.$1, size: 18),
+                            if (row.$1 == 'facility')
+                              Icon(
+                                Icons.location_on_outlined,
+                                size: 18,
+                                color: p.brand,
+                              )
+                            else
+                              DashboardAsset(row.$1, size: 18),
                             const SizedBox(width: 12),
                             Expanded(child: Text(row.$2, style: p.text(13))),
                           ],

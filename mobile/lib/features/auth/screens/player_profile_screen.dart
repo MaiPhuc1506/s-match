@@ -89,7 +89,9 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
   String? _preferredMode;
   String get _skillLabel {
     final value = _profile?.skillLevel;
-    if (value == null || value.isEmpty) return 'Not assessed';
+    if (_profile?.overallSkillScore == null || value == null || value.isEmpty) {
+      return 'Not assessed';
+    }
     final label = value[0].toUpperCase() + value.substring(1).toLowerCase();
     final score = _profile?.overallSkillScore;
     return score == null ? label : '$label · ${score.toStringAsFixed(1)}/5';
@@ -130,11 +132,8 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
   RatingSummary? _rating;
   String? _ratingError;
   bool _ratingLoading = false;
-  String get _ratingLabel =>
-      ApiClient.instance.token == null ? '4.6' : _rating?.label ?? '—';
-  String get _ratingCaption => ApiClient.instance.token == null
-      ? ' 4.6 (24)'
-      : _ratingLoading
+  String get _ratingLabel => _rating?.label ?? '—';
+  String get _ratingCaption => _ratingLoading
       ? ' Loading…'
       : _ratingError != null
       ? ' —'
@@ -199,15 +198,11 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
 
   String get _fullName =>
       _profile?.fullName ??
-      (ApiClient.instance.token == null
-          ? 'Phúc Mai'
-          : AuthService.instance.currentUser?['fullName'] as String? ??
-                'Player');
-  String get _bio =>
-      _profile?.bio ??
-      (ApiClient.instance.token == null
-          ? 'Badminton enthusiast. Always up for a friendly match and improving together! '
-          : '');
+      (ApiClient.instance.token != null
+          ? (AuthService.instance.currentUser?['fullName'] as String?)
+          : null) ??
+      'Player';
+  String get _bio => _profile?.bio ?? '';
 
   static const _background = Color(0xFFF7F8F5);
   static const _primary = Color(0xFF05644F);
@@ -369,6 +364,17 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildProfileHeader(context),
+        if (_profile?.playingArea?.trim().isNotEmpty == true)
+          Text(
+            'Usual Playing Area: ${_profile!.playingArea}',
+            textAlign: TextAlign.center,
+            style: _textStyle(
+              size: 12,
+              lineHeight: 17,
+              color: _textSecondary,
+              weight: FontWeight.w400,
+            ),
+          ),
         const SizedBox(height: 8),
         _buildQuickStats(context),
         const SizedBox(height: 8),
@@ -494,9 +500,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            ApiClient.instance.token == null
-                                ? 'Intermediate'
-                                : _skillLabel,
+                            _skillLabel,
                             style: _textStyle(
                               size: 12,
                               lineHeight: 17,
@@ -529,7 +533,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  ApiClient.instance.token == null ? '●  Da Nang, Vietnam' : '',
+                  '',
                   style: _textStyle(
                     size: 12,
                     lineHeight: 17,
@@ -667,17 +671,13 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
             children: [
               Expanded(
                 child: _StatItem(
-                  value: ApiClient.instance.token == null
-                      ? '24'
-                      : _matchCount?.toString() ?? '—',
+                  value: _matchCount?.toString() ?? '—',
                   label: 'Matches',
                 ),
               ),
               Expanded(
                 child: _StatItem(
-                  value: ApiClient.instance.token == null
-                      ? '18'
-                      : _completedCount?.toString() ?? '—',
+                  value: _completedCount?.toString() ?? '—',
                   label: 'Completed',
                   onTap: () {
                     Navigator.of(context).push(
@@ -767,12 +767,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
             ),
             SizedBox(
               height: 190 - (PlayerBottomNavigation.heightFor(context) - 84),
-              child: ApiClient.instance.token == null
-                  ? const FittedBox(
-                      fit: BoxFit.contain,
-                      child: ProfileSkillRadar(refined: true),
-                    )
-                  : scores != null
+              child: scores != null
                   ? FittedBox(
                       fit: BoxFit.contain,
                       child: ProfileSkillRadar(refined: true, values: scores),
@@ -836,19 +831,10 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                 child: Row(
                   children: [
                     _StyleChip(
-                      label: ApiClient.instance.token == null
-                          ? 'Doubles'
-                          : _preferredMode ?? 'Not set',
+                      label: _preferredMode ?? 'Not set',
                       background: _primary,
                       foreground: Colors.white,
                     ),
-                    SizedBox(width: 8),
-                    if (ApiClient.instance.token == null)
-                      const _StyleChip(
-                        label: 'Offensive',
-                        background: Color(0xFFF6DEDC),
-                        foreground: Color(0xFF924A45),
-                      ),
                   ],
                 ),
               ),

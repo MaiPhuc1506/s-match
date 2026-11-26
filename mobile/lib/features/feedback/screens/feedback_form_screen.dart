@@ -28,6 +28,15 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
   List<FeedbackPlayer> get players =>
       widget.match?.players ?? feedbackTeammates;
   late final _stars = List.filled(players.length, 0);
+  static const _axes = {
+    'smash': 'Smash',
+    'defense': 'Defense',
+    'netPlay': 'Net Play',
+    'stamina': 'Stamina',
+    'footwork': 'Footwork',
+    'serve': 'Serve',
+  };
+  late final _skills = List.generate(players.length, (_) => <String, int?>{});
   late final _tags = List.generate(players.length, (_) => <String>{});
   late final _reviews = List.generate(
     players.length,
@@ -65,6 +74,7 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
           (i) => TeammateFeedback(
             player: players[i],
             stars: _stars[i],
+            skillRatings: _skills[i],
             tags: _tags[i],
             review: _reviews[i].text,
           ),
@@ -144,7 +154,7 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'A little feedback makes the next rally better.',
+            'Please rate fairly based on what you actually observed during this match. Avoid personal bias, retaliation, or dishonest ratings. Your feedback helps keep matchmaking fair.',
             style: feedbackText(14, color: AppColors.textSecondary),
           ),
           for (var i = 0; i < players.length; i++) ...[
@@ -186,6 +196,42 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
                         ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Skill performance · Optional',
+                    style: feedbackText(12, weight: FontWeight.w600),
+                  ),
+                  Text(
+                    'Rate 1–5 based on what you observed, or leave Not Observed.',
+                    style: feedbackText(11, color: AppColors.textSecondary),
+                  ),
+                  for (final axis in _axes.entries)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(axis.value, style: feedbackText(12)),
+                        ),
+                        DropdownButton<int>(
+                          value: _skills[i][axis.key] ?? 0,
+                          items: [
+                            const DropdownMenuItem(
+                              value: 0,
+                              child: Text('Not Observed'),
+                            ),
+                            for (var value = 1; value <= 5; value++)
+                              DropdownMenuItem(
+                                value: value,
+                                child: Text('$value'),
+                              ),
+                          ],
+                          onChanged: (value) => setState(
+                            () => _skills[i][axis.key] = value == 0
+                                ? null
+                                : value,
+                          ),
+                        ),
+                      ],
+                    ),
                   const SizedBox(height: 14),
                   Text(
                     'Review (optional)',

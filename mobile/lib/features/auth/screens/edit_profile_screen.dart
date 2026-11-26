@@ -1,13 +1,18 @@
 import '../../../core/theme/app_motion.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../widgets/sprint2_presentation.dart';
+import '../widgets/playing_area_picker.dart';
 import '../../../core/network/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/player_profile_service.dart';
+import '../../recommendation/widgets/save_discovery_location.dart';
+
+import 'package:dio/dio.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key, this.initialProfile});
@@ -38,6 +43,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String _dominantHand = 'Right';
   String _preferredMode = 'Doubles';
 
+  OwnPlayerProfile? _discoveryProfile;
+  bool _savingSharing = false;
   bool _isSaving = false;
   bool _isLoadingProfile = false;
   String? _loadError;
@@ -47,6 +54,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.initState();
     final initial = widget.initialProfile;
     if (initial != null) {
+      _discoveryProfile = initial;
+      _locationController.text = initial.playingArea ?? '';
       _nameController.text = initial.fullName;
       _bioController.text = initial.bio;
     } else if (ApiClient.instance.token != null) {
@@ -66,6 +75,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final profile = await PlayerProfileService.instance.getMyProfile();
       if (!mounted) return;
       setState(() {
+        _discoveryProfile = profile;
+        _locationController.text = profile.playingArea ?? '';
         _nameController.text = profile.fullName;
         _bioController.text = profile.bio;
         _isLoadingProfile = false;
@@ -77,6 +88,42 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _loadError = error.message;
         });
       }
+    }
+  }
+
+  Future<void> _refreshDiscoveryProfile() async {
+    try {
+      final profile = await PlayerProfileService.instance.getMyProfile();
+      if (mounted) setState(() => _discoveryProfile = profile);
+    } on PlayerProfileException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not refresh location status.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _setLocationSharing(bool enabled) async {
+    final client = ApiClient.instance;
+    final token = client.token;
+    if (token == null || _savingSharing) return;
+    setState(() => _savingSharing = true);
+    try {
+      await client.dio.put(
+        '/candidates/me/location-sharing',
+        data: {'enabled': enabled},
+        options: Options(extra: {'expectedAuthToken': token}),
+      );
+      if (mounted && client.token == token) await _refreshDiscoveryProfile();
+    } catch (_) {
+      if (mounted && client.token == token) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update location sharing.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingSharing = false);
     }
   }
 
@@ -96,14 +143,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
     final localOnlyChanges =
-        _locationController.text != 'Da Nang, Vietnam' ||
-        _dominantHand != 'Right' ||
-        _preferredMode != 'Doubles';
+        _dominantHand != 'Right' || _preferredMode != 'Doubles';
     setState(() => _isSaving = true);
     try {
       final saved = await PlayerProfileService.instance.updateMyProfile(
         fullName: _nameController.text,
-        bio: _bioController.text,
+        bio: _bioController.text == _discoveryProfile?.bio
+            ? null
+            : _bioController.text,
+        playingArea:
+            _locationController.text == (_discoveryProfile?.playingArea ?? '')
+            ? null
+            : _locationController.text,
       );
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
@@ -112,7 +163,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         SnackBar(
           content: Text(
             localOnlyChanges
-                ? 'Đã lưu tên và Bio. Vị trí, tay thuận và chế độ chơi chưa được API hỗ trợ lưu.'
+                ? 'Profile and playing area saved. Hand and playing mode are not saved yet.'
                 : 'Đã cập nhật hồ sơ thành công.',
           ),
         ),
@@ -194,6 +245,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           _buildFullNameField(),
                           const SizedBox(height: 8),
                           _buildLocationField(),
+                          if (_discoveryProfile != null) ...[
+                            Text(
+                              _discoveryProfile!.latitude != null &&
+                                      _discoveryProfile!.longitude != null
+                                  ? 'Discovery location saved'
+                                  : 'Discovery location not saved',
+                            ),
+                            SaveDiscoveryLocation(
+                              label: 'Update discovery location',
+                              onSaved: _refreshDiscoveryProfile,
+                            ),
+                            SwitchListTile(
+                              title: const Text('Location sharing'),
+                              value: _discoveryProfile!.locationSharingEnabled,
+                              onChanged: _savingSharing
+                                  ? null
+                                  : _setLocationSharing,
+                            ),
+                          ],
                           const SizedBox(height: 8),
                           _buildBioField(),
                         ],
@@ -279,26 +349,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     'assets/icons/register_user.svg',
   );
   Widget _buildLocationField() => _inlineField(
-    'Location',
+    'Usual Playing Area',
     _locationController,
     'assets/icons/sprint2_edit_Sprint3IconLocation.svg',
+    onTap: () async {
+      final selected = await pickPlayingArea(context, _locationController.text);
+      if (mounted && selected != null) {
+        setState(() => _locationController.text = selected);
+      }
+    },
   );
 
   Widget _inlineField(
     String label,
     TextEditingController controller,
-    String asset,
-  ) => SizedBox(
+    String asset, {
+    VoidCallback? onTap,
+  }) => SizedBox(
     height: 44,
     child: TextField(
       controller: controller,
+      readOnly: onTap != null,
+      onTap: onTap,
       textAlign: TextAlign.right,
       style: _textStyle(size: 14, weight: FontWeight.w400, lineHeight: 20),
       decoration: InputDecoration(
         filled: true,
         fillColor: Colors.white,
         isDense: true,
-        prefixIconConstraints: const BoxConstraints(maxWidth: 145),
+        prefixIconConstraints: BoxConstraints(maxWidth: onTap == null ? 145 : 190),
         prefixIcon: Padding(
           padding: const EdgeInsets.only(left: 16),
           child: Row(

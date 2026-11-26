@@ -13,6 +13,7 @@ import 'admin_welcome_screen.dart';
 import 'court_owner_welcome_screen.dart';
 import 'create_account_screen.dart';
 import 'forgot_password_screen.dart';
+import 'google_onboarding_screen.dart';
 import 'player_welcome_screen.dart';
 import '../services/auth_service.dart';
 
@@ -93,6 +94,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
     // Đăng nhập thành công -> Điều hướng theo vai trò
     final role = result.user?['role']?.toString().toUpperCase() ?? 'PLAYER';
+    if (result.needsOnboarding) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => GoogleOnboardingScreen(
+            initialName: result.user?['fullName'] as String?,
+          ),
+        ),
+      );
+      return;
+    }
     Widget targetScreen;
     if (role == 'COURT_OWNER' || role == 'COURT OWNER') {
       targetScreen = const CourtOwnerWelcomeScreen();

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../core/theme/app_colors.dart';
 import '../../features/auth/services/auth_service.dart';
 import 'dev_screen_explorer.dart';
@@ -50,7 +51,7 @@ class _DevGlobalOverlayState extends State<DevGlobalOverlay> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.12),
+                        color: AppColors.primary.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(
@@ -88,9 +89,14 @@ class _DevGlobalOverlayState extends State<DevGlobalOverlay> {
                 ),
                 const Divider(height: 24),
                 ListTile(
-                  leading: const Icon(Icons.hub_rounded, color: AppColors.primary),
+                  leading: const Icon(
+                    Icons.hub_rounded,
+                    color: AppColors.primary,
+                  ),
                   title: const Text('Quay lại Developer Testing Hub'),
-                  subtitle: const Text('Trở về trung tâm kiểm thử & danh sách tài khoản'),
+                  subtitle: const Text(
+                    'Trở về trung tâm kiểm thử & danh sách tài khoản',
+                  ),
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   onTap: () {
@@ -102,20 +108,30 @@ class _DevGlobalOverlayState extends State<DevGlobalOverlay> {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.explore_rounded, color: Colors.blueGrey),
+                  leading: const Icon(
+                    Icons.explore_rounded,
+                    color: Colors.blueGrey,
+                  ),
                   title: const Text('Mở Screen Explorer'),
-                  subtitle: const Text('Khám phá và mở hơn 20 màn hình hệ thống'),
+                  subtitle: const Text(
+                    'Khám phá và mở hơn 20 màn hình hệ thống',
+                  ),
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   onTap: () {
                     Navigator.pop(sheetCtx);
                     widget.navKey.currentState?.push(
-                      MaterialPageRoute(builder: (_) => const DevScreenExplorer()),
+                      MaterialPageRoute(
+                        builder: (_) => const DevScreenExplorer(),
+                      ),
                     );
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.switch_account_rounded, color: Colors.teal),
+                  leading: const Icon(
+                    Icons.switch_account_rounded,
+                    color: Colors.teal,
+                  ),
                   title: const Text('Đổi tài khoản nhanh'),
                   subtitle: const Text('Chọn tài khoản Player / Owner / Admin'),
                   dense: true,
@@ -159,9 +175,12 @@ class _DevGlobalOverlayState extends State<DevGlobalOverlay> {
               child: Material(
                 elevation: 6,
                 borderRadius: BorderRadius.circular(20),
-                color: AppColors.primary.withOpacity(0.95),
+                color: AppColors.primary.withValues(alpha: 0.95),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: Colors.white30, width: 1),

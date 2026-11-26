@@ -72,11 +72,11 @@ class _LiveMatchFeedbackScreenState extends State<LiveMatchFeedbackScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final end = DateTime.tryParse(match?['endTime'] as String? ?? '');
+    final start = DateTime.tryParse(match?['startTime'] as String? ?? '');
     final canComplete =
         match?['hostId'] == widget.repository.api.userId &&
-        end != null &&
-        !end.isAfter(DateTime.now()) &&
+        start != null &&
+        !start.isAfter(DateTime.now()) &&
         ['OPEN', 'FULL', 'IN_PROGRESS'].contains(match?['status']);
     return FeedbackScaffold(
       title: 'Match feedback',

@@ -9,12 +9,20 @@ class OwnPlayerProfile {
   const OwnPlayerProfile({
     required this.fullName,
     required this.bio,
+    this.playingArea,
+    this.latitude,
+    this.longitude,
+    this.locationSharingEnabled = false,
     this.skillLevel,
     this.skill,
     this.overallSkillScore,
   });
   final String fullName;
   final String bio;
+  final String? playingArea;
+  final double? latitude;
+  final double? longitude;
+  final bool locationSharingEnabled;
   final String? skillLevel;
   final Map<String, dynamic>? skill;
   final double? overallSkillScore;
@@ -33,6 +41,10 @@ class OwnPlayerProfile {
     return OwnPlayerProfile(
       fullName: json['fullName'] as String,
       bio: bio as String? ?? '',
+      playingArea: rawProfile['playingArea'] as String?,
+      latitude: (rawProfile['latitude'] as num?)?.toDouble(),
+      longitude: (rawProfile['longitude'] as num?)?.toDouble(),
+      locationSharingEnabled: rawProfile['locationSharingEnabled'] == true,
       skillLevel: rawProfile['skillLevel'] as String?,
       overallSkillScore: (rawProfile['overallSkillScore'] as num?)?.toDouble(),
       skill: rawProfile['skill'] is Map
@@ -58,10 +70,22 @@ class PlayerProfileService {
 
   Future<OwnPlayerProfile> updateMyProfile({
     required String fullName,
-    required String bio,
-  }) => _request(fullName: fullName.trim(), bio: bio);
+    String? bio,
+    String? playingArea,
+    bool completeGoogleOnboarding = false,
+  }) => _request(
+    fullName: fullName.trim(),
+    bio: bio,
+    playingArea: playingArea?.trim(),
+    completeGoogleOnboarding: completeGoogleOnboarding,
+  );
 
-  Future<OwnPlayerProfile> _request({String? fullName, String? bio}) async {
+  Future<OwnPlayerProfile> _request({
+    String? fullName,
+    String? bio,
+    String? playingArea,
+    bool completeGoogleOnboarding = false,
+  }) async {
     final token = _client.token;
     if (token == null || token.isEmpty) {
       throw const PlayerProfileException(
@@ -73,7 +97,12 @@ class PlayerProfileService {
           ? await _client.dio.get('/players/profile/me')
           : await _client.dio.patch(
               '/players/profile/me',
-              data: {'fullName': fullName, 'bio': bio},
+              data: {
+                'fullName': fullName,
+                'bio': ?bio,
+                'playingArea': ?playingArea,
+                if (completeGoogleOnboarding) 'completeGoogleOnboarding': true,
+              },
             );
       // Do not apply a response from an account that has since logged out/switched.
       if (_client.token != token) {

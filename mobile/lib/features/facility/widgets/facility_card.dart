@@ -15,6 +15,7 @@ class FacilityCardItem {
   final bool isOpen;
   final String? contactPhone;
   final String? description;
+  final double? latitude, longitude;
 
   const FacilityCardItem({
     required this.id,
@@ -25,6 +26,8 @@ class FacilityCardItem {
     this.isOpen = true,
     this.contactPhone,
     this.description,
+    this.latitude,
+    this.longitude,
   });
 }
 

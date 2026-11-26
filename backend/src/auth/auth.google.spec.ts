@@ -18,6 +18,7 @@ describe('Google auth (mock provider and Prisma)', () => {
       googleIdentity: { findUnique: jest.fn(), create: jest.fn() },
       user: { findFirst: jest.fn(), create: jest.fn().mockResolvedValue(user) },
       refreshSession: { create: jest.fn() },
+      playerProfile: { findUnique: jest.fn().mockResolvedValue(null) },
       $transaction: jest.fn((action) => action(db)),
     };
     service = new AuthService(db, {
@@ -44,12 +45,17 @@ describe('Google auth (mock provider and Prisma)', () => {
   });
 
   it('attaches a new subject atomically and reuses the same user on repeat login', async () => {
-    db.googleIdentity.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ user });
-    await expect(service.loginGoogle('token')).resolves.toMatchObject({ user: { id: 7 } });
-    await expect(service.loginGoogle('token')).resolves.toMatchObject({ user: { id: 7 } });
+    db.googleIdentity.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ onboardingPending: true }).mockResolvedValueOnce({ user }).mockResolvedValueOnce({ onboardingPending: false });
+    await expect(service.loginGoogle('token')).resolves.toMatchObject({
+      user: { id: 7 }, needsOnboarding: true,
+    });
+    db.playerProfile.findUnique.mockResolvedValue({ playingArea: 'Da Nang, Vietnam' });
+    await expect(service.loginGoogle('token')).resolves.toMatchObject({
+      user: { id: 7 }, needsOnboarding: false,
+    });
     expect(verify).toHaveBeenCalledWith({ idToken: 'token', audience: 'test-audience' });
     expect(db.user.create).toHaveBeenCalledTimes(1);
-    expect(db.user.create.mock.calls[0][0].data.googleIdentity).toEqual({ create: { subject: identity.sub } });
+    expect(db.user.create.mock.calls[0][0].data.googleIdentity).toEqual({ create: { subject: identity.sub, onboardingPending: true } });
     expect(db.refreshSession.create).toHaveBeenCalledTimes(2);
   });
 
@@ -73,6 +79,16 @@ describe('Google auth (mock provider and Prisma)', () => {
     db.user.findFirst.mockResolvedValue(null);
     await expect(service.linkGoogle(7, 'token')).rejects.toBeInstanceOf(ConflictException);
     expect(db.googleIdentity.create).not.toHaveBeenCalled();
+  });
+
+  it('does not onboard legacy linked users with missing area', async () => {
+    db.googleIdentity.findUnique.mockResolvedValueOnce({ user }).mockResolvedValueOnce({ onboardingPending: false });
+    await expect(service.loginGoogle('token')).resolves.toMatchObject({ needsOnboarding: false, user: { id: 7 } });
+  });
+  it('reports persistent pending and completed onboarding states', async () => {
+    db.googleIdentity.findUnique.mockResolvedValueOnce({ onboardingPending: true }).mockResolvedValueOnce({ onboardingPending: false });
+    await expect(service.googleOnboardingStatus(7)).resolves.toEqual({ needsOnboarding: true });
+    await expect(service.googleOnboardingStatus(7)).resolves.toEqual({ needsOnboarding: false });
   });
 
 });

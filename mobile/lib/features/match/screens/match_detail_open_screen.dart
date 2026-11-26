@@ -104,8 +104,8 @@ class MatchDetailOpenScreen extends StatelessWidget {
                   for (final c in candidates) ...[
                     ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: MatchColors.primaryGreen.withOpacity(
-                          0.12,
+                        backgroundColor: MatchColors.primaryGreen.withValues(
+                          alpha: 0.12,
                         ),
                         child: Text(
                           c['name']![0],

@@ -111,7 +111,7 @@ export class AuthService {
       if (existing) throw new ConflictException('Sign in to the existing account before linking Google');
       try {
         user = await this.prisma.user.create({ data: {
-          googleIdentity: { create: { subject } }, email, fullName: name,
+          googleIdentity: { create: { subject, onboardingPending: true } }, email, fullName: name,
           password: await bcrypt.hash(randomUUID() + randomUUID(), 12),
           role: { connectOrCreate: { where: { name: RoleName.PLAYER }, create: { name: RoleName.PLAYER } } },
         }, include: { role: true } });
@@ -121,7 +121,17 @@ export class AuthService {
         if (!user) throw new ConflictException('Sign in to the existing account before linking Google');
       }
     }
-    return this.issueSession(user);
+    return {
+      ...(await this.issueSession(user)),
+      needsOnboarding: (await this.prisma.googleIdentity.findUnique({
+        where: { userId: user.id }, select: { onboardingPending: true },
+      }))?.onboardingPending === true,
+    };
+  }
+
+  async googleOnboardingStatus(userId: number) {
+    const identity = await this.prisma.googleIdentity.findUnique({ where: { userId }, select: { onboardingPending: true } });
+    return { needsOnboarding: identity?.onboardingPending === true };
   }
 
   async googleLinkStatus(userId: number) {

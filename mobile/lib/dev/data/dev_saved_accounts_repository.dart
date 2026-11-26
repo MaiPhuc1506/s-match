@@ -183,10 +183,9 @@ class DevSavedAccountsRepository {
     if (oldIndex < 0 ||
         oldIndex >= accounts.length ||
         newIndex < 0 ||
-        newIndex > accounts.length) {
+        newIndex >= accounts.length) {
       return;
     }
-    if (newIndex > oldIndex) newIndex -= 1;
     final account = accounts.removeAt(oldIndex);
     accounts.insert(newIndex, account);
     _cache = accounts;

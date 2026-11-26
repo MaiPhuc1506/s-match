@@ -53,6 +53,7 @@ void main() {
         ],
       );
       expect(court.startingHourlyRate, 120000);
+      expect(court.priceSummary, '120000 VND / hour');
       expect(court.discoveryPriceBand, r'$$');
       expect(facility().discoveryPriceBand, isNull);
     },

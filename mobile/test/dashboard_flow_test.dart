@@ -565,7 +565,7 @@ void main() {
     expect(data.bookings.single.court, 'Actual court');
     expect(data.bookings.single.player, 'Actual player');
     expect(data.bookings.single.time, '18:00–19:00');
-    expect(data.bookings.single.total, '125000 VND');
+    expect(data.bookings.single.total, '125.000 VND');
     expect(data.bookings.single.status, 'Confirmed');
     expect(data.preview, isFalse);
   });
@@ -727,6 +727,38 @@ void main() {
           requestedPeriods.add(period);
           requestedFacilities.add(facilityId);
         },
+        bookings: [
+          DashboardBooking(
+            'Court 1',
+            'Player A',
+            '08:00–09:00',
+            'Confirmed',
+            '170,000đ',
+            totalValue: 170000,
+            startTime: DateTime(2020, 1, 1),
+            endTime: DateTime(2020, 1, 1, 1),
+          ),
+          DashboardBooking(
+            'Court 2',
+            'Player B',
+            '09:00–10:00',
+            'Completed',
+            '85,000đ',
+            totalValue: 85000,
+            startTime: DateTime(2020, 1, 1),
+            endTime: DateTime(2020, 1, 1, 1),
+          ),
+          DashboardBooking(
+            'Court 3',
+            'Player C',
+            '10:00–11:00',
+            'Cancelled',
+            '85,000đ',
+            totalValue: 85000,
+            startTime: DateTime(2020, 1, 1),
+            endTime: DateTime(2020, 1, 1, 1),
+          ),
+        ],
       );
       await tester.pumpWidget(
         ProviderScope(
@@ -741,6 +773,14 @@ void main() {
       expect(find.text('Available now'), findsOneWidget);
       expect(find.text('4 / 6 courts'), findsNothing);
       expect(find.text('12'), findsNothing);
+      await tester.scrollUntilVisible(
+        find.text("Today's booked value"),
+        150,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text("Today's booked value"), findsOneWidget);
+      expect(find.text('255,000đ'), findsOneWidget);
       await tester.scrollUntilVisible(
         find.text('Gross Booked Value'),
         150,
@@ -823,11 +863,12 @@ void main() {
 }
 
 class _FakeLiveDashboardRepository extends DashboardRepository {
-  _FakeLiveDashboardRepository({required this.onLoad})
+  _FakeLiveDashboardRepository({required this.onLoad, this.bookings = const []})
     : super(token: () => 'owner-token', role: () => 'COURT_OWNER');
 
   final void Function(DashboardRole role, String? period, int? facilityId)
   onLoad;
+  final List<DashboardBooking> bookings;
 
   @override
   Future<DashboardData> load(
@@ -839,14 +880,14 @@ class _FakeLiveDashboardRepository extends DashboardRepository {
     DateTime? bookingDate,
   }) async {
     onLoad(role, period, facilityId);
-    return const DashboardData(
+    return DashboardData(
       preview: false,
-      people: [],
-      facilities: [
+      people: const [],
+      facilities: const [
         DashboardFacility(1, 'Sky Badminton Center', 4),
         DashboardFacility(2, 'Star Badminton Club', 3),
       ],
-      analytics: DashboardAnalytics(
+      analytics: const DashboardAnalytics(
         dataStatus: 'READY',
         grossBookedRevenue: 640000,
         collectedRevenue: null,
@@ -890,6 +931,7 @@ class _FakeLiveDashboardRepository extends DashboardRepository {
           ),
         ],
       ),
+      bookings: bookings,
     );
   }
 }

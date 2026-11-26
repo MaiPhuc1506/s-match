@@ -1,5 +1,7 @@
 import {
   ForbiddenException,
+  ConflictException,
+  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -15,6 +17,9 @@ export class FacilitiesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createFacility(ownerId: number, dto: CreateFacilityDto) {
+    if ((dto.latitude == null) !== (dto.longitude == null)) {
+      throw new BadRequestException('Latitude and longitude must be provided together.');
+    }
     return this.prisma.facility.create({
       data: {
         ownerId,
@@ -104,6 +109,12 @@ export class FacilitiesService {
       throw new ForbiddenException('Bạn không có quyền cập nhật cơ sở này');
     }
 
+    const latitude = dto.latitude ?? facility.latitude;
+    const longitude = dto.longitude ?? facility.longitude;
+    if ((latitude == null) !== (longitude == null)) {
+      throw new BadRequestException('Latitude and longitude must be provided together.');
+    }
+
     return this.prisma.facility.update({
       where: { id: facilityId },
       data: {
@@ -119,70 +130,30 @@ export class FacilitiesService {
   }
 
   async deleteFacility(ownerId: number, facilityId: number, userRole?: string) {
-    const facility = await this.prisma.facility.findUnique({
-      where: { id: facilityId },
-    });
-
-    if (!facility) {
-      throw new NotFoundException(`Không tìm thấy cơ sở với ID ${facilityId}`);
-    }
-
-    if (userRole !== Role.ADMIN && facility.ownerId !== ownerId) {
-      throw new ForbiddenException('Bạn không có quyền xóa cơ sở này (cơ sở thuộc chủ sân khác)');
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      // 1. Tìm tất cả các sân con của cơ sở
-      const courts = await tx.court.findMany({
-        where: { facilityId },
-        select: { id: true },
-      });
-      const courtIds = courts.map((c) => c.id);
-
-      if (courtIds.length > 0) {
-        // 2. Tìm tất cả các booking thuộc các sân này
-        const bookings = await tx.booking.findMany({
-          where: { courtId: { in: courtIds } },
-          select: { id: true },
-        });
-        const bookingIds = bookings.map((b) => b.id);
-
-        if (bookingIds.length > 0) {
-          // Gỡ liên kết Match -> Booking để không bị vi phạm khóa ngoại
-          await tx.match.updateMany({
-            where: { bookingId: { in: bookingIds } },
-            data: { bookingId: null },
-          });
-
-          // Xóa các booking
-          await tx.booking.deleteMany({
-            where: { id: { in: bookingIds } },
-          });
-        }
-
-        // 3. Xóa các TimeSlots của sân con
-        await tx.timeSlot.deleteMany({
-          where: { courtId: { in: courtIds } },
-        });
-
-        // 4. Xóa các sân con
-        await tx.court.deleteMany({
-          where: { id: { in: courtIds } },
-        });
+    return this.prisma.$transaction(async (tx) => {
+      // Lock the parent and child rows before checking history. Booking inserts
+      // must acquire a foreign-key lock on the court and cannot race this check.
+      const facilities = await tx.$queryRaw<{ id: number; ownerId: number; name: string }[]>`
+        SELECT "id", "ownerId", "name" FROM "Facility" WHERE "id" = ${facilityId} FOR UPDATE
+      `;
+      const facility = facilities[0];
+      if (!facility) throw new NotFoundException(`Facility ${facilityId} not found`);
+      if (userRole !== Role.ADMIN && facility.ownerId !== ownerId) {
+        throw new ForbiddenException('You cannot delete another owner’s facility');
       }
-
-      // 5. Xóa giờ hoạt động của cơ sở
-      await tx.operatingHours.deleteMany({
-        where: { facilityId },
-      });
-
-      // 6. Xóa chính cơ sở
-      await tx.facility.delete({
-        where: { id: facilityId },
-      });
+      const courts = await tx.$queryRaw<{ id: number }[]>`
+        SELECT "id" FROM "Court" WHERE "facilityId" = ${facilityId} ORDER BY "id" FOR UPDATE
+      `;
+      const courtIds = courts.map((court) => court.id);
+      if (courtIds.length && await tx.booking.count({ where: { courtId: { in: courtIds } } })) {
+        throw new ConflictException('This facility has booking history and cannot be deleted.');
+      }
+      await tx.timeSlot.deleteMany({ where: { courtId: { in: courtIds } } });
+      await tx.court.deleteMany({ where: { facilityId } });
+      await tx.operatingHours.deleteMany({ where: { facilityId } });
+      await tx.facility.delete({ where: { id: facilityId } });
+      return { message: `Facility "${facility.name}" deleted` };
     });
-
-    return { message: `Đã xóa cơ sở "${facility.name}" thành công` };
   }
 
   async updateCourt(ownerId: number, facilityId: number, courtId: number, dto: UpdateCourtDto, userRole?: string) {
@@ -217,58 +188,26 @@ export class FacilitiesService {
   }
 
   async deleteCourt(ownerId: number, facilityId: number, courtId: number, userRole?: string) {
-    const facility = await this.prisma.facility.findUnique({
-      where: { id: facilityId },
-    });
-
-    if (!facility) {
-      throw new NotFoundException(`Không tìm thấy cơ sở với ID ${facilityId}`);
-    }
-
-    if (userRole !== Role.ADMIN && facility.ownerId !== ownerId) {
-      throw new ForbiddenException('Bạn không có quyền xóa sân trong cơ sở này');
-    }
-
-    const court = await this.prisma.court.findUnique({
-      where: { id: courtId },
-    });
-
-    if (!court || court.facilityId !== facilityId) {
-      throw new NotFoundException(`Không tìm thấy sân với ID ${courtId} trong cơ sở này`);
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      // 1. Tìm các booking của sân này
-      const bookings = await tx.booking.findMany({
-        where: { courtId },
-        select: { id: true },
-      });
-      const bookingIds = bookings.map((b) => b.id);
-
-      if (bookingIds.length > 0) {
-        // Gỡ liên kết Match -> Booking
-        await tx.match.updateMany({
-          where: { bookingId: { in: bookingIds } },
-          data: { bookingId: null },
-        });
-
-        // Xóa bookings
-        await tx.booking.deleteMany({
-          where: { id: { in: bookingIds } },
-        });
+    return this.prisma.$transaction(async (tx) => {
+      const facilities = await tx.$queryRaw<{ id: number; ownerId: number }[]>`
+        SELECT "id", "ownerId" FROM "Facility" WHERE "id" = ${facilityId} FOR UPDATE
+      `;
+      const facility = facilities[0];
+      if (!facility) throw new NotFoundException(`Facility ${facilityId} not found`);
+      if (userRole !== Role.ADMIN && facility.ownerId !== ownerId) {
+        throw new ForbiddenException('You cannot delete another owner’s court');
       }
-
-      // 2. Xóa time slots của sân
-      await tx.timeSlot.deleteMany({
-        where: { courtId },
-      });
-
-      // 3. Xóa sân
-      await tx.court.delete({
-        where: { id: courtId },
-      });
+      const courts = await tx.$queryRaw<{ id: number; name: string }[]>`
+        SELECT "id", "name" FROM "Court" WHERE "id" = ${courtId} AND "facilityId" = ${facilityId} FOR UPDATE
+      `;
+      const court = courts[0];
+      if (!court) throw new NotFoundException(`Court ${courtId} not found in this facility`);
+      if (await tx.booking.count({ where: { courtId } })) {
+        throw new ConflictException('This court has booking history and cannot be deleted.');
+      }
+      await tx.timeSlot.deleteMany({ where: { courtId } });
+      await tx.court.delete({ where: { id: courtId } });
+      return { message: `Court "${court.name}" deleted` };
     });
-
-    return { message: `Đã xóa sân "${court.name}" thành công` };
   }
 }

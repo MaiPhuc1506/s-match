@@ -332,7 +332,8 @@ class RecommendedPlayerDetailScreen extends StatelessWidget {
                 if (player.location != null || player.distanceKm != null)
                   Text(
                     [
-                      if (player.location != null) '● ${player.location}',
+                      if (player.location != null)
+                        'Usual Playing Area: ${player.location}',
                       if (player.distanceKm != null)
                         '${player.distanceKm!.toStringAsFixed(1)} km away',
                     ].join(' · '),

@@ -278,6 +278,7 @@ class _LiveOpenMatchListScreenState extends State<LiveOpenMatchListScreen> {
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: ListTile(
+                      key: ValueKey('open-match-${match['id']}'),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 6,

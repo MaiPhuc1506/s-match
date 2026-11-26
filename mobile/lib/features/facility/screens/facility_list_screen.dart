@@ -63,6 +63,8 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
             isOpen: hours is List && hours.isNotEmpty,
             contactPhone: facility['contactPhone'] as String?,
             description: facility['description'] as String?,
+            latitude: (facility['latitude'] as num?)?.toDouble(),
+            longitude: (facility['longitude'] as num?)?.toDouble(),
           );
         }).toList();
       }

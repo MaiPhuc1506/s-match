@@ -8,6 +8,9 @@ export class RecommendationProfileDto {
   nickname: string | null;
 
   @ApiProperty({ type: String, nullable: true })
+  playingArea: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
   avatarUrl: string | null;
 
   @ApiProperty({ type: String, nullable: true })

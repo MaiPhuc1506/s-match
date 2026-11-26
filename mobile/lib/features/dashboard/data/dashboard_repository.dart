@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/formatting/vietnamese_currency.dart';
 import '../../auth/services/auth_service.dart';
 
 enum DashboardRole { owner, admin }
@@ -50,11 +51,13 @@ class DashboardBooking {
     this.endTime,
     this.facilityName,
     this.id,
+    this.totalValue,
   });
   final DateTime? startTime, endTime;
   final String? facilityName;
   final int? id;
   final String court, player, time, status, total;
+  final num? totalValue;
 }
 
 /// Optional daily operational snapshot; absent until a live Owner feed exists.
@@ -267,6 +270,12 @@ class DashboardData {
       : facilities.isNotEmpty
       ? facilities.fold(0, (a, f) => a + f.courts)
       : (analytics?.courts.length ?? 0);
+
+  /// SUM(totalPrice) of the selected day's confirmed/completed bookings.
+  /// Cancelled and pending bookings never contribute to booked value.
+  num get bookedValue => bookings
+      .where((b) => b.status == 'Confirmed' || b.status == 'Completed')
+      .fold<num>(0, (sum, b) => sum + (b.totalValue ?? 0));
 }
 
 /// Design fixtures are explicit and never substituted for a failed API request.
@@ -281,6 +290,7 @@ abstract final class DashboardFixtures {
       '18:00–19:00',
       'Confirmed',
       '120,000đ',
+      totalValue: 120000,
     ),
     DashboardBooking(
       'Court 02',
@@ -288,6 +298,7 @@ abstract final class DashboardFixtures {
       '19:00–20:00',
       'Pending',
       '120,000đ',
+      totalValue: 120000,
     ),
     DashboardBooking(
       'Court 03',
@@ -295,6 +306,7 @@ abstract final class DashboardFixtures {
       '20:00–21:00',
       'Confirmed',
       '120,000đ',
+      totalValue: 120000,
     ),
   ];
   // The approved Owner daily example is a six-court facility. Keep Admin's
@@ -527,6 +539,7 @@ class DashboardRepository {
     final utilizationRaw = results[offset++].data;
 
     final analytics = _parseAnalytics(
+      role: role,
       scopeOverviewRaw: scopeOverviewRaw,
       revenueOverviewRaw: revenueOverviewRaw,
       trendRaw: trendRaw,
@@ -559,7 +572,10 @@ class DashboardRepository {
                     (b['user'] as Map?)?['fullName']?.toString() ?? 'Player',
                     '${time(start)}–${time(end)}',
                     '${status[0].toUpperCase()}${status.substring(1)}',
-                    '${b['totalPrice']} VND',
+                    b['totalPrice'] is num
+                        ? formatVietnameseVnd(b['totalPrice'] as num)
+                        : '—',
+                    totalValue: (b['totalPrice'] as num?)?.toDouble(),
                     startTime: DateTime.parse(b['startTime'] as String),
                     endTime: DateTime.parse(b['endTime'] as String),
                     id: (b['id'] as num?)?.toInt(),
@@ -574,6 +590,7 @@ class DashboardRepository {
   }
 
   DashboardAnalytics? _parseAnalytics({
+    required DashboardRole role,
     required Object? scopeOverviewRaw,
     required Object? revenueOverviewRaw,
     required Object? trendRaw,
@@ -616,14 +633,14 @@ class DashboardRepository {
         (summaryMap['totalBookings'] as num?)?.toInt();
     final confirmedBookings = (revMap['confirmedBookings'] as num?)?.toInt();
 
-    double? occupancyRatePercent;
-    if (summaryMap['reservedOccupancyRatePercent'] is num) {
-      occupancyRatePercent = (summaryMap['reservedOccupancyRatePercent'] as num)
-          .toDouble();
-    } else if (revMap['occupancyRate'] is num) {
-      occupancyRatePercent =
-          ((revMap['occupancyRate'] as num).toDouble() * 10000).round() / 100;
-    }
+    // Operating hours alone do not account for disabled/unpriced court slots.
+    // Do not present that estimate as real bookable-capacity occupancy.
+    final double? occupancyRatePercent = role == DashboardRole.owner
+        ? null
+        : (summaryMap['reservedOccupancyRatePercent'] as num?)?.toDouble() ??
+              ((revMap['occupancyRate'] as num?)?.toDouble() == null
+                  ? null
+                  : (revMap['occupancyRate'] as num).toDouble() * 100);
 
     final byStatus = <String, int>{
       'PENDING': 0,
