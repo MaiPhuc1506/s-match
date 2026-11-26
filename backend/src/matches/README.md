@@ -3,15 +3,19 @@
 `PATCH /matches/:id/complete` requires a valid access token. There is no request
 body: host identity comes from the verified JWT, and ADMIN has no host override.
 Only the stored host may complete OPEN, FULL or IN_PROGRESS when server time is
-at or after endTime. Success is HTTP 200 with the existing manager projection;
+at or after startTime (including early finish before scheduled endTime). Success is HTTP 200 with the existing manager projection;
 Booking and participant data are not changed. Invalid IDs return 400, invalid
 authentication 401, non-host 403, absent Match 404 and invalid state/time 409.
 Repeated completion returns 409 rather than another successful mutation.
+MATCH_COMPLETED notifications for accepted non-host participants are persisted
+in that same transaction; notification failure rolls back completion. The scheduled
+endTime and Booking are preserved. Feedback still requires scheduled endTime
+to have been reached, as well as COMPLETED and accepted participation.
 
 All service mutations of an existing Match or its participants lock the parent
 Match row using parameterized SELECT FOR UPDATE inside a ReadCommitted Prisma
 transaction. Completion additionally uses a conditional update on id, hostId,
-allowed status and endTime. Time edits, cancellation, invitation/request writes,
+allowed status and startTime. Time edits, cancellation, invitation/request writes,
 accept/approve/reject and leaving use the same parent lock, so an older request
 cannot commit a roster/time change after completion. OPEN/FULL recalculation has
 a write-time status predicate as an additional safeguard. No in-process mutex or

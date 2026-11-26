@@ -1,3 +1,4 @@
+import '../../court_map/widgets/facility_gallery.dart';
 import '../../../core/theme/app_motion_widgets.dart';
 
 import 'package:flutter/material.dart';
@@ -5,7 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../booking_theme.dart';
 
-class BookingDetailScreen extends StatelessWidget {
+class BookingDetailScreen extends StatefulWidget {
   final bool readOnly;
   final String? photoAsset;
   final String bookingId;
@@ -18,7 +19,8 @@ class BookingDetailScreen extends StatelessWidget {
   final String courtType;
   final String priceText;
   final String statusText;
-  final VoidCallback? onCancelBooking;
+  final Future<void> Function()? onCancelBooking;
+  final VoidCallback? onOrganizeMatch;
 
   const BookingDetailScreen({
     super.key,
@@ -35,8 +37,33 @@ class BookingDetailScreen extends StatelessWidget {
     this.priceText = '100,000 VND',
     this.statusText = 'Confirmed',
     this.onCancelBooking,
+    this.onOrganizeMatch,
   });
 
+  @override
+  State<BookingDetailScreen> createState() => _BookingDetailScreenState();
+}
+
+class _BookingDetailScreenState extends State<BookingDetailScreen> {
+  bool cancelling = false;
+  bool cancelled = false;
+  bool get readOnly => widget.readOnly;
+  String? get photoAsset => widget.photoAsset;
+  String get bookingId => widget.bookingId;
+  String get facilityName => widget.facilityName;
+  String get courtName => widget.courtName;
+  String get address => widget.address;
+  String get dateText => widget.dateText;
+  String get timeRange => widget.timeRange;
+  String get durationText => widget.durationText;
+  String get courtType => widget.courtType;
+  String get priceText => widget.priceText;
+  Future<void> Function()? get onCancelBooking => widget.onCancelBooking;
+  String get statusText => cancelled ? 'Cancelled' : widget.statusText;
+  bool get canCancel =>
+      !cancelled &&
+      !cancelling &&
+      !['CANCELLED', 'COMPLETED'].contains(statusText.toUpperCase());
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -57,7 +84,19 @@ class BookingDetailScreen extends StatelessWidget {
               const SizedBox(height: 16),
               if (!readOnly) _buildFacilityAndPolicyCard(context),
               const SizedBox(height: 24),
-              if (!readOnly) _buildCancelButton(context),
+              if (cancelling) const Center(child: CircularProgressIndicator()),
+              if ((!readOnly || onCancelBooking != null) && canCancel)
+                _buildCancelButton(context),
+              if (widget.onOrganizeMatch != null && !cancelled) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: widget.onOrganizeMatch,
+                    child: const Text('Organize Open Match'),
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
             ],
           ),
@@ -137,7 +176,11 @@ class BookingDetailScreen extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                'Upcoming',
+                statusText.toUpperCase() == 'CANCELLED'
+                    ? 'Cancelled'
+                    : statusText.toUpperCase() == 'COMPLETED'
+                    ? 'Completed'
+                    : 'Upcoming',
                 style: BookingTypography.inter(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -174,11 +217,10 @@ class BookingDetailScreen extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: photoAsset != null
-                ? Image.asset(
-                    photoAsset!,
+                ? SizedBox(
                     width: 92,
                     height: 62,
-                    fit: BoxFit.cover,
+                    child: FacilityPhoto(photoAsset!),
                   )
                 : SvgPicture.asset(
                     BookingIcons.courtThumbnail,
@@ -578,10 +620,27 @@ class BookingDetailScreen extends StatelessWidget {
               backgroundColor: BookingColors.badgeCancelledText,
               elevation: 0,
             ),
-            onPressed: () {
+            onPressed: () async {
+              if (cancelling) return;
               Navigator.pop(ctx);
               if (onCancelBooking != null) {
-                onCancelBooking!();
+                setState(() => cancelling = true);
+                try {
+                  await onCancelBooking!();
+                  if (mounted) setState(() => cancelled = true);
+                } catch (_) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Could not cancel booking. Refresh history and try again.',
+                        ),
+                      ),
+                    );
+                  }
+                } finally {
+                  if (mounted) setState(() => cancelling = false);
+                }
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(

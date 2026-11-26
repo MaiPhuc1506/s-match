@@ -15,7 +15,7 @@ describe('MatchesService', () => {
   };
   const createDto = {
     mode: 'DOUBLES' as const, purpose: 'CASUAL' as const,
-    neededPlayers: 2, minSkillLevel: 2, maxSkillLevel: 4,
+    neededPlayers: 3, minSkillLevel: 2, maxSkillLevel: 4,
   };
 
   beforeEach(() => {
@@ -48,8 +48,8 @@ describe('MatchesService', () => {
     await service.createFromBooking(5, 1, createDto);
     expect(prisma.match.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        bookingId: 1, privacy: MatchPrivacy.OPEN, maxPlayers: 3,
-        feePerPlayer: 80000, mode: 'DOUBLES', purpose: 'CASUAL',
+        bookingId: 1, privacy: MatchPrivacy.OPEN, maxPlayers: 4,
+        feePerPlayer: 60000, mode: 'DOUBLES', purpose: 'CASUAL',
         minSkillLevel: 2, maxSkillLevel: 4,
         participants: { create: { userId: 5, role: 'HOST', status: ParticipantStatus.ACCEPTED } },
       }),
@@ -60,7 +60,7 @@ describe('MatchesService', () => {
     prisma.match.findMany.mockResolvedValue([]);
     await service.findAll({ mode: 'DOUBLES', purpose: 'CASUAL' });
     expect(prisma.match.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { privacy: MatchPrivacy.OPEN, status: MatchState.OPEN, mode: 'DOUBLES', purpose: 'CASUAL' },
+      where: { privacy: MatchPrivacy.OPEN, status: MatchState.OPEN, startTime: { gt: expect.any(Date) }, mode: 'DOUBLES', purpose: 'CASUAL' },
     }));
   });
 

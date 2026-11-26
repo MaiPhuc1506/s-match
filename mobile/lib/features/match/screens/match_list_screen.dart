@@ -11,6 +11,7 @@ import 'match_invitations_screen.dart';
 import '../widgets/match_card.dart';
 import 'create_match_screen.dart';
 import 'match_detail_open_screen.dart';
+import 'live_open_match_list_screen.dart';
 
 import 'package:mobile/features/navigation/player_bottom_navigation.dart';
 
@@ -82,6 +83,11 @@ class _MatchListScreenState extends State<MatchListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.onCreateMatch == null &&
+        widget.onMyMatches == null &&
+        widget.onMatchDetail == null) {
+      return const LiveOpenMatchListScreen();
+    }
     return ListenableBuilder(
       listenable: MatchUiStore.instance,
       builder: (context, _) => Scaffold(

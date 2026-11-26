@@ -50,7 +50,9 @@ export class BookingsService {
     }
 
     // Đơn đặt sân phải nằm trong cùng 1 ngày
-    if (vietnamTime(start).date !== vietnamTime(end).date) {
+    const endsAtMidnight = vietnamTime(end).time === '00:00' &&
+      vietnamTime(new Date(end.getTime() - 1)).date === vietnamTime(start).date;
+    if (vietnamTime(start).date !== vietnamTime(end).date && !endsAtMidnight) {
       throw new BadRequestException('Đơn đặt sân phải diễn ra trong cùng một ngày');
     }
 
@@ -80,7 +82,7 @@ export class BookingsService {
 
       // 3. Kiểm tra giờ hoạt động của cơ sở
       const startInfo = vietnamTime(start);
-      const endInfo = vietnamTime(end);
+      const endInfo = { ...vietnamTime(end), time: endsAtMidnight ? '24:00' : vietnamTime(end).time };
 
       const isWithinHours = await this.operatingHoursService.isWithinOperatingHours(
         court.facilityId,
@@ -113,17 +115,20 @@ export class BookingsService {
       // 5. Giá được tính toán an toàn phía server
       const configured = await tx.timeSlot.findMany({
         where: { courtId: dto.courtId, dayOfWeek: startInfo.dayOfWeek, isActive: true,
-          startTime: { gte: startInfo.time }, endTime: { lte: endInfo.time } },
+          startTime: { lt: endInfo.time }, endTime: { gt: startInfo.time } },
         orderBy: { startTime: 'asc' },
       });
       let cursor = startInfo.time;
       let totalPrice = 0;
       for (const slot of configured) {
-        if (slot.startTime !== cursor || slot.endTime <= cursor || !Number.isFinite(slot.price) || slot.price < 0) {
+        const coveredStart = slot.startTime < startInfo.time ? startInfo.time : slot.startTime;
+        const coveredEnd = slot.endTime > endInfo.time ? endInfo.time : slot.endTime;
+        if (coveredStart !== cursor || coveredEnd <= cursor || !Number.isFinite(slot.price) || slot.price < 0) {
           throw new BadRequestException('Khung giờ đặt sân chưa có giá hợp lệ');
         }
-        totalPrice += slot.price; // TimeSlot.price is the price of the entire slot.
-        cursor = slot.endTime;
+        const minutes = (time: string) => { const [h, m] = time.split(':').map(Number); return h * 60 + m; };
+        totalPrice += slot.price * (minutes(coveredEnd) - minutes(coveredStart)) / (minutes(slot.endTime) - minutes(slot.startTime));
+        cursor = coveredEnd;
       }
       if (!configured.length || cursor !== endInfo.time) {
         throw new BadRequestException('Khung giờ chưa được cấu hình hoặc đã ngừng nhận đặt');
@@ -156,6 +161,7 @@ export class BookingsService {
       where: { userId },
       orderBy: { startTime: 'desc' },
       include: {
+        match: { select: { id: true, status: true } },
         court: {
           include: {
             facility: true,
@@ -219,9 +225,13 @@ export class BookingsService {
   }
 
   async cancel(id: number, currentUserId: number, currentUserRole: string) {
-    const booking = await this.prisma.booking.findUnique({
+    return this.prisma.$transaction(async (db) => {
+    // Serialize with creation of a match linked to this booking.
+    await db.$queryRaw`SELECT id FROM "Booking" WHERE id = ${id} FOR UPDATE`;
+    const booking = await db.booking.findUnique({
       where: { id },
       include: {
+        match: { select: { id: true, status: true } },
         court: {
           include: {
             facility: true,
@@ -250,12 +260,20 @@ export class BookingsService {
       throw new BadRequestException('Không thể hủy đơn đặt sân đã hoàn tất');
     }
 
-    return this.prisma.booking.update({
+    if (booking.match && booking.match.status !== 'CANCELLED' && booking.match.status !== 'COMPLETED') {
+      await db.$queryRaw`SELECT id FROM "Match" WHERE id = ${booking.match.id} FOR UPDATE`;
+      await db.match.updateMany({
+        where: { id: booking.match.id, status: { notIn: ['CANCELLED', 'COMPLETED'] } },
+        data: { status: 'CANCELLED' },
+      });
+    }
+    return db.booking.update({
       where: { id },
       data: { status: BookingStatus.CANCELLED },
       include: {
         court: true,
       },
+    });
     });
   }
 }

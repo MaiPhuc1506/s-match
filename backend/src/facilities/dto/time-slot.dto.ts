@@ -27,7 +27,7 @@ export class CreateTimeSlotDto {
 
   @ApiProperty({ example: '19:00' })
   @IsString()
-  @Matches(TIME_PATTERN, { message: TIME_MESSAGE })
+  @Matches(/^(?:([01]\d|2[0-3]):[0-5]\d|24:00)$/, { message: TIME_MESSAGE })
   endTime: string;
 
   @ApiProperty({ example: 240000, description: 'Giá cho khung giờ này (VNĐ)' })
@@ -46,7 +46,7 @@ export class UpdateTimeSlotDto {
   @ApiPropertyOptional({ example: '19:00' })
   @IsOptional()
   @IsString()
-  @Matches(TIME_PATTERN, { message: TIME_MESSAGE })
+  @Matches(/^(?:([01]\d|2[0-3]):[0-5]\d|24:00)$/, { message: TIME_MESSAGE })
   endTime?: string;
 
   @ApiPropertyOptional({ example: 240000 })
@@ -59,4 +59,13 @@ export class UpdateTimeSlotDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+}
+
+// Separate endpoint lets newer clients fail safely against older servers,
+// rather than invoking legacy price updates that remove tariff metadata.
+export class UpdateTimeSlotPriceDto {
+  @ApiProperty({ example: 240000, description: 'Giá cho toàn bộ khung giờ (VNĐ)' })
+  @IsNumber()
+  @Min(0)
+  price: number;
 }

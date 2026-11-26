@@ -45,10 +45,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       _facilityFilter = 'All',
       _query = '';
   bool _owners = false;
+  bool _openingFacilities = false;
   int _facilityIndex = 0;
   int? _selectedFacilityId;
-  final DateTime _demoDate = DateUtils.dateOnly(DateTime.now());
-  DateTime _date = DateUtils.dateOnly(DateTime.now());
+  final DateTime _demoDate = _vietnamToday();
+  DateTime _date = _vietnamToday();
   final _scroll = ScrollController();
   final _search = TextEditingController();
   DashboardPalette get p => DashboardPalette(widget.role);
@@ -77,6 +78,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
 
     _data = _fetchData();
+    if (!p.admin && !widget.preview && widget.initialTab == 1) {
+      _tab = 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _manageFacilities();
+      });
+    }
   }
 
   Future<DashboardData> _fetchData() => ref
@@ -100,6 +107,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     _data = _fetchData();
   });
   void _select(int value) {
+    if (!p.admin && !widget.preview && value == 1) {
+      _manageFacilities();
+      return;
+    }
     if (!p.admin && value == 4) {
       _account();
       return;
@@ -178,6 +189,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Future<void> _manageFacilities() async {
+    if (_openingFacilities) return;
     if (widget.preview) {
       await _info(
         'Manage Facilities',
@@ -185,18 +197,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
       return;
     }
-    if (!await _canOpenManagement() || !mounted) return;
-    final tab = await Navigator.push<int>(
-      context,
-      AppMotion.route(
-        FacilityListScreen(
-          onNavigateTab: (index) => Navigator.pop(context, index),
+    _openingFacilities = true;
+    try {
+      if (!await _canOpenManagement() || !mounted) return;
+      final tab = await Navigator.push<int>(
+        context,
+        AppMotion.route(
+          FacilityListScreen(
+            onNavigateTab: (index) => Navigator.pop(context, index),
+          ),
         ),
-      ),
-    );
-    if (mounted) {
-      _reload();
-      if (tab != null) _select(tab);
+      );
+      if (mounted) {
+        _reload();
+        if (tab != null) _select(tab);
+      }
+    } finally {
+      _openingFacilities = false;
     }
   }
 
@@ -248,7 +265,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
     (m) => '${m[1]},',
   );
-  bool get _isToday => DateUtils.isSameDay(_date, DateTime.now());
+  static DateTime _vietnamToday() =>
+      DateUtils.dateOnly(DateTime.now().toUtc().add(const Duration(hours: 7)));
+  bool get _isToday => DateUtils.isSameDay(_date, _vietnamToday());
   String get _shortDate =>
       '${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][_date.weekday - 1]}, ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][_date.month - 1]} ${_date.day}';
   Future<void> _chooseDate() async {
@@ -698,7 +717,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             height: 44,
             child: FilledButton(
               onPressed: () => setState(() {
-                _date = DateUtils.dateOnly(DateTime.now());
+                _date = _vietnamToday();
                 _data = _fetchData();
               }),
               style: FilledButton.styleFrom(
@@ -768,10 +787,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               next?.court ?? 'No upcoming booking available',
               palette: p,
               icon: 'owner.imgIconCalendar',
-              onTap: next == null ? null : () => _openBooking(next),
+              onTap: next == null
+                  ? null
+                  : () => _openBooking(next, preview: data.preview),
             ),
           ),
         ],
+      ),
+      _gap(),
+      DashboardMetric(
+        _isToday ? "Today's booked value" : 'Booked value · $_shortDate',
+        _currency(data.bookedValue),
+        live
+            ? 'Confirmed & completed bookings · selected day'
+            : 'Confirmed & completed bookings · sample day',
+        palette: p,
+        icon: 'metric.value',
+        onTap: () => _select(2),
       ),
       _gap(),
       Row(
@@ -802,7 +834,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         )
       else
         for (final booking in upcoming.take(2)) ...[
-          _bookingCard(booking, compact: true),
+          _bookingCard(booking, compact: true, preview: data.preview),
           const SizedBox(height: 12),
         ],
       _gap(),
@@ -1116,6 +1148,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           '${b.court} ${b.player}'.toLowerCase().contains(_query),
     );
     return [
+      DashboardSelector(_shortDate, palette: p, onTap: _chooseDate),
+      _gap(),
       _searchField('Search by name or court...'),
       _gap(),
       _filters(
@@ -1135,7 +1169,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           'No bookings match your search or selected status.',
         )
       else
-        ...rows.expand((b) => [_bookingCard(b), _gap()]),
+        ...rows.expand((b) => [_bookingCard(b, preview: data.preview), _gap()]),
       _gap(),
       _note(
         data.preview
@@ -1145,53 +1179,58 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     ];
   }
 
-  void _openBooking(DashboardBooking booking) => Navigator.push(
-    context,
-    AppMotion.route(OwnerBookingDetailScreen(booking: booking)),
-  );
-
-  Widget _bookingCard(DashboardBooking b, {bool compact = false}) =>
-      DashboardCard(
-        palette: p,
-        padding: const EdgeInsets.all(14),
-        onTap: () => _openBooking(b),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: compact ? 48 : 66),
-          child: Row(
-            children: [
-              DashboardAsset('bookings.imgIconCourt', size: 24),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      compact ? '${b.court} · ${b.time}' : b.court,
-                      style: p.text(14, weight: FontWeight.w600),
-                    ),
-                    _gap(4),
-                    Text(
-                      compact
-                          ? '${b.player} · ${b.status}'
-                          : '${b.player} · ${b.time}',
-                      style: p.text(12, color: p.muted),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              Column(
-                children: [
-                  if (!compact)
-                    DashboardPill(b.status, palette: p, status: true),
-                  _gap(4),
-                  DashboardAsset('bookings.imgIconRight', size: 16),
-                ],
-              ),
-            ],
-          ),
+  void _openBooking(DashboardBooking booking, {required bool preview}) =>
+      Navigator.push(
+        context,
+        AppMotion.route(
+          OwnerBookingDetailScreen(booking: booking, preview: preview),
         ),
       );
+
+  Widget _bookingCard(
+    DashboardBooking b, {
+    bool compact = false,
+    bool preview = false,
+  }) => DashboardCard(
+    palette: p,
+    padding: const EdgeInsets.all(14),
+    onTap: () => _openBooking(b, preview: preview),
+    child: ConstrainedBox(
+      constraints: BoxConstraints(minHeight: compact ? 48 : 66),
+      child: Row(
+        children: [
+          DashboardAsset('bookings.imgIconCourt', size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  compact ? '${b.court} · ${b.time}' : b.court,
+                  style: p.text(14, weight: FontWeight.w600),
+                ),
+                _gap(4),
+                Text(
+                  compact
+                      ? '${b.player} · ${b.status}'
+                      : '${b.player} · ${b.time}',
+                  style: p.text(12, color: p.muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          Column(
+            children: [
+              if (!compact) DashboardPill(b.status, palette: p, status: true),
+              _gap(4),
+              DashboardAsset('bookings.imgIconRight', size: 16),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
 
   List<Widget> _users(DashboardData data) {
     final users = data.people
@@ -1394,6 +1433,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           context,
           AppMotion.route(
             const OwnerBookingDetailScreen(
+              preview: true,
               booking: DashboardBooking(
                 'Court 01',
                 'Nguyen Van A',
@@ -1576,11 +1616,23 @@ class _HatchPainter extends CustomPainter {
 }
 
 class OwnerBookingDetailScreen extends StatelessWidget {
-  const OwnerBookingDetailScreen({super.key, required this.booking});
+  const OwnerBookingDetailScreen({
+    super.key,
+    required this.booking,
+    this.preview = false,
+  });
   final DashboardBooking booking;
+  final bool preview;
   @override
   Widget build(BuildContext context) {
     const p = DashboardPalette(DashboardRole.owner);
+    final date = booking.startTime?.toUtc().add(const Duration(hours: 7));
+    final dateText = date == null
+        ? 'Ngày không có dữ liệu'
+        : '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} · UTC+7';
+    final duration = booking.startTime != null && booking.endTime != null
+        ? booking.endTime!.difference(booking.startTime!).inMinutes
+        : null;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
@@ -1600,19 +1652,6 @@ class OwnerBookingDetailScreen extends StatelessWidget {
             onTap: () => Navigator.pop(context),
             child: DashboardAsset('detail.imgIconBack', size: 22),
           ),
-          actions: [
-            DashboardControl(
-              label: 'Booking Actions',
-              onTap: () => dashboardOptions(
-                context,
-                p,
-                'Booking Actions',
-                [],
-                subtitle: 'UI preview only. No booking will be changed.',
-              ),
-              child: const DashboardAsset('detail.imgIconMore', size: 22),
-            ),
-          ],
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -1626,10 +1665,13 @@ class OwnerBookingDetailScreen extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      Image.asset(
-                        dashboardAssets['detail.imgCourtReusedPhotograph']!,
-                        fit: BoxFit.cover,
-                      ),
+                      if (preview)
+                        Image.asset(
+                          dashboardAssets['detail.imgCourtReusedPhotograph']!,
+                          fit: BoxFit.cover,
+                        )
+                      else
+                        ColoredBox(color: p.brand),
                       const DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
@@ -1661,16 +1703,27 @@ class OwnerBookingDetailScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     for (final row in [
-                      ('detail.imgIconCalendar', 'Tuesday, Nov 3, 2026'),
-                      ('detail.imgIconClock', '${booking.time} · 1 hour'),
+                      ('detail.imgIconCalendar', dateText),
+                      (
+                        'detail.imgIconClock',
+                        '${booking.time}${duration == null ? '' : ' · $duration phút'}',
+                      ),
                       ('detail.imgVector', booking.player),
-                      ('detail.imgVector1', '+84 901234567'),
+                      if (booking.facilityName != null)
+                        ('facility', booking.facilityName!),
                     ])
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 7),
                         child: Row(
                           children: [
-                            DashboardAsset(row.$1, size: 18),
+                            if (row.$1 == 'facility')
+                              Icon(
+                                Icons.location_on_outlined,
+                                size: 18,
+                                color: p.brand,
+                              )
+                            else
+                              DashboardAsset(row.$1, size: 18),
                             const SizedBox(width: 12),
                             Expanded(child: Text(row.$2, style: p.text(13))),
                           ],
@@ -1703,33 +1756,10 @@ class OwnerBookingDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Text(
-                'UI preview · sample booking. Contact and booking updates are not connected to a live Owner API.',
+                preview ? 'UI preview · sample booking.' : 'Thông tin liên hệ và thao tác cập nhật đơn chưa có trong màn này.',
                 style: p.text(11, color: p.muted),
               ),
             ],
-          ),
-        ),
-        bottomNavigationBar: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: p.brand,
-                side: BorderSide(color: p.brand),
-                minimumSize: const Size.fromHeight(52),
-                shape: const StadiumBorder(),
-              ),
-              onPressed: () => dashboardOptions(
-                context,
-                p,
-                'Contact Player',
-                [],
-                subtitle:
-                    '${booking.player}\n+84 901234567\nSample contact · no call is placed.',
-              ),
-              child: const Text('Contact Player'),
-            ),
           ),
         ),
       ),

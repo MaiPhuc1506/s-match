@@ -33,6 +33,236 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Player account cannot open owner facility management', (
+    tester,
+  ) async {
+    final client = ApiClient.instance;
+    final oldToken = client.token;
+    final oldUser = AuthService.instance.currentUser;
+    client.setToken('player-token');
+    AuthService.instance.currentUser = {'role': 'PLAYER'};
+    addTearDown(() {
+      if (oldToken == null) {
+        client.clearToken();
+      } else {
+        client.setToken(oldToken);
+      }
+      AuthService.instance.currentUser = oldUser;
+    });
+    final repo = _FakeLiveDashboardRepository(onLoad: (_, _, _) {});
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [dashboardRepositoryProvider.overrideWithValue(repo)],
+        child: const MaterialApp(
+          home: DashboardScreen(role: DashboardRole.owner),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('dashboard-tab-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Sign In Required'), findsOneWidget);
+    expect(find.text('My Facilities'), findsNothing);
+  });
+
+  testWidgets(
+    'Owner Courts opens owned facilities and a read-only live schedule',
+    (tester) async {
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final client = ApiClient.instance;
+      final oldToken = client.token;
+      final oldUser = AuthService.instance.currentUser;
+      client.setToken('owner-token');
+      AuthService.instance.currentUser = {'role': 'COURT_OWNER'};
+      final calls = <String>[];
+      final patches = <Object?>[];
+      final hours = [
+        for (var d = 0; d < 7; d++)
+          {'dayOfWeek': d, 'openTime': '05:00', 'closeTime': '23:00'},
+      ];
+      final court = {
+        'id': 51,
+        'name': 'Court 1',
+        'status': 'ACTIVE',
+        'courtType': 'INDOOR',
+        'timeSlots': [
+          for (var day = 0; day < 7; day++)
+            for (var hour = 5; hour < 23; hour++)
+              {
+                'id': day * 100 + hour,
+                'dayOfWeek': day,
+                'startTime': '${hour.toString().padLeft(2, '0')}:00',
+                'endTime': '${(hour + 1).toString().padLeft(2, '0')}:00',
+                'price': 80000,
+                'isActive': true,
+              },
+        ],
+      };
+      final facility = {
+        'id': 45,
+        'name': 'Owned Centre',
+        'address': 'Da Nang',
+        'courts': [court],
+        'operatingHours': hours,
+      };
+      final interceptor = InterceptorsWrapper(
+        onRequest: (options, handler) {
+          calls.add('${options.method} ${options.path}');
+          Object data;
+          if (options.path == '/facilities/my') {
+            data = [facility];
+          } else if (options.path == '/facilities/45') {
+            data = facility;
+          } else if (options.path.endsWith('/availability')) {
+            expect(
+              options.queryParameters['date'],
+              matches(r'^\d{4}-\d{2}-\d{2}$'),
+            );
+            data = [
+              {
+                'id': 1,
+                'startTime': '05:00',
+                'endTime': '06:00',
+                'isBooked': false,
+                'isActive': true,
+                'status': 'AVAILABLE',
+              },
+              {
+                'id': 2,
+                'startTime': '06:00',
+                'endTime': '07:00',
+                'isBooked': true,
+                'isActive': true,
+                'status': 'BOOKED',
+              },
+              {
+                'id': 3,
+                'startTime': '23:00',
+                'endTime': '24:00',
+                'isBooked': false,
+                'isActive': false,
+                'status': 'LOCKED',
+              },
+            ];
+          } else if (options.method == 'PATCH') {
+            patches.add(options.data);
+            data = <String, dynamic>{};
+          } else {
+            fail('Unexpected request ${options.method} ${options.path}');
+          }
+          handler.resolve(
+            Response(requestOptions: options, data: data, statusCode: 200),
+          );
+        },
+      );
+      client.dio.interceptors.add(interceptor);
+      addTearDown(() {
+        client.dio.interceptors.remove(interceptor);
+        if (oldToken == null) {
+          client.clearToken();
+        } else {
+          client.setToken(oldToken);
+        }
+        AuthService.instance.currentUser = oldUser;
+      });
+      final repo = _FakeLiveDashboardRepository(onLoad: (_, _, _) {});
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [dashboardRepositoryProvider.overrideWithValue(repo)],
+          child: const MaterialApp(
+            home: DashboardScreen(role: DashboardRole.owner),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('dashboard-tab-1')));
+      await tester.pumpAndSettle();
+      expect(find.text('My Facilities'), findsOneWidget);
+      expect(find.text('Owned Centre'), findsOneWidget);
+      expect(calls, contains('GET /facilities/my'));
+      await tester.tap(find.text('Owned Centre'));
+      await tester.pumpAndSettle();
+      expect(
+        calls,
+        contains('GET /facilities/45/courts/51/time-slots/availability'),
+      );
+      expect(
+        find.byKey(const ValueKey('owner-slot-51-06:00 – 07:00')),
+        findsOneWidget,
+      );
+      expect(find.text('Continue'), findsNothing);
+      expect(find.byType(Switch), findsNothing);
+
+      final manage = find.byKey(const ValueKey('manage-court-51'));
+      await tester.scrollUntilVisible(
+        manage,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(manage);
+      await tester.pumpAndSettle();
+      expect(find.byType(Switch), findsNWidgets(18));
+      final edit = find.byTooltip('Edit slot price').first;
+      await tester.ensureVisible(edit);
+      await tester.tap(edit);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, '123000');
+      await tester.tap(find.text('Lưu'));
+      await tester.pumpAndSettle();
+      expect(patches, [
+        {'price': 123000.0},
+      ]);
+      expect(
+        calls.any(
+          (call) =>
+              RegExp(r'^PATCH /facilities/45/courts/51/time-slots/\d+/pricing$')
+                  .hasMatch(call),
+        ),
+        isTrue,
+      );
+      expect(calls.where((call) => call.startsWith('POST /bookings')), isEmpty);
+      expect(find.text('Edit slot price'), findsNothing);
+      await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+      await tester.pumpAndSettle();
+      expect(find.text('My Facilities'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('dashboard-tab-2')));
+      await tester.pumpAndSettle();
+      expect(find.text('No bookings'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Owner booking details do not invent date, duration or phone', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OwnerBookingDetailScreen(
+          booking: DashboardBooking(
+            'Court 1',
+            'Actual player',
+            '18:00–18:30',
+            'Confirmed',
+            '45000 VND',
+            startTime: DateTime.parse('2026-11-09T11:00:00Z'),
+            endTime: DateTime.parse('2026-11-09T11:30:00Z'),
+            facilityName: 'Owned Centre',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('09/11/2026 · UTC+7'), findsOneWidget);
+    expect(find.text('18:00–18:30 · 30 phút'), findsOneWidget);
+    expect(find.text('Actual player'), findsOneWidget);
+    expect(find.text('Owned Centre'), findsOneWidget);
+    expect(find.textContaining('901234567'), findsNothing);
+    expect(find.text('Contact Player'), findsNothing);
+  });
+
   testWidgets(
     'Demo figures are opened explicitly without API calls and Back restores live dashboard',
     (tester) async {
@@ -335,7 +565,7 @@ void main() {
     expect(data.bookings.single.court, 'Actual court');
     expect(data.bookings.single.player, 'Actual player');
     expect(data.bookings.single.time, '18:00–19:00');
-    expect(data.bookings.single.total, '125000 VND');
+    expect(data.bookings.single.total, '125.000 VND');
     expect(data.bookings.single.status, 'Confirmed');
     expect(data.preview, isFalse);
   });
@@ -497,6 +727,38 @@ void main() {
           requestedPeriods.add(period);
           requestedFacilities.add(facilityId);
         },
+        bookings: [
+          DashboardBooking(
+            'Court 1',
+            'Player A',
+            '08:00–09:00',
+            'Confirmed',
+            '170,000đ',
+            totalValue: 170000,
+            startTime: DateTime(2020, 1, 1),
+            endTime: DateTime(2020, 1, 1, 1),
+          ),
+          DashboardBooking(
+            'Court 2',
+            'Player B',
+            '09:00–10:00',
+            'Completed',
+            '85,000đ',
+            totalValue: 85000,
+            startTime: DateTime(2020, 1, 1),
+            endTime: DateTime(2020, 1, 1, 1),
+          ),
+          DashboardBooking(
+            'Court 3',
+            'Player C',
+            '10:00–11:00',
+            'Cancelled',
+            '85,000đ',
+            totalValue: 85000,
+            startTime: DateTime(2020, 1, 1),
+            endTime: DateTime(2020, 1, 1, 1),
+          ),
+        ],
       );
       await tester.pumpWidget(
         ProviderScope(
@@ -511,6 +773,14 @@ void main() {
       expect(find.text('Available now'), findsOneWidget);
       expect(find.text('4 / 6 courts'), findsNothing);
       expect(find.text('12'), findsNothing);
+      await tester.scrollUntilVisible(
+        find.text("Today's booked value"),
+        150,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text("Today's booked value"), findsOneWidget);
+      expect(find.text('255,000đ'), findsOneWidget);
       await tester.scrollUntilVisible(
         find.text('Gross Booked Value'),
         150,
@@ -593,11 +863,12 @@ void main() {
 }
 
 class _FakeLiveDashboardRepository extends DashboardRepository {
-  _FakeLiveDashboardRepository({required this.onLoad})
+  _FakeLiveDashboardRepository({required this.onLoad, this.bookings = const []})
     : super(token: () => 'owner-token', role: () => 'COURT_OWNER');
 
   final void Function(DashboardRole role, String? period, int? facilityId)
   onLoad;
+  final List<DashboardBooking> bookings;
 
   @override
   Future<DashboardData> load(
@@ -609,14 +880,14 @@ class _FakeLiveDashboardRepository extends DashboardRepository {
     DateTime? bookingDate,
   }) async {
     onLoad(role, period, facilityId);
-    return const DashboardData(
+    return DashboardData(
       preview: false,
-      people: [],
-      facilities: [
+      people: const [],
+      facilities: const [
         DashboardFacility(1, 'Sky Badminton Center', 4),
         DashboardFacility(2, 'Star Badminton Club', 3),
       ],
-      analytics: DashboardAnalytics(
+      analytics: const DashboardAnalytics(
         dataStatus: 'READY',
         grossBookedRevenue: 640000,
         collectedRevenue: null,
@@ -660,6 +931,7 @@ class _FakeLiveDashboardRepository extends DashboardRepository {
           ),
         ],
       ),
+      bookings: bookings,
     );
   }
 }

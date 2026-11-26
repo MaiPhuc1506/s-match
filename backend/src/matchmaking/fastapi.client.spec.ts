@@ -34,7 +34,7 @@ describe('FastApiClient (HTTP dependency mock; no upstream connection)', () => {
       max_distance_km: 10, playing_style: ['aggressive'], reliability_score: 5,
     });
     expect(JSON.stringify(payload)).not.toContain('not-public');
-    expect(result).toEqual({ matchedUsers: [{ userId: '7', matchScore: 85 }, { userId: '3', matchScore: 80 }], totalCandidatesProcessed: 2 });
+    expect(result).toEqual({ matchedUsers: [{ userId: '7', matchScore: 85, breakdown: fastApiResponse().matched_users[0].breakdown }, { userId: '3', matchScore: 80, breakdown: fastApiResponse().matched_users[1].breakdown }], totalCandidatesProcessed: 2 });
     // Preserve upstream order; the Gateway never ranks or computes scores.
     expect(http.post).toHaveBeenCalledTimes(1);
   });
@@ -99,6 +99,7 @@ describe('FastApiClient (HTTP dependency mock; no upstream connection)', () => {
     { matched_users: [{ user_id: '7', match_score: NaN }], total_candidates_processed: 2 },
     { matched_users: [{ user_id: '7', match_score: Infinity }], total_candidates_processed: 2 },
     { matched_users: [{ user_id: '7', match_score: 80 }, { user_id: '7', match_score: 80 }], total_candidates_processed: 2 },
+    { matched_users: [{ user_id: '7', match_score: 80, breakdown: null }], total_candidates_processed: 2 },
     { matched_users: [{ user_id: '7', match_score: 80, breakdown: {} }], total_candidates_processed: 2 },
     { matched_users: [{ user_id: '7', match_score: 80, breakdown: { skill_score: 80 } }], total_candidates_processed: 2 },
     { matched_users: [{ user_id: '7', match_score: 80, breakdown: { distance_score: 90, skill_score: 80, fake_score: 50 } }], total_candidates_processed: 2 },
@@ -107,24 +108,29 @@ describe('FastApiClient (HTTP dependency mock; no upstream connection)', () => {
     http.post.mockResolvedValue({ status: 200, data });
     await expect(client.recommend(candidateData())).rejects.toMatchObject({ status: 502, message: 'Phản hồi dịch vụ matchmaking không hợp lệ' });
   });
-  it('accepts the real FastAPI SMM-39 breakdown (distance_score & skill_score) and distance_km without exposing them', async () => {
-    const body = {
+  it('accepts all five FastAPI scores at the boundaries', async () => {
+    const breakdown = { skill_score: 100, distance_score: 0, time_score: 75, reliability_score: 90, style_score: 50 };
+    http.post.mockResolvedValue({ status: 200, data: {
       total_candidates_processed: 2,
-      matched_users: [
-        {
-          user_id: '7',
-          match_score: 99.78,
-          distance_km: 0.11,
-          breakdown: { distance_score: 99.12, skill_score: 100.0 },
-        },
-      ],
-    };
-    http.post.mockResolvedValue({ status: 200, data: body });
-    const result = await client.recommend(candidateData());
-    expect(result).toEqual({
-      matchedUsers: [{ userId: '7', matchScore: 99.78 }],
-      totalCandidatesProcessed: 2,
+      matched_users: [{ user_id: '7', match_score: 99.78, distance_km: 0.11, breakdown }],
+    } });
+    await expect(client.recommend(candidateData())).resolves.toEqual({
+      matchedUsers: [{ userId: '7', matchScore: 99.78, breakdown }], totalCandidatesProcessed: 2,
     });
+  });
+  it.each(['skill_score', 'distance_score', 'time_score', 'reliability_score', 'style_score'])('rejects missing or invalid %s', async (key) => {
+    for (const invalid of [undefined, null, '50', -0.01, 100.01, NaN, Infinity]) {
+      const body = fastApiResponse();
+      (body.matched_users[0].breakdown as Record<string, unknown>)[key] = invalid;
+      if (invalid === undefined) delete (body.matched_users[0].breakdown as Record<string, unknown>)[key];
+      http.post.mockResolvedValue({ status: 200, data: body });
+      await expect(client.recommend(candidateData())).rejects.toMatchObject({ status: 502 });
+    }
+  });
+  it.each([-1, 101])('rejects out-of-range total score %s', async (score) => {
+    const body = fastApiResponse(); body.matched_users[0].match_score = score;
+    http.post.mockResolvedValue({ status: 200, data: body });
+    await expect(client.recommend(candidateData())).rejects.toMatchObject({ status: 502 });
   });
   it('returns no-result from FastAPI without fabricating a match', async () => {
     http.post.mockResolvedValue({ status: 200, data: { matched_users: [], total_candidates_processed: 2 } });

@@ -18,7 +18,7 @@ describe('TimeSlotsService', () => {
     booking: { findMany: jest.Mock };
     facility: { findUnique: jest.Mock };
   };
-  let operatingHoursService: { isWithinOperatingHours: jest.Mock };
+  let operatingHoursService: { isWithinOperatingHours: jest.Mock; findAllForFacility: jest.Mock };
 
   const mockCourt = { id: 5, facilityId: 10, status: 'ACTIVE' };
   const mockFacility = { id: 10, ownerId: 2 };
@@ -36,7 +36,10 @@ describe('TimeSlotsService', () => {
       booking: { findMany: jest.fn().mockResolvedValue([]) },
       facility: { findUnique: jest.fn() },
     };
-    operatingHoursService = { isWithinOperatingHours: jest.fn().mockResolvedValue(true) };
+    operatingHoursService = {
+      isWithinOperatingHours: jest.fn().mockResolvedValue(true),
+      findAllForFacility: jest.fn().mockResolvedValue([]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -110,23 +113,108 @@ describe('TimeSlotsService', () => {
     it('should return active slots for the resolved day of week', async () => {
       prisma.court.findUnique.mockResolvedValue(mockCourt);
       prisma.timeSlot.findMany.mockResolvedValue([
-        { id: 1, dayOfWeek: 1, startTime: '18:00', endTime: '19:00', price: 240000 },
+        { id: 1, dayOfWeek: 1, startTime: '18:00', endTime: '19:00', price: 240000, isActive: true },
       ]);
 
       const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
-      expect(result).toHaveLength(1);
+      expect(result).toHaveLength(2);
     });
   });
 
   it('marks overlapping bookings but permits adjacent boundaries in Vietnam time', async () => {
     prisma.court.findUnique.mockResolvedValue(mockCourt);
     prisma.timeSlot.findMany.mockResolvedValue([
-      { id: 1, startTime: '06:00', endTime: '07:00', price: 120000 },
-      { id: 2, startTime: '07:00', endTime: '08:00', price: 140000 },
+      { id: 1, startTime: '06:00', endTime: '07:00', price: 120000, isActive: true },
+      { id: 2, startTime: '07:00', endTime: '08:00', price: 140000, isActive: true },
     ]);
     prisma.booking.findMany.mockResolvedValue([{ startTime: new Date('2026-10-04T23:00:00Z'), endTime: new Date('2026-10-05T00:00:00Z') }]);
     const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
-    expect(result.map((s) => [s.price, s.isBooked])).toEqual([[120000, true], [140000, false]]);
+    expect(result.map((s) => [s.price, s.isBooked])).toEqual([[60000, true], [60000, true], [70000, false], [70000, false]]);
+  });
+
+  it('preserves booked slots after closing as non-bookable, but omits unbooked ones', async () => {
+    prisma.court.findUnique.mockResolvedValue(mockCourt);
+    prisma.timeSlot.findMany.mockResolvedValue([
+      { id: 1, startTime: '23:00', endTime: '24:00', isActive: true, price: 90000 },
+      { id: 2, startTime: '22:00', endTime: '23:00', isActive: true, price: 90000 },
+    ]);
+    prisma.booking.findMany.mockResolvedValue([
+      { startTime: new Date('2026-10-05T16:00:00Z'), endTime: new Date('2026-10-05T17:00:00Z') },
+    ]);
+    operatingHoursService.isWithinOperatingHours.mockResolvedValue(false);
+    const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
+    expect(result).toEqual([expect.objectContaining({ id: 1, isBooked: true, isActive: false }), expect.objectContaining({ id: 1, isBooked: true, isActive: false })]);
+  });
+
+  it('returns booked and genuinely locked inactive slots', async () => {
+    prisma.court.findUnique.mockResolvedValue(mockCourt);
+    prisma.timeSlot.findMany.mockResolvedValue([
+      { id: 1, startTime: '18:00', endTime: '19:00', isActive: false, price: 90000 },
+      { id: 2, startTime: '19:00', endTime: '20:00', isActive: false, price: 90000 },
+    ]);
+    prisma.booking.findMany.mockResolvedValue([
+      { startTime: new Date('2026-10-05T11:00:00Z'), endTime: new Date('2026-10-05T12:00:00Z') },
+    ]);
+    const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
+    expect(result).toEqual([
+      expect.objectContaining({ id: 1, isBooked: true, isActive: false, status: 'BOOKED' }),
+      expect.objectContaining({ id: 1, isBooked: true, isActive: false, status: 'BOOKED' }),
+      expect.objectContaining({ id: 2, isBooked: false, isActive: false, status: 'LOCKED' }),
+      expect.objectContaining({ id: 2, isBooked: false, isActive: false, status: 'LOCKED' }),
+    ]);
+  });
+
+  it('does not duplicate booked cells for superseded overlapping templates', async () => {
+    prisma.court.findUnique.mockResolvedValue(mockCourt);
+    prisma.timeSlot.findMany.mockResolvedValue([
+      { id: 1, startTime: '18:00', endTime: '19:00', isActive: true, price: 90000 },
+      { id: 2, startTime: '18:30', endTime: '19:30', isActive: false, price: 90000 },
+    ]);
+    prisma.booking.findMany.mockResolvedValue([
+      { startTime: new Date('2026-10-05T11:00:00Z'), endTime: new Date('2026-10-05T12:00:00Z') },
+    ]);
+    const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
+    expect(result).toEqual([expect.objectContaining({ id: 1, isBooked: true }), expect.objectContaining({ id: 1, isBooked: true })]);
+  });
+
+  it('retains a historical booking when the overlapping active slot does not cover it', async () => {
+    prisma.court.findUnique.mockResolvedValue(mockCourt);
+    prisma.timeSlot.findMany.mockResolvedValue([
+      { id: 1, startTime: '18:00', endTime: '18:30', isActive: true, price: 45000 },
+      { id: 2, startTime: '18:00', endTime: '19:00', isActive: false, price: 90000 },
+    ]);
+    prisma.booking.findMany.mockResolvedValue([
+      { startTime: new Date('2026-10-05T11:30:00Z'), endTime: new Date('2026-10-05T12:00:00Z') },
+    ]);
+    const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
+    expect(result).toEqual([
+      expect.objectContaining({ id: 1, status: 'AVAILABLE' }),
+      expect.objectContaining({ id: 2, status: 'BOOKED', isActive: false }),
+    ]);
+  });
+
+  it('returns a locked closing cell from the configured hours', async () => {
+    prisma.court.findUnique.mockResolvedValue(mockCourt);
+    prisma.timeSlot.findMany.mockResolvedValue([
+      { id: 1, courtId: 5, dayOfWeek: 1, startTime: '22:00', endTime: '23:00', isActive: true, price: 90000 },
+    ]);
+    operatingHoursService.findAllForFacility.mockResolvedValue([{ dayOfWeek: 1, closeTime: '23:00' }]);
+    const result = await service.getAvailabilityForDate(10, 5, '2026-10-05');
+    expect(result).toEqual([
+      expect.objectContaining({ id: 1, startTime: '22:00', status: 'AVAILABLE', price: 45000 }),
+      expect.objectContaining({ id: 1, startTime: '22:30', status: 'AVAILABLE', price: 45000 }),
+      expect.objectContaining({ startTime: '23:00', endTime: '23:30', status: 'LOCKED', isActive: false }),
+      expect.objectContaining({ startTime: '23:30', endTime: '24:00', status: 'LOCKED', isActive: false }),
+    ]);
+  });
+
+  it('keeps a public open match slot booked while exposing its match ID', async () => {
+    prisma.court.findUnique.mockResolvedValue(mockCourt);
+    prisma.timeSlot.findMany.mockResolvedValue([{ id: 1, courtId: 5, dayOfWeek: 1, startTime: '06:00', endTime: '07:00', price: 120000, isActive: true }]);
+    prisma.booking.findMany.mockResolvedValue([{ startTime: new Date('2026-10-04T23:00:00Z'), endTime: new Date('2026-10-05T00:00:00Z'), status: 'CONFIRMED', match: { id: 77, privacy: 'OPEN', status: 'OPEN' } }]);
+    const cells = await service.getAvailabilityForDate(10, 5, '2026-10-05');
+    expect(cells).toHaveLength(2);
+    expect(cells.every((cell) => cell.isBooked && cell.status === 'BOOKED' && cell.openMatchId === 77)).toBe(true);
   });
 
   it.each(['invalid', '2026-02-30', '2026-10-05T00:00:00Z', undefined])('rejects invalid availability date %s', async (date) => {
@@ -136,6 +224,40 @@ describe('TimeSlotsService', () => {
   it('does not offer maintenance courts', async () => {
     prisma.court.findUnique.mockResolvedValue({ ...mockCourt, status: 'MAINTENANCE' });
     expect(await service.getAvailabilityForDate(10, 5, '2026-10-05')).toEqual([]);
+  });
+
+  describe('update slot price', () => {
+    it('rejects price changes by an owner of another facility', async () => {
+      prisma.facility.findUnique.mockResolvedValue(mockFacility);
+      await expect(service.update(999, 10, 5, 1, { price: 90000 })).rejects.toThrow(ForbiddenException);
+      expect(prisma.timeSlot.update).not.toHaveBeenCalled();
+    });
+
+    it('recalculates the hourly rate while retaining the walk-in charge', async () => {
+      prisma.facility.findUnique.mockResolvedValue(mockFacility);
+      prisma.court.findUnique.mockResolvedValue(mockCourt);
+      prisma.timeSlot.findUnique.mockResolvedValue({
+        id: 1, courtId: 5, dayOfWeek: 1, startTime: '11:30', endTime: '12:00',
+        price: 35000, hourlyRate: 70000, walkInPrice: 40000,
+      });
+      prisma.timeSlot.update.mockImplementation(({ data }) => data);
+      const result = await service.update(2, 10, 5, 1, { price: 45000 });
+      expect(result).toEqual({ price: 45000, hourlyRate: 90000 });
+      expect(prisma.timeSlot.update).toHaveBeenCalledWith({
+        where: { id: 1 }, data: { price: 45000, hourlyRate: 90000 },
+      });
+    });
+
+    it('does not invent an hourly rate when none was published', async () => {
+      prisma.facility.findUnique.mockResolvedValue(mockFacility);
+      prisma.court.findUnique.mockResolvedValue(mockCourt);
+      prisma.timeSlot.findUnique.mockResolvedValue({
+        id: 1, courtId: 5, dayOfWeek: 1, startTime: '18:00', endTime: '19:00',
+        price: 80000, hourlyRate: null, walkInPrice: null,
+      });
+      prisma.timeSlot.update.mockImplementation(({ data }) => data);
+      expect(await service.update(2, 10, 5, 1, { price: 90000 })).toEqual({ price: 90000 });
+    });
   });
 
   describe('remove', () => {

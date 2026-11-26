@@ -8,10 +8,21 @@ export class RecommendationProfileDto {
   nickname: string | null;
 
   @ApiProperty({ type: String, nullable: true })
+  playingArea: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
   avatarUrl: string | null;
 
   @ApiProperty({ type: String, nullable: true })
   skillLevel: string | null;
+}
+
+export class MatchBreakdownDto {
+  @ApiProperty({ minimum: 0, maximum: 100 }) skill_score: number;
+  @ApiProperty({ minimum: 0, maximum: 100 }) distance_score: number;
+  @ApiProperty({ minimum: 0, maximum: 100 }) time_score: number;
+  @ApiProperty({ minimum: 0, maximum: 100 }) reliability_score: number;
+  @ApiProperty({ minimum: 0, maximum: 100 }) style_score: number;
 }
 
 export class MatchedPlayerDto {
@@ -20,6 +31,9 @@ export class MatchedPlayerDto {
 
   @ApiProperty()
   matchScore: number;
+
+  @ApiProperty({ type: MatchBreakdownDto })
+  breakdown: MatchBreakdownDto;
 
   @ApiProperty({ type: RecommendationProfileDto })
   profile: RecommendationProfileDto;

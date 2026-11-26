@@ -5,8 +5,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { MatchState, ParticipantStatus, Prisma } from '@prisma/client';
+import { MatchPrivacy, MatchState, ParticipantStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { replayPlayerSkill } from '../players/skill-progression.persistence';
 import { CreateRatingDto, ListRatingsQueryDto, UpdateRatingDto } from './dto/rating.dto';
 
 const DEFAULT_PAGE = 1;
@@ -57,7 +58,9 @@ export class RatingsService {
       where: { id: dto.matchId },
       select: {
         id: true,
+        privacy: true,
         status: true,
+        startTime: true,
         endTime: true,
         participants: {
           where: {
@@ -86,10 +89,13 @@ export class RatingsService {
     if (match.status !== MatchState.COMPLETED) {
       throw new BadRequestException('Host phải hoàn thành trận đấu trước khi đánh giá');
     }
+    if (dto.skillRatings && match.privacy !== MatchPrivacy.OPEN) {
+      throw new BadRequestException('Skill feedback is only available for completed Open Matches.');
+    }
     const now = Date.now();
     const endedAt = match.endTime.getTime();
-    if (endedAt > now) {
-      throw new BadRequestException('Trận đấu chưa kết thúc, chưa thể đánh giá');
+    if (match.startTime.getTime() > now) {
+      throw new BadRequestException('Trận đấu chưa bắt đầu, chưa thể đánh giá');
     }
     if (now - endedAt > RATING_WINDOW_DAYS * DAY_MS) {
       throw new BadRequestException(
@@ -99,6 +105,16 @@ export class RatingsService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        if (dto.skillRatings) {
+          await tx.$queryRaw`SELECT id FROM "Match" WHERE id = ${dto.matchId} FOR UPDATE`;
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(736123, ${dto.ratedUserId}::integer)::text AS locked`;
+          const current = await tx.match.findUnique({ where: { id: dto.matchId }, select: {
+            status: true, privacy: true, participants: { where: { userId: { in: [raterId, dto.ratedUserId] }, status: ParticipantStatus.ACCEPTED }, select: { userId: true } },
+          } });
+          if (!current || current.status !== MatchState.COMPLETED || current.privacy !== MatchPrivacy.OPEN || new Set(current.participants.map(p => p.userId)).size !== 2) {
+            throw new ForbiddenException('Match participants or status are no longer eligible.');
+          }
+        }
         const created = await tx.playerRating.create({
           data: {
             matchId: dto.matchId,
@@ -108,9 +124,11 @@ export class RatingsService {
             punctuality: dto.punctuality,
             sportsmanship: dto.sportsmanship,
             comment: dto.comment || null,
+            ...(dto.skillRatings ? { skillRatings: { ...dto.skillRatings } as Prisma.InputJsonObject } : {}),
           },
           include: ratingInclude,
         });
+        if (dto.skillRatings) await replayPlayerSkill(tx, dto.ratedUserId);
         await this.recordHistory(tx, dto.ratedUserId, created.id);
         return created;
       });
@@ -209,8 +227,9 @@ export class RatingsService {
 
     const matches = await this.prisma.match.findMany({
       where: {
-        status: { not: MatchState.CANCELLED },
-        endTime: { lte: now, gte: windowStart },
+        status: MatchState.COMPLETED,
+        startTime: { lte: now },
+        endTime: { gte: windowStart },
         participants: { some: { userId, status: ParticipantStatus.ACCEPTED } },
       },
       select: {

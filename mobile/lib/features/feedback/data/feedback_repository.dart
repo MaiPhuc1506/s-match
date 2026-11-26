@@ -22,9 +22,11 @@ class TeammateFeedback {
     this.review = '',
     this.matchTitle,
     this.createdAt,
+    this.skillRatings = const {},
   });
   final FeedbackPlayer player;
   final int stars;
+  final Map<String, int?> skillRatings;
   final Set<String> tags;
   final String review;
   final String? matchTitle;
@@ -349,6 +351,8 @@ class ApiFeedbackRepository extends FeedbackRepository {
             'matchId': id,
             'ratedUserId': int.parse(entry.player.id),
             'score': entry.stars,
+            if (entry.skillRatings.values.any((v) => v != null))
+              'skillRatings': entry.skillRatings,
             if (entry.review.trim().isNotEmpty) 'comment': entry.review.trim(),
           },
         );

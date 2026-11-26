@@ -88,7 +88,7 @@ live('P0.1 Booking integration (real PostgreSQL + auth + row locks)', () => {
     const detail = await request(app.getHttpServer()).get(`/facilities/${facilityId}`).expect(200);
     expect(detail.body.courts.some((c: any) => c.id === courtId)).toBe(true);
     const slots = await request(app.getHttpServer()).get(availability()).expect(200);
-    expect(slots.body.map((s: any) => [s.price, s.isBooked])).toEqual([[125000, false], [175000, false]]);
+    expect(slots.body.filter((s: any) => s.startTime >= '06:00' && s.endTime <= '08:00').map((s: any) => [s.price, s.isBooked])).toEqual([[62500, false], [62500, false], [87500, false], [87500, false]]);
     await api('post', '/bookings').send({ ...first, facilityId: facilityId + 1 }).expect(400);
     await api('post', '/bookings').send({ ...first, courtId: -1 }).expect(400);
     await api('post', '/bookings').send({ ...first, startTime: `${date}T06:00:00` }).expect(400);
@@ -108,7 +108,7 @@ live('P0.1 Booking integration (real PostgreSQL + auth + row locks)', () => {
     const stored = await db.booking.findUniqueOrThrow({ where: { id: bookingId } });
     expect(stored.totalPrice).toBe(125000);
     const slots = await request(app.getHttpServer()).get(availability()).expect(200);
-    expect(slots.body.map((s: any) => s.isBooked)).toEqual([true, false]);
+    expect(slots.body.filter((s: any) => s.startTime >= '06:00' && s.endTime <= '08:00').map((s: any) => s.isBooked)).toEqual([true, true, false, false]);
   });
 
   it('reflects bookings in Player history, Owner feed and real Owner analytics only within scope', async () => {
@@ -138,7 +138,10 @@ live('P0.1 Booking integration (real PostgreSQL + auth + row locks)', () => {
     await api('post', '/bookings').send({ ...first, startTime: `${date}T08:00:00+07:00`, endTime: `${date}T09:00:00+07:00` }).expect(400);
     await api('patch', `/bookings/${bookingId}/cancel`, winner).expect(200);
     const slots = await request(app.getHttpServer()).get(availability()).expect(200);
-    expect(slots.body.map((s: any) => s.isBooked)).toEqual([false, true]);
+    expect(slots.body.filter((s: any) => s.startTime >= '06:00' && s.endTime <= '08:00').map((s: any) => s.isBooked)).toEqual([false, false, true, true]);
+    expect(slots.body.filter((s: any) => s.startTime >= '06:00' && s.endTime <= '07:00').every((s: any) => s.status === 'AVAILABLE')).toBe(true);
+    const cancelled = await db.booking.findUniqueOrThrow({ where: { id: bookingId } });
+    expect(cancelled.status).toBe('CANCELLED');
     await api('post', '/bookings', 1 - winner).send(first).expect(201);
   });
 });

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,9 +10,30 @@ class ProfileSkillRadar extends StatelessWidget {
     super.key,
     this.refined = false,
     this.assessment = false,
+    this.values,
   });
   final bool refined;
   final bool assessment;
+  final List<double>? values;
+
+  static List<double>? assessedValues(Object? raw) {
+    if (raw is! Map) return null;
+    final axes = [
+      for (final key in [
+        'smash',
+        'defense',
+        'netPlay',
+        'stamina',
+        'footwork',
+        'serve',
+      ])
+        raw[key],
+    ];
+    if (!axes.every((v) => v is num && v.isFinite && v >= 1 && v <= 5)) {
+      return null;
+    }
+    return axes.cast<num>().map((v) => v.toDouble()).toList(growable: false);
+  }
 
   TextStyle get _labelStyle => GoogleFonts.plusJakartaSans(
     fontSize: 10.67,
@@ -22,7 +45,7 @@ class ProfileSkillRadar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (refined || assessment) return _refined();
+    if (refined || assessment || values != null) return _refined();
     return SizedBox(
       width: 176,
       height: 176,
@@ -100,15 +123,25 @@ class ProfileSkillRadar extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          _svg(
-            assessment
-                ? 'assets/icons/sprint2_skill_RadarEditableGridAndSkillData.svg'
-                : 'assets/sprint7/recommendation/profile_radar.svg',
-            left: 28.5 * scale,
-            top: 7.6 * scale,
-            width: 171 * scale,
-            height: 171 * scale,
-          ),
+          if (values case final scores?)
+            Positioned(
+              left: 28.5 * scale,
+              top: 7.6 * scale,
+              child: CustomPaint(
+                size: Size.square(171 * scale),
+                painter: _AssessmentRadar(scores),
+              ),
+            )
+          else
+            _svg(
+              assessment
+                  ? 'assets/icons/sprint2_skill_RadarEditableGridAndSkillData.svg'
+                  : 'assets/sprint7/recommendation/profile_radar.svg',
+              left: 28.5 * scale,
+              top: 7.6 * scale,
+              width: 171 * scale,
+              height: 171 * scale,
+            ),
           for (final axis in const [
             ('Smash', 95.95, 0.0),
             ('Defense', 184.3, 40.85),
@@ -147,4 +180,64 @@ class ProfileSkillRadar extends StatelessWidget {
       child: SvgPicture.asset(asset, width: width, height: height),
     );
   }
+}
+
+class _AssessmentRadar extends CustomPainter {
+  const _AssessmentRadar(this.values);
+  final List<double> values;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.scale(size.width / 171, size.height / 171);
+    const center = Offset(85.5, 85.5);
+    Offset vertex(int index, double radius) {
+      final angle = index * math.pi / 3 - math.pi / 2;
+      return center +
+          Offset(math.cos(angle) * radius, math.sin(angle) * radius);
+    }
+
+    Path hexagon(double Function(int) radius) => Path()
+      ..addPolygon([for (var i = 0; i < 6; i++) vertex(i, radius(i))], true);
+    for (final radius in [72.675, 48.0938, 24.5812]) {
+      final ring = hexagon((_) => radius);
+      canvas.drawPath(
+        ring,
+        Paint()..color = const Color(0xFF05644F).withValues(alpha: .025),
+      );
+      canvas.drawPath(
+        ring,
+        Paint()
+          ..color = const Color(0xFFA3C9BB)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = .665,
+      );
+    }
+    for (var i = 0; i < 6; i++) {
+      canvas.drawLine(
+        center,
+        vertex(i, 72.675),
+        Paint()
+          ..color = const Color(0xFFBBD7CD)
+          ..strokeWidth = .475,
+      );
+    }
+    final polygon = hexagon((i) => 72.675 * values[i] / 5);
+    canvas.drawPath(
+      polygon,
+      Paint()..color = const Color(0xFF71BAA4).withValues(alpha: .45),
+    );
+    canvas.drawPath(
+      polygon,
+      Paint()
+        ..color = const Color(0xFF087D62)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.14,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _AssessmentRadar oldDelegate) =>
+      Iterable<int>.generate(6).any((i) => values[i] != oldDelegate.values[i]);
 }

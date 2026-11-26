@@ -1,5 +1,5 @@
 import math
-from typing import List
+from typing import List, Optional
 from app.config import settings
 from app.schemas import (
     PlayerProfileInput,
@@ -26,6 +26,15 @@ def calculate_haversine_distance(
   return R * c
 
 
+def assessment_mean(profile: PlayerProfileInput) -> Optional[float]:
+  skill = profile.skill
+  values = (
+      skill.smash, skill.defense, skill.net_play,
+      skill.stamina, skill.footwork, skill.serve,
+  )
+  return sum(values) / 6 if all(1 <= value <= 5 for value in values) else None
+
+
 class MatchmakingEngine:
 
   @staticmethod
@@ -50,17 +59,11 @@ class MatchmakingEngine:
       return False
 
     # 3. Dải trình độ
-    cand_avg_skill = (
-        candidate.skill.smash
-        + candidate.skill.defense
-        + candidate.skill.net_play
-        + candidate.skill.stamina
-        + candidate.skill.footwork
-        + candidate.skill.serve
-    ) / 6.0
-
-    if not (
-        user.skill.preferred_min <= cand_avg_skill <= user.skill.preferred_max
+    cand_avg_skill = assessment_mean(candidate)
+    unrestricted = user.skill.preferred_min == 1 and user.skill.preferred_max == 5
+    if not unrestricted and (
+        cand_avg_skill is None
+        or not user.skill.preferred_min <= cand_avg_skill <= user.skill.preferred_max
     ):
       return False
 
@@ -72,25 +75,12 @@ class MatchmakingEngine:
   ) -> MatchedUserResult:
     """Tính điểm tương thích chi tiết (Scoring) dựa trên cấu hình Settings"""
     # 1. Skill Score
-    user_avg = (
-        user.skill.smash
-        + user.skill.defense
-        + user.skill.net_play
-        + user.skill.stamina
-        + user.skill.footwork
-        + user.skill.serve
-    ) / 6.0
-    cand_avg = (
-        candidate.skill.smash
-        + candidate.skill.defense
-        + candidate.skill.net_play
-        + candidate.skill.stamina
-        + candidate.skill.footwork
-        + candidate.skill.serve
-    ) / 6.0
-
-    skill_diff = abs(user_avg - cand_avg)
-    skill_score = max(0.0, settings.WEIGHT_SKILL - (skill_diff * 10.0))
+    user_avg = assessment_mean(user)
+    cand_avg = assessment_mean(candidate)
+    skill_score = (
+        max(0.0, settings.WEIGHT_SKILL - abs(user_avg - cand_avg) * 10.0)
+        if user_avg is not None and cand_avg is not None else 0.0
+    )
 
     # 2. Distance Score
     dist_km = calculate_haversine_distance(

@@ -72,11 +72,11 @@ class _LiveMatchFeedbackScreenState extends State<LiveMatchFeedbackScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final end = DateTime.tryParse(match?['endTime'] as String? ?? '');
+    final start = DateTime.tryParse(match?['startTime'] as String? ?? '');
     final canComplete =
         match?['hostId'] == widget.repository.api.userId &&
-        end != null &&
-        !end.isAfter(DateTime.now()) &&
+        start != null &&
+        !start.isAfter(DateTime.now()) &&
         ['OPEN', 'FULL', 'IN_PROGRESS'].contains(match?['status']);
     return FeedbackScaffold(
       title: 'Match feedback',
@@ -94,7 +94,9 @@ class _LiveMatchFeedbackScreenState extends State<LiveMatchFeedbackScreen> {
               )
             else if (match != null)
               Text(
-                'The host must complete this match before feedback can be submitted.',
+                match?['status'] == 'COMPLETED'
+                    ? 'Feedback is available to accepted participants.'
+                    : 'The host must complete this match before feedback can be submitted.',
                 style: feedbackText(14),
               ),
             TextButton(onPressed: load, child: const Text('Refresh')),

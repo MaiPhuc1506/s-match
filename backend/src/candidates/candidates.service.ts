@@ -5,6 +5,7 @@ import { AvailabilityService } from '../availability-preference/availability.ser
 import { DEFAULT_RELIABILITY_SCORE, RatingsService } from '../ratings/ratings.service';
 import { CandidateQueryDto, UpdateLocationDto } from './dto/candidate.dto';
 import { boundingBox, haversineKm } from './geo.util';
+import { assessmentScore, effectiveSkillLevel } from '../players/skill-assessment';
 
 const DEFAULT_RADIUS_KM = 10;
 const DEFAULT_CANDIDATE_LIMIT = 20;
@@ -95,6 +96,23 @@ export class CandidatesService {
     };
   }
 
+  async getLocationSharing(userId: number) {
+    const profile = await this.prisma.playerProfile.findUnique({
+      where: { userId }, select: { locationSharingEnabled: true },
+    });
+    return { enabled: profile?.locationSharingEnabled ?? false };
+  }
+
+  async updateLocationSharing(userId: number, enabled: boolean) {
+    const profile = await this.prisma.playerProfile.upsert({
+      where: { userId },
+      update: { locationSharingEnabled: enabled },
+      create: { userId, locationSharingEnabled: enabled },
+      select: { locationSharingEnabled: true },
+    });
+    return { enabled: profile.locationSharingEnabled };
+  }
+
   async findNearby(userId: number, query: CandidateQueryDto) {
     const me = await this.getMyLocationOrThrow(userId);
     const preference = await this.getPreference(userId);
@@ -110,9 +128,7 @@ export class CandidatesService {
         userId: profile.userId,
         fullName: profile.user.fullName,
         nickname: profile.nickname,
-        skillLevel: profile.skillLevel,
-        latitude: profile.latitude,
-        longitude: profile.longitude,
+        skillLevel: effectiveSkillLevel(assessmentScore(profile.skill), profile.skillLevel),
         distanceKm,
       })),
     };
@@ -208,6 +224,7 @@ export class CandidatesService {
     const rows = await this.prisma.playerProfile.findMany({
       where: {
         userId: { not: userId },
+        locationSharingEnabled: true,
         latitude: { gte: box.minLat, lte: box.maxLat },
         longitude: { gte: box.minLon, lte: box.maxLon },
         user: { role: { name: RoleName.PLAYER } },
@@ -219,13 +236,12 @@ export class CandidatesService {
     return (rows as ProfileWithRelations[])
       .map((profile) => ({
         profile,
-        distanceKm: Math.round(
-          haversineKm(latitude, longitude, profile.latitude as number, profile.longitude as number) * 100,
-        ) / 100,
+        distanceKm: haversineKm(latitude, longitude, profile.latitude as number, profile.longitude as number),
       }))
       .filter((item) => item.distanceKm <= radiusKm)
       .sort((a, b) => a.distanceKm - b.distanceKm)
-      .slice(0, limit);
+      .slice(0, limit)
+      .map((item) => ({ ...item, distanceKm: Math.round(item.distanceKm * 100) / 100 }));
   }
 
   private async toPlayerInput(
@@ -233,7 +249,7 @@ export class CandidatesService {
     preference: PreferenceLike,
     reliabilityScore: number,
   ): Promise<MatchmakingPlayerInput> {
-    const skill = profile.skill;
+    const skill = assessmentScore(profile.skill) === null ? null : profile.skill;
     const axes = {
       smash: clamp(skill?.smash ?? 0, 0, 5),
       defense: clamp(skill?.defense ?? 0, 0, 5),

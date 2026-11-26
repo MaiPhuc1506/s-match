@@ -8,6 +8,7 @@ export function makeMatchFeedbackFixture() {
   const feedbacks: any[] = [];
   fixture.privateMatch.status = 'COMPLETED';
   fixture.privateMatch.endTime = new Date(Date.now() - 1000);
+  fixture.privateMatch.startTime = new Date(Date.now() - 3600000);
   let sequence = 0;
   fixture.prisma.feedback = { create: jest.fn(async ({ data, select }: any) => {
     if (feedbacks.some((row) => ['matchId', 'senderUserId', 'recipientUserId'].every((key) => row[key] === data[key]))) {

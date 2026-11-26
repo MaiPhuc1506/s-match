@@ -35,6 +35,7 @@ describe('BookingsService', () => {
         findUnique: jest.fn(),
       },
       facility: { findUnique: jest.fn() },
+      match: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       timeSlot: { findMany: jest.fn().mockResolvedValue([{ startTime: '15:00', endTime: '17:00', price: 160000 }]) },
       booking: {
         create: jest.fn(),
@@ -67,6 +68,23 @@ describe('BookingsService', () => {
     const validStartTime = `${dateStr}T08:00:00.000Z`;
     const validEndTime = `${dateStr}T10:00:00.000Z`;
 
+    it('books up to next midnight using the previous day 24:00 tariff', async () => {
+      prisma.court.findUnique.mockResolvedValue(mockCourt);
+      prisma.booking.findFirst.mockResolvedValue(null);
+      prisma.timeSlot.findMany.mockResolvedValue([{startTime:'23:00',endTime:'24:00',price:90000}]);
+      prisma.booking.create.mockImplementation(({data}: {data: any})=>data);
+      const result = await service.create(1,{courtId:1,startTime:`${dateStr}T23:00:00+07:00`,endTime:`${dateStr}T24:00:00+07:00`});
+      expect(result.totalPrice).toBe(90000);
+      expect(operatingHoursService.isWithinOperatingHours).toHaveBeenCalledWith(10,expect.any(Number),'23:00','24:00',prisma);
+    });
+    it('uses the configured half-hour amount, not the hourly display rate', async () => {
+      prisma.court.findUnique.mockResolvedValue(mockCourt);
+      prisma.booking.findFirst.mockResolvedValue(null);
+      prisma.timeSlot.findMany.mockResolvedValue([{startTime:'11:30',endTime:'12:00',price:35000,hourlyRate:70000}]);
+      prisma.booking.create.mockImplementation(({data}: {data: any})=>data);
+      const result=await service.create(1,{courtId:1,startTime:`${dateStr}T11:30:00+07:00`,endTime:`${dateStr}T12:00:00+07:00`});
+      expect(result.totalPrice).toBe(35000);
+    });
     it('should throw BadRequestException if startTime is invalid', async () => {
       await expect(
         service.create(1, {
@@ -226,6 +244,21 @@ describe('BookingsService', () => {
       ]);
       await service.create(1, { courtId: 1, facilityId: 10, startTime: validStartTime, endTime: validEndTime });
       expect(prisma.booking.create.mock.calls[0][0].data.totalPrice).toBe(275000);
+    });
+
+    it('prices half-hour endpoints across two tariff bands', async () => {
+      prisma.court.findUnique.mockResolvedValue(mockCourt);
+      prisma.timeSlot.findMany.mockResolvedValue([
+        { startTime: '15:00', endTime: '16:00', price: 120000 },
+        { startTime: '16:00', endTime: '17:00', price: 160000 },
+      ]);
+      const start = new Date(validStartTime);
+      start.setUTCMinutes(30);
+      const end = new Date(validEndTime);
+      end.setUTCMinutes(30);
+      end.setUTCHours(end.getUTCHours() - 1);
+      await service.create(1, { courtId: 1, startTime: start.toISOString(), endTime: end.toISOString() });
+      expect(prisma.booking.create.mock.calls[0][0].data.totalPrice).toBe(140000);
     });
 
     it('rejects a court outside the selected facility', async () => {
@@ -427,6 +460,14 @@ describe('BookingsService', () => {
         }),
       );
       expect(result).toEqual(updated);
+    });
+
+    it('cancels an attached active match in the same transaction', async () => {
+      prisma.booking.findUnique.mockResolvedValue({ ...activeBooking, match: { id: 21, status: 'OPEN' } });
+      prisma.booking.update.mockResolvedValue({ ...activeBooking, status: BookingStatus.CANCELLED });
+      await service.cancel(10, 5, 'PLAYER');
+      expect(prisma.match.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 21 }), data: { status: 'CANCELLED' } }));
+      expect(prisma.$transaction).toHaveBeenCalled();
     });
   });
 });

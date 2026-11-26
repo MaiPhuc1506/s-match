@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+
+import 'dart:convert';
+import 'dart:io';
 
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
@@ -25,6 +29,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
 
   List<DevAccount> _accounts = [];
   bool _isLoadingAccounts = true;
+  bool _ownerQuickLoginBusy = false;
   String? _backendPingStatus;
 
   @override
@@ -126,18 +131,73 @@ class _DevTestingHubState extends State<DevTestingHub> {
       targetScreen = const PlayerWelcomeScreen();
     }
 
-    Navigator.push(
+    Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (ctx) => targetScreen),
+      (route) => false,
     ).then((_) {
       if (mounted) setState(() {});
     });
   }
 
-  void _triggerLoginForAccount(DevAccount account) {
+  Future<void> _triggerLoginForAccount(DevAccount account) async {
+    if (!kDebugMode) return;
+    final key = switch (account.email.toLowerCase()) {
+      'player@smatch.dev' => 'DEV_PLAYER_1_PASSWORD',
+      'player2@smatch.dev' => 'DEV_PLAYER_2_PASSWORD',
+      'player3@smatch.dev' => 'DEV_PLAYER_3_PASSWORD',
+      'owner@smatch.dev' => 'DEV_OWNER_PASSWORD',
+      'admin@smatch.dev' => 'DEV_ADMIN_PASSWORD',
+      _ => '',
+    };
+    var password = switch (account.email.toLowerCase()) {
+      'player@smatch.dev' => const String.fromEnvironment(
+        'DEV_PLAYER_1_PASSWORD',
+      ),
+      'player2@smatch.dev' => const String.fromEnvironment(
+        'DEV_PLAYER_2_PASSWORD',
+      ),
+      'player3@smatch.dev' => const String.fromEnvironment(
+        'DEV_PLAYER_3_PASSWORD',
+      ),
+      'owner@smatch.dev' => const String.fromEnvironment('DEV_OWNER_PASSWORD'),
+      'admin@smatch.dev' => const String.fromEnvironment('DEV_ADMIN_PASSWORD'),
+      _ => '',
+    };
+    if (key.isNotEmpty) {
+      try {
+        final file = File(
+          '${Directory.systemTemp.parent.path}/Documents/smatch_dev_quick_login.json',
+        );
+        if (await file.exists()) {
+          final data = jsonDecode(await file.readAsString());
+          if (data is Map && data[key] is String) {
+            password = data[key] as String;
+          }
+        }
+      } catch (_) {
+        // Missing development configuration falls back to the normal login dialog.
+      }
+    }
+    if (!mounted) return;
+    if (account.email.toLowerCase() == 'owner@smatch.dev' &&
+        password.isNotEmpty) {
+      if (_ownerQuickLoginBusy) return;
+      _ownerQuickLoginBusy = true;
+      try {
+        final success = await _handleLogin(account.email, password);
+        if (success && mounted) {
+          _navigateToRoleScreen(_auth.currentUser?['role']?.toString() ?? '');
+        }
+      } finally {
+        _ownerQuickLoginBusy = false;
+      }
+      return;
+    }
     DevAccountSelector.showQuickLoginDialog(
       context: context,
       account: account,
+      initialPassword: password,
       onLogin: (email, pass) => _handleLogin(email, pass),
       onSuccess: (role) => _navigateToRoleScreen(role),
     );
@@ -254,7 +314,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
         border: Border.all(color: const Color(0xFFE5EBE7)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -268,7 +328,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
@@ -427,7 +487,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
       color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: color.withOpacity(0.2)),
+        side: BorderSide(color: color.withValues(alpha: 0.2)),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -439,7 +499,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, color: color, size: 22),
@@ -497,11 +557,19 @@ class _DevTestingHubState extends State<DevTestingHub> {
       );
     }
 
-    return ListView.separated(
+    return ReorderableListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
+      buildDefaultDragHandles: false,
       itemCount: _accounts.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      onReorderItem: (oldIndex, newIndex) async {
+        setState(() {
+          _accounts = [..._accounts];
+          final account = _accounts.removeAt(oldIndex);
+          _accounts.insert(newIndex, account);
+        });
+        await _repo.reorderAccounts(oldIndex, newIndex);
+      },
       itemBuilder: (context, index) {
         final acc = _accounts[index];
         final isActive =
@@ -509,6 +577,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
             currentEmail.toLowerCase() == acc.email.toLowerCase();
 
         return Card(
+          key: ValueKey(acc.id),
           elevation: 0.5,
           color: Colors.white,
           shape: RoundedRectangleBorder(
@@ -526,7 +595,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: _getRoleColor(acc.role).withOpacity(0.1),
+                    color: _getRoleColor(acc.role).withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Center(
@@ -545,27 +614,29 @@ class _DevTestingHubState extends State<DevTestingHub> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
+                      Text(
+                        acc.label,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
                         children: [
-                          Flexible(
-                            child: Text(
-                              acc.label,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 6,
                               vertical: 1.5,
                             ),
                             decoration: BoxDecoration(
-                              color: _getRoleColor(acc.role).withOpacity(0.12),
+                              color: _getRoleColor(acc.role)
+                                  .withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -578,7 +649,6 @@ class _DevTestingHubState extends State<DevTestingHub> {
                             ),
                           ),
                           if (isActive) ...[
-                            const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 6,
@@ -607,6 +677,8 @@ class _DevTestingHubState extends State<DevTestingHub> {
                           fontSize: 12,
                           color: AppColors.textSecondary,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       if (acc.note != null && acc.note!.isNotEmpty) ...[
                         const SizedBox(height: 2),
@@ -625,6 +697,21 @@ class _DevTestingHubState extends State<DevTestingHub> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: const Tooltip(
+                        message: 'Drag to reorder',
+                        child: SizedBox(
+                          width: 36,
+                          height: 48,
+                          child: Icon(
+                            Icons.drag_handle_rounded,
+                            color: Colors.grey,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
                     IconButton(
                       icon: const Icon(
                         Icons.flash_on_rounded,
@@ -709,7 +796,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
       color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: AppColors.primary.withOpacity(0.2)),
+        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.2)),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -726,7 +813,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(

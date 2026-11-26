@@ -22,8 +22,8 @@ describe('Match hardening 2D HTTP (Prisma mock only)', () => {
     issuer: 'match-hardening-test', accessAudience: 'match-api', refreshAudience: 'match-refresh',
   };
   const sessions = new Map<string, any>();
-  const create = { title: 'Fixture', startTime: '2026-10-20T18:00:00Z', endTime: '2026-10-20T19:00:00Z' };
-  const open = { mode: 'DOUBLES', purpose: 'CASUAL', neededPlayers: 2, minSkillLevel: 1, maxSkillLevel: 5 };
+  const create = { title: 'Fixture', startTime: '2099-10-20T18:00:00Z', endTime: '2099-10-20T19:00:00Z' };
+  const open = { mode: 'DOUBLES', purpose: 'CASUAL', neededPlayers: 3, minSkillLevel: 1, maxSkillLevel: 5 };
   beforeAll(async () => {
     const module = await Test.createTestingModule({ imports: [PrismaModule, AuthModule, MatchesModule] })
       .overrideProvider(PrismaService).useValue(prisma)
@@ -35,7 +35,7 @@ describe('Match hardening 2D HTTP (Prisma mock only)', () => {
   });
   afterAll(async () => { await app?.close(); });
   beforeEach(() => {
-    fixture = makeMatchBookingFixture();
+    fixture = makeMatchBookingFixture(new Date('2099-10-20T18:00:00Z'));
     Object.assign(prisma, fixture.prisma);
     sessions.clear();
     prisma.refreshSession.findUnique.mockImplementation(async ({ where }: any) => sessions.get(where.id) ?? null);
@@ -122,9 +122,9 @@ describe('Match hardening 2D HTTP (Prisma mock only)', () => {
   it.each([
     { startTime: 'invalid' }, { endTime: 'invalid' }, { startTime: null }, { endTime: null },
     { startTime: create.endTime }, { endTime: create.startTime },
-    { startTime: '2026-10-20T20:00:00Z' }, { endTime: '2026-10-20T17:00:00Z' },
-    { startTime: '2026-10-21T20:00:00Z', endTime: '2026-10-21T19:00:00Z' },
-    { startTime: '2026-10-21T19:00:00Z', endTime: '2026-10-21T19:00:00Z' },
+    { startTime: '2099-10-20T20:00:00Z' }, { endTime: '2099-10-20T17:00:00Z' },
+    { startTime: '2099-10-21T20:00:00Z', endTime: '2099-10-21T19:00:00Z' },
+    { startTime: '2099-10-21T19:00:00Z', endTime: '2099-10-21T19:00:00Z' },
   ])('rejects invalid final PATCH pair before mutation: %j', async (body) => {
     const before = JSON.stringify(fixture.rows);
     expect((await send('patch', '/matches/11', 10, { ...body, bookingId: 102 })).status).toBe(400);
@@ -134,15 +134,15 @@ describe('Match hardening 2D HTTP (Prisma mock only)', () => {
   it.each([
     { startTime: 'invalid' }, { endTime: 'invalid' }, { startTime: null }, { endTime: null },
     { startTime: create.endTime }, { endTime: create.startTime },
-    { startTime: '2026-10-20T20:00:00Z' },
+    { startTime: '2099-10-20T20:00:00Z' },
   ])('rejects invalid create times: %j', async (body) => {
     expect((await send('post', '/matches', 10, { ...create, ...body })).status).toBe(400);
     noWrites();
   });
   it.each([
-    { startTime: '2026-10-20T18:30:00Z' }, { endTime: '2026-10-20T19:30:00Z' },
-    { startTime: '2026-10-21T18:00:00Z', endTime: '2026-10-21T19:00:00Z' },
-    { startTime: '2026-10-20T20:00:00+02:00', endTime: '2026-10-20T18:30:00Z' },
+    { startTime: '2099-10-20T18:30:00Z' }, { endTime: '2099-10-20T19:30:00Z' },
+    { startTime: '2099-10-21T18:00:00Z', endTime: '2099-10-21T19:00:00Z' },
+    { startTime: '2099-10-20T20:00:00+02:00', endTime: '2099-10-20T18:30:00Z' },
   ])('accepts valid merged times without writing omitted fields: %j', async (body) => {
     const response = await send('patch', '/matches/11', 10, body);
     expect(response.status).toBe(200);
@@ -179,8 +179,8 @@ describe('Match hardening 2D HTTP (Prisma mock only)', () => {
     expect((await send('post', '/bookings/102/open-match', 10, { ...open, neededPlayers })).status).toBe(400);
     noWrites();
   });
-  it.each([1, 2147483646])('accepts neededPlayers=%s within PostgreSQL Int', async (neededPlayers) => {
-    const response = await send('post', '/bookings/102/open-match', 10, { ...open, neededPlayers });
+  it.each([[1, 'SINGLES'], [3, 'DOUBLES']] as const)('accepts neededPlayers=%s for %s', async (neededPlayers, mode) => {
+    const response = await send('post', '/bookings/102/open-match', 10, { ...open, mode, neededPlayers });
     expect(response.status).toBe(201);
     expect(response.body.maxPlayers).toBe(neededPlayers + 1);
     expectSafeMatchResponse(response.body);

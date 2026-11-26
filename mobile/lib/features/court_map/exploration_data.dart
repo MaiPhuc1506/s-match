@@ -1,4 +1,5 @@
 import '../../core/network/api_client.dart';
+import 'facility_images.dart';
 
 import 'package:dio/dio.dart';
 
@@ -155,8 +156,12 @@ class CourtLocation {
   final String? priceRange;
   final bool? isOpen;
   final String address;
+  final String? contactPhone;
+  final String? description;
   final List<String> photos;
   final List<Map<String, dynamic>> courts;
+  final List<Map<String, dynamic>> operatingHours;
+  final List<Map<String, dynamic>> services;
   final bool demo;
   bool get hasCoordinates =>
       latitude != null &&
@@ -171,11 +176,143 @@ class CourtLocation {
   String get distanceText => distanceKm == null
       ? (demo ? 'Distance unavailable' : 'Chưa có khoảng cách')
       : '${distanceKm!.toStringAsFixed(1)} km';
+  double? get startingHourlyRate {
+    double? result;
+    for (final court in courts) {
+      if (court['status'] != null && court['status'] != 'ACTIVE') continue;
+      for (final slot in (court['timeSlots'] as List? ?? []).whereType<Map>()) {
+        if (slot['isActive'] == false) continue;
+        final hourly = slot['hourlyRate'];
+        final price = slot['price'];
+        double? rate;
+        if (hourly is num) {
+          rate = hourly.toDouble();
+        } else if (price is num) {
+          final start = _clockMinutes(slot['startTime']);
+          final end = _clockMinutes(slot['endTime']);
+          if (start != null && end != null && end > start) {
+            rate = price * 60 / (end - start);
+          }
+        }
+        if (rate != null &&
+            rate.isFinite &&
+            rate > 0 &&
+            (result == null || rate < result)) {
+          result = rate;
+        }
+      }
+    }
+    return result;
+  }
+
+  static int? _clockMinutes(Object? value) {
+    final parts = value?.toString().split(':');
+    if (parts == null || parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null ||
+        minute == null ||
+        hour < 0 ||
+        hour > 24 ||
+        minute < 0 ||
+        minute > 59 ||
+        (hour == 24 && minute != 0)) {
+      return null;
+    }
+    return hour * 60 + minute;
+  }
+
+  /// Facility schedules use Asia/Ho_Chi_Minh (UTC+7), independent of device zone.
+  bool? isOpenAt(DateTime instant) {
+    if (isOpen != null) return isOpen;
+    final local = instant.toUtc().add(const Duration(hours: 7));
+    final day = local.weekday % 7;
+    final minute = local.hour * 60 + local.minute;
+    var hasToday = false;
+    for (final hours in operatingHours) {
+      final start = _clockMinutes(hours['openTime']);
+      final end = _clockMinutes(hours['closeTime']);
+      if (start == null || end == null) continue;
+      if (hours['dayOfWeek'] == day) {
+        hasToday = true;
+        if (end > start && minute >= start && minute < end) return true;
+        if (end < start && minute >= start) return true;
+      }
+      if (hours['dayOfWeek'] == (day + 6) % 7 && end < start && minute < end) {
+        return true;
+      }
+    }
+    return hasToday ? false : null;
+  }
+
+  bool? get currentlyOpen => isOpenAt(DateTime.now());
+  String? get discoveryPriceBand => startingHourlyRate != null
+      ? (startingHourlyRate! <= 100000 ? r'$' : r'$$')
+      : (priceRange == r'$' || priceRange == r'$$' ? priceRange : null);
+
+  String? get priceSummary {
+    if (priceRange != null && priceRange!.trim().isNotEmpty) {
+      return priceRange;
+    }
+    double? minPrice;
+    double? maxPrice;
+    for (final court in courts) {
+      if (court['status'] != null && court['status'] != 'ACTIVE') continue;
+      final slots = court['timeSlots'];
+      if (slots is! List) continue;
+      for (final rawSlot in slots) {
+        if (rawSlot is! Map) continue;
+        if (rawSlot['isActive'] == false) continue;
+        final hourly = rawSlot['hourlyRate'];
+        final price = rawSlot['price'];
+        final start = _clockMinutes(rawSlot['startTime']);
+        final end = _clockMinutes(rawSlot['endTime']);
+        final double? value = hourly is num
+            ? hourly.toDouble()
+            : price is num && start != null && end != null && end > start
+            ? price * 60 / (end - start)
+            : null;
+        if (value != null && value.isFinite && value > 0) {
+          minPrice = minPrice == null
+              ? value
+              : (value < minPrice ? value : minPrice);
+          maxPrice = maxPrice == null
+              ? value
+              : (value > maxPrice ? value : maxPrice);
+        }
+      }
+    }
+    if (minPrice == null || maxPrice == null) return null;
+    final minInt = minPrice.round();
+    final maxInt = maxPrice.round();
+    return minInt == maxInt
+        ? '$minInt VND / hour'
+        : '$minInt - $maxInt VND / hour';
+  }
+
+  String? get operatingHoursText {
+    if (operatingHours.isEmpty) return null;
+    final ranges = <String>[];
+    for (final item in operatingHours) {
+      final open = item['openTime']?.toString().trim();
+      final close = item['closeTime']?.toString().trim();
+      if (open != null &&
+          open.isNotEmpty &&
+          close != null &&
+          close.isNotEmpty) {
+        final range = '$open - $close';
+        if (!ranges.contains(range)) ranges.add(range);
+      }
+    }
+    if (ranges.isEmpty) return null;
+    return ranges.first;
+  }
+
   String get mapSubtitle =>
-      [if (distanceKm != null) distanceText, ?priceRange].join(' · ');
-  String get availabilityText => isOpen == null
+      [if (distanceKm != null) distanceText, ?priceSummary].join(' · ');
+  String get availabilityText => currentlyOpen == null
       ? (demo ? 'Demo availability' : 'Chưa rõ giờ mở cửa')
-      : isOpen!
+      : currentlyOpen!
       ? 'Open now'
       : 'Closed';
 
@@ -190,12 +327,16 @@ class CourtLocation {
     this.priceRange,
     this.isOpen,
     this.address = '',
+    this.contactPhone,
+    this.description,
     this.photos = const [],
     this.courts = const [],
+    this.operatingHours = const [],
+    this.services = const [],
     this.demo = false,
   });
 
-  /// Factory for deserializing from future NestJS /facilities endpoint.
+  /// Factory for deserializing from NestJS /facilities endpoint.
   factory CourtLocation.fromJson(Map<String, dynamic> json) {
     return CourtLocation(
       id: (json['id'] as num).toInt(),
@@ -208,13 +349,30 @@ class CourtLocation {
       priceRange: json['priceRange'] as String?,
       isOpen: json['isOpen'] as bool?,
       address: json['address'] as String? ?? '',
-      photos:
-          (json['photos'] as List?)?.map((e) => e.toString()).toList() ??
-          const [],
+      contactPhone: json['contactPhone'] as String?,
+      description: json['description'] as String?,
+      photos: FacilityImages.resolve(
+        name: json['name'] as String? ?? '',
+        address: json['address'] as String? ?? '',
+        photos:
+            (json['photos'] as List?)?.whereType<String>().toList() ?? const [],
+      ),
       courts:
           (json['courts'] as List?)
               ?.whereType<Map>()
               .map((c) => Map<String, dynamic>.from(c))
+              .toList() ??
+          const [],
+      services:
+          (json['services'] as List?)
+              ?.whereType<Map>()
+              .map((s) => Map<String, dynamic>.from(s))
+              .toList() ??
+          const [],
+      operatingHours:
+          (json['operatingHours'] as List?)
+              ?.whereType<Map>()
+              .map((h) => Map<String, dynamic>.from(h))
               .toList() ??
           const [],
     );
@@ -378,15 +536,29 @@ final nearbyPlayersProvider = FutureProvider.autoDispose<List<NearbyPlayer>>(
 final courtPreviewProvider = FutureProvider<CourtPreviewData>(
   (ref) => ref.watch(explorationRepositoryProvider).court(),
 );
+final facilityDetailProvider = FutureProvider.autoDispose
+    .family<CourtLocation, int>((ref, id) async {
+      final response = await ApiClient.instance.dio.get('/facilities/$id');
+      final location = CourtLocation.fromJson(
+        Map<String, dynamic>.from(response.data as Map),
+      );
+      if (location.id != id) {
+        throw const FormatException('Facility identity mismatch');
+      }
+      return location;
+    });
 final nearbyCourtsProvider = FutureProvider.autoDispose<List<CourtLocation>>((
   ref,
 ) async {
   final response = await ApiClient.instance.dio.get('/facilities');
-  return (response.data as List)
-      .map(
-        (item) =>
-            CourtLocation.fromJson(Map<String, dynamic>.from(item as Map)),
-      )
+  final data = response.data;
+  if (data is! List) {
+    throw const FormatException('Invalid facilities response');
+  }
+  return data
+      .whereType<Map>()
+      .map((item) => CourtLocation.fromJson(Map<String, dynamic>.from(item)))
+      .where((court) => !court.demo && court.id > 0)
       .toList();
 });
 

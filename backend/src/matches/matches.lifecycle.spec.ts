@@ -51,7 +51,7 @@ describe('SMM-34 Complete Match and lifecycle (transaction simulator only)', () 
     expect(fixture.privateMatch.participants).toEqual(roster);
     expect([...fixture.bookings]).toEqual(bookings);
     expect(fixture.prisma.match.updateMany).toHaveBeenCalledWith({
-      where: { id: 11, hostId: 10, status: { in: ['OPEN', 'FULL', 'IN_PROGRESS'] }, endTime: { lte: now } },
+      where: { id: 11, hostId: 10, status: { in: ['OPEN', 'FULL', 'IN_PROGRESS'] }, startTime: { lte: now } },
       data: { status: 'COMPLETED' },
     });
     expect(fixture.events).toEqual(['begin', 'lock-match', 'commit']);
@@ -60,12 +60,32 @@ describe('SMM-34 Complete Match and lifecycle (transaction simulator only)', () 
     expect(id).toBe(11);
     expect(fixture.prisma.$transaction.mock.calls[0][1]).toEqual({ isolationLevel: 'ReadCommitted' });
   });
-  it('permits completion exactly at endTime, but rejects one millisecond early', async () => {
-    fixture.privateMatch.endTime = new Date(now.getTime() + 1);
+  it('permits early completion exactly at startTime, but rejects one millisecond before start', async () => {
+    fixture.privateMatch.startTime = new Date(now.getTime() + 1);
+    fixture.privateMatch.endTime = new Date(now.getTime() + 3600000);
     await expect(service.completeMatch(11, 10)).rejects.toBeInstanceOf(ConflictException);
     noWrites();
-    fixture.privateMatch.endTime = now;
+    fixture.privateMatch.startTime = now;
     await expect(service.completeMatch(11, 10)).resolves.toMatchObject({ status: 'COMPLETED' });
+  });
+  it('notifies only accepted non-host participants once and preserves scheduled endTime', async () => {
+    fixture.privateMatch.startTime = new Date(now.getTime() - 60000);
+    fixture.privateMatch.endTime = new Date(now.getTime() + 3600000);
+    const end = fixture.privateMatch.endTime;
+    await service.completeMatch(11, 10);
+    expect(fixture.privateMatch.endTime).toEqual(end);
+    expect(fixture.prisma.matchNotification.create).toHaveBeenCalledTimes(1);
+    expect(fixture.prisma.matchNotification.create).toHaveBeenCalledWith({
+      data: { userId: 30, matchId: 11, kind: 'MATCH_COMPLETED' },
+    });
+    await expect(service.completeMatch(11, 10)).rejects.toBeInstanceOf(ConflictException);
+    expect(fixture.prisma.matchNotification.create).toHaveBeenCalledTimes(1);
+  });
+  it('rolls back completion when notification persistence fails', async () => {
+    fixture.prisma.matchNotification.create.mockRejectedValueOnce(new Error('notification write failed'));
+    await expect(service.completeMatch(11, 10)).rejects.toThrow();
+    expect(fixture.privateMatch.status).toBe('OPEN');
+    expect(fixture.events.at(-1)).toBe('rollback');
   });
   it.each([30, 80, 90])('rejects non-host %s before mutation', async (id) => {
     await expect(service.completeMatch(11, id)).rejects.toBeInstanceOf(ForbiddenException);
@@ -98,7 +118,9 @@ describe('SMM-34 Complete Match and lifecycle (transaction simulator only)', () 
     root.matchParticipant = { findUnique: wrongClient, update: wrongClient, create: wrongClient };
     root.$queryRaw = wrongClient;
     root.$transaction.mockImplementation(async (action: (tx: any) => Promise<any>) => action(db));
+    jest.setSystemTime(new Date('2026-10-20T17:59:00Z'));
     await service.acceptInvitation(11, 40);
+    jest.setSystemTime(now);
     await service.completeMatch(11, 10);
     expect(wrongClient).not.toHaveBeenCalled();
     expect(db.$queryRaw).toHaveBeenCalledTimes(2);
@@ -130,9 +152,9 @@ describe('SMM-34 Complete Match and lifecycle (transaction simulator only)', () 
     expect(fixture.prisma.matchParticipant.update).not.toHaveBeenCalled();
     expect(fixture.prisma.matchParticipant.create).not.toHaveBeenCalled();
   });
-  it('sees a time edit committed before completion instead of using stale endTime', async () => {
+  it('sees a time edit committed before completion instead of using stale startTime', async () => {
     const results = await Promise.allSettled([
-      service.updateMatch(11, 10, { endTime: '2026-10-28T12:00:00Z' }), service.completeMatch(11, 10),
+      service.updateMatch(11, 10, { startTime: '2026-10-28T11:00:00Z', endTime: '2026-10-28T12:00:00Z' }), service.completeMatch(11, 10),
     ]);
     expect(results[0].status).toBe('fulfilled');
     expect((results[1] as PromiseRejectedResult).reason).toBeInstanceOf(ConflictException);
@@ -152,6 +174,13 @@ describe('SMM-34 Complete Match and lifecycle (transaction simulator only)', () 
     const oldRequestPromise = mutate(action);
     await locked;
     const [oldRequest, completion] = await Promise.allSettled([oldRequestPromise, service.completeMatch(11, 10)]);
+    const requiresFuture = /^(invite-|join-|accept$|approve)/.test(action);
+    if (requiresFuture) {
+      expect(oldRequest.status).toBe('rejected');
+      expect((oldRequest as PromiseRejectedResult).reason).toBeInstanceOf(ConflictException);
+      expect(completion.status).toBe('fulfilled');
+      return;
+    }
     expect(oldRequest.status).toBe('fulfilled');
     if (action === 'cancel') {
       expect((completion as PromiseRejectedResult).reason).toBeInstanceOf(ConflictException);

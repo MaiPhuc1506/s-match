@@ -1,4 +1,4 @@
-import { BadGatewayException, BadRequestException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { CANDIDATE_PROVIDER, CandidateProvider } from './matchmaking/candidate-provider';
 import { isCandidateData } from './matchmaking/candidate-data';
 import { FastApiClient } from './matchmaking/fastapi.client';
@@ -7,6 +7,7 @@ import { MatchmakingResponseDto } from './matchmaking/dto/matchmaking-response.d
 import { RoleName } from '@prisma/client';
 import { PrismaService } from './prisma/prisma.service';
 import { RecommendationHistoryService } from './recommendation-history/recommendation-history.service';
+import { assessmentScore, effectiveSkillLevel } from './players/skill-assessment';
 
 @Injectable()
 export class MatchmakingService {
@@ -25,7 +26,8 @@ export class MatchmakingService {
     let data: unknown;
     try {
       data = await this.candidates.getCandidates(userId, criteria);
-    } catch {
+    } catch (error) {
+      if (error instanceof ConflictException || error instanceof ForbiddenException) throw error;
       throw new ServiceUnavailableException('Dịch vụ dữ liệu ứng viên chưa sẵn sàng');
     }
     if (!isCandidateData(data, userId)) throw new BadGatewayException('Dữ liệu ứng viên không hợp lệ');
@@ -41,9 +43,9 @@ export class MatchmakingService {
       return Number(userId);
     });
     const profiles = await this.prisma.playerProfile.findMany({
-      where: { userId: { in: userIds }, user: { role: { name: RoleName.PLAYER } } },
+      where: { userId: { in: userIds }, locationSharingEnabled: true, user: { role: { name: RoleName.PLAYER } } },
       select: {
-        userId: true, nickname: true, avatarUrl: true, skillLevel: true,
+        userId: true, nickname: true, avatarUrl: true, skillLevel: true, skill: true, playingArea: true,
         user: { select: { fullName: true } },
       },
     }).catch(() => {
@@ -52,16 +54,17 @@ export class MatchmakingService {
     const byUserId = new Map(profiles.map((profile) => [String(profile.userId), profile]));
     return this.saveSearch(userId, criteria, {
       // Iterate ranking, never the database rows: IN queries do not preserve order.
-      matchedUsers: ranked.matchedUsers.flatMap(({ userId, matchScore }) => {
+      matchedUsers: ranked.matchedUsers.flatMap(({ userId, matchScore, breakdown }) => {
         const profile = byUserId.get(userId);
         if (!profile) return [];
         return [{
-          userId, matchScore,
+          userId, matchScore, breakdown,
           profile: {
             fullName: profile.user.fullName ?? null,
             nickname: profile.nickname ?? null,
+            playingArea: profile.playingArea ?? null,
             avatarUrl: profile.avatarUrl ?? null,
-            skillLevel: profile.skillLevel ?? null,
+            skillLevel: effectiveSkillLevel(assessmentScore(profile.skill), profile.skillLevel ?? null),
           },
         }];
       }),

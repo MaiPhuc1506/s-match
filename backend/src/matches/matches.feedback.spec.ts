@@ -31,10 +31,22 @@ describe('SMM-34 Submit Feedback (Prisma mock)', () => {
     await expect(service.submitFeedback(11, 10, dto)).rejects.toMatchObject({ status: 409 });
     expect(fixture.prisma.feedback.create).not.toHaveBeenCalled(); unchanged();
   });
-  it('rejects a future endTime even if completed', async () => {
-    fixture.privateMatch.endTime = new Date(Date.now() + 60000);
+  it('rejects a future startTime even if completed', async () => {
+    fixture.privateMatch.startTime = new Date(Date.now() + 60000);
     await expect(service.submitFeedback(11, 10, dto)).rejects.toMatchObject({ status: 409 });
     expect(fixture.feedbacks).toHaveLength(0);
+  });
+  it('preserves feedback timing after an early host finish', async () => {
+    jest.useFakeTimers();
+    try {
+      const end = new Date(Date.now() + 3600000);
+      fixture.privateMatch.status = 'IN_PROGRESS';
+      fixture.privateMatch.startTime = new Date(Date.now() - 60000);
+      fixture.privateMatch.endTime = end;
+      await service.completeMatch(11, 10);
+      await expect(service.submitFeedback(11, 10, dto)).resolves.toMatchObject({ rating: 5 });
+      expect(fixture.privateMatch.endTime).toEqual(end);
+    } finally { jest.useRealTimers(); }
   });
   it('accepts server time exactly at endTime', async () => {
     jest.useFakeTimers();

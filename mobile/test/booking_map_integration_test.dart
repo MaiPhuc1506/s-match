@@ -139,22 +139,41 @@ void main() {
       await tester.tap(find.byKey(const Key('view_courts')));
       await tester.pumpAndSettle();
       expect(find.byType(LiveFacilitySchedule), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.calendar_month));
+      expect(find.byType(Dialog), findsNothing);
+      expect(
+        ModalRoute.of(tester.element(find.byType(LiveFacilitySchedule)))!
+            .opaque,
+        isTrue,
+      );
+      expect(
+        tester.getSize(find.byKey(const Key('booking-schedule-content'))).width,
+        393,
+      );
+
+      await tester.tap(find.byKey(const Key('booking-month-trigger')));
       await tester.pumpAndSettle();
-      tester
-          .widget<CalendarDatePicker>(find.byType(CalendarDatePicker))
-          .onDateChanged(tomorrow);
+      final today = DateTime.now().toUtc().add(const Duration(hours: 7));
+      if (tomorrow.month != today.month || tomorrow.year != today.year) {
+        await tester.tap(find.byKey(const ValueKey('booking-month-arrow-1')));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(
+        find.byKey(
+          ValueKey(
+            'booking-day-${tomorrow.year}-${tomorrow.month}-${tomorrow.day}',
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(const Key('booking-month-confirm')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('slot-52-18:00 – 19:00')));
       await tester.pump();
-      await tester.tap(find.text('OK'));
+      await tester.tap(find.byKey(const Key('booking-continue')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Selected court'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('18:00 – 19:00'));
-      await tester.pump();
-      await tester.tap(find.text('Continue'));
+      await tester.tap(find.text('Normal Booking'));
       await tester.pumpAndSettle();
       expect(find.text('Selected court'), findsOneWidget);
-      expect(find.text('125000 VND'), findsWidgets);
+      expect(find.text('125,000 VND'), findsWidgets);
       await tester.tap(find.text('Confirm Booking'));
       await tester.pumpAndSettle();
       expect(writes, hasLength(1));

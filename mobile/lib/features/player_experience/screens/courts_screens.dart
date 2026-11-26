@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../court_map/exploration_data.dart';
+import '../../court_map/screens/court_preview_screen.dart';
 import '../../court_map/screens/find_courts_map_screen.dart';
 import '../../navigation/player_bottom_navigation.dart';
 import '../../booking/widgets/live_facility_schedule.dart';
@@ -22,15 +24,7 @@ class _ExploreCourtsScreenState extends ConsumerState<ExploreCourtsScreen> {
   String query = '';
   @override
   Widget build(BuildContext context) {
-    final facilities = ref
-        .watch(demoCatalogProvider)
-        .facilities
-        .where(
-          (f) => '${f.name} ${f.district}'.toLowerCase().contains(
-            query.toLowerCase(),
-          ),
-        )
-        .toList();
+    final facilitiesAsync = ref.watch(nearbyCourtsProvider);
     return ExperienceScaffold(
       title: 'Explore Courts',
       tab: PlayerNavTab.map,
@@ -44,36 +38,96 @@ class _ExploreCourtsScreenState extends ConsumerState<ExploreCourtsScreen> {
               prefixIcon: Icon(Icons.search),
             ),
           ),
-          const DemoNotice(),
+          const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () =>
-                openExperience(context, const DemoCourtsMapScreen()),
+                openExperience(context, const FindCourtsMapScreen()),
             icon: const Icon(Icons.map_outlined),
             label: const Text('Explore Map'),
           ),
           TextButton.icon(
             onPressed: () => openExperience(
               context,
-              BookingHistoryScreen(
-                demoBookings: ref.read(demoBookingProvider).history,
-              ),
+              const BookingHistoryScreen(live: true),
             ),
             icon: const Icon(Icons.history),
-            label: const Text('Demo Bookings'),
+            label: const Text('My Bookings'),
           ),
           const SizedBox(height: 12),
-          Text(
-            facilities.length == 1
-                ? '1 facility'
-                : '${facilities.length} facilities',
-            style: Theme.of(context).textTheme.titleMedium,
+          ...facilitiesAsync.when(
+            loading: () => const [
+              ExperienceCard(
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+              ),
+            ],
+            error: (_, _) => [
+              ExperienceCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Unable to load courts. Please try again.'),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      key: const Key('explore_courts_retry'),
+                      onPressed: () => ref.invalidate(nearbyCourtsProvider),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            data: (allFacilities) {
+              final registered = allFacilities
+                  .where((f) => !f.demo && f.id > 0)
+                  .toList();
+              final facilities = registered
+                  .where(
+                    (f) => '${f.name} ${f.address}'.toLowerCase().contains(
+                      query.trim().toLowerCase(),
+                    ),
+                  )
+                  .toList();
+              return [
+                Text(
+                  facilities.length == 1
+                      ? '1 facility'
+                      : '${facilities.length} facilities',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                if (registered.isEmpty)
+                  ExperienceCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('No registered facilities available yet.'),
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          key: const Key('explore_courts_empty_refresh'),
+                          onPressed: () => ref.invalidate(nearbyCourtsProvider),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Refresh'),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (facilities.isEmpty)
+                  const ExperienceCard(
+                    child: Text(
+                      'No courts match your search. Try another area.',
+                    ),
+                  )
+                else
+                  ...facilities.map((f) => FacilityTile(facility: f)),
+              ];
+            },
           ),
-          const SizedBox(height: 12),
-          if (facilities.isEmpty)
-            const ExperienceCard(
-              child: Text('No courts match your search. Try another area.'),
-            ),
-          ...facilities.map((f) => FacilityTile(facility: f)),
         ],
       ),
     );
@@ -82,46 +136,124 @@ class _ExploreCourtsScreenState extends ConsumerState<ExploreCourtsScreen> {
 
 class FacilityTile extends StatelessWidget {
   const FacilityTile({super.key, required this.facility, this.compact = false});
-  final DemoFacility facility;
+  final CourtLocation facility;
   final bool compact;
   @override
-  Widget build(BuildContext context) => ExperienceCard(
-    padding: EdgeInsets.zero,
-    child: InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: () => openExperience(
-        context,
-        DemoCourtDetailScreen(facilityId: facility.id),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ExperiencePhoto(facility.image, height: compact ? 108 : 170),
-            const SizedBox(height: 10),
-            Text(
-              facility.name,
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: compact ? 12 : 17,
+  Widget build(BuildContext context) {
+    final photoPath = facility.photos.isEmpty ? null : facility.photos.first;
+    final courtCount = facility.courts.length;
+    final countLabel = '$courtCount ${courtCount == 1 ? 'court' : 'courts'}';
+    final address = facility.address.trim();
+    final subtitle = address.isEmpty ? countLabel : '$address · $countLabel';
+    final priceText = facility.priceSummary;
+
+    return ExperienceCard(
+      padding: EdgeInsets.zero,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => openExperience(
+          context,
+          CourtPreviewScreen(location: facility),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _FacilityPhotoBanner(
+                path: photoPath,
+                height: compact ? 108 : 170,
+                compact: compact,
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${facility.district} · ${facility.courtCount} courts',
-              style: const TextStyle(fontSize: 11, color: Colors.black54),
-            ),
-            if (!compact)
+              const SizedBox(height: 10),
               Text(
-                'From ${facility.hourlyPrice} VND / hour',
-                style: const TextStyle(color: mint),
+                facility.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: compact ? 12 : 17,
+                ),
               ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                maxLines: compact ? 1 : 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11, color: Colors.black54),
+              ),
+              if (!compact) ...[
+                const SizedBox(height: 4),
+                Text(
+                  priceText ?? 'Chưa có giá',
+                  style: TextStyle(
+                    color: priceText != null ? mint : Colors.black54,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
+}
+
+class _FacilityPhotoBanner extends StatelessWidget {
+  const _FacilityPhotoBanner({
+    required this.path,
+    required this.height,
+    required this.compact,
+  });
+  final String? path;
+  final double height;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final placeholder = Container(
+      height: height,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF4EE),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.sports_tennis,
+          color: mint,
+          size: compact ? 32 : 44,
+        ),
+      ),
+    );
+    final imagePath = path;
+    if (imagePath == null || imagePath.isEmpty) {
+      return placeholder;
+    }
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.network(
+          imagePath,
+          height: height,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => placeholder,
+        ),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Image.asset(
+        imagePath,
+        height: height,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => placeholder,
+      ),
+    );
+  }
 }
 
 /// Compatibility entry point; Map discovery now shows registered facilities only.

@@ -243,7 +243,7 @@ class MatchInvitationsScreen extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       boxShadow: [
         BoxShadow(
-          color: MatchColors.primaryGreen.withOpacity(0.08),
+          color: MatchColors.primaryGreen.withValues(alpha: 0.08),
           blurRadius: 10,
           offset: const Offset(0, 3),
         ),

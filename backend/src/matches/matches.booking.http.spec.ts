@@ -23,7 +23,7 @@ describe('Match Booking ownership HTTP (no PostgreSQL)', () => {
   };
   const sessions = new Map<string, any>();
   const create = { title: 'Fixture', startTime: '2026-10-20T18:00:00Z', endTime: '2026-10-20T19:00:00Z' };
-  const open = { mode: 'DOUBLES', purpose: 'CASUAL', neededPlayers: 2, minSkillLevel: 1, maxSkillLevel: 5 };
+  const open = { mode: 'DOUBLES', purpose: 'CASUAL', neededPlayers: 3, minSkillLevel: 1, maxSkillLevel: 5 };
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({ imports: [PrismaModule, AuthModule, MatchesModule] })

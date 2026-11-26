@@ -7,8 +7,45 @@ import '../data/dashboard_repository.dart';
 import 'dashboard_assets.dart';
 import 'dashboard_widgets.dart';
 
-/// The Figma chart series remain discrete SVGs; axes, selection and tooltips
-/// are native widgets connected to live analytics data when available.
+class _LiveBookingTrendPainter extends CustomPainter {
+  _LiveBookingTrendPainter(this.counts, this.maximum, this.color);
+  final List<int> counts;
+  final int maximum;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (counts.isEmpty) return;
+    final line = Path();
+    for (var i = 0; i < counts.length; i++) {
+      final x = counts.length == 1
+          ? size.width / 2
+          : size.width * i / (counts.length - 1);
+      final y = size.height * (1 - counts[i] / maximum);
+      if (i == 0) {
+        line.moveTo(x, y);
+      } else {
+        line.lineTo(x, y);
+      }
+    }
+    canvas.drawPath(
+      line,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _LiveBookingTrendPainter oldDelegate) =>
+      oldDelegate.counts != counts ||
+      oldDelegate.maximum != maximum ||
+      oldDelegate.color != color;
+}
+
+/// Live booking trends use API values; SVG series are reserved for previews.
 class DashboardTrendChart extends StatelessWidget {
   const DashboardTrendChart({
     super.key,
@@ -60,6 +97,12 @@ class DashboardTrendChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final prefix = growth ? 'admin' : 'owner';
     final livePoints = _displaySeries;
+    final liveBookingChart = live && !growth;
+    final chartMaximum = livePoints.fold<int>(
+      0,
+      (m, p) => p.bookingCount > m ? p.bookingCount : m,
+    );
+    final axisMaximum = chartMaximum == 0 ? 4 : ((chartMaximum + 3) ~/ 4) * 4;
     return DashboardCard(
       palette: palette,
       child: Column(
@@ -95,6 +138,7 @@ class DashboardTrendChart extends StatelessWidget {
             builder: (context, box) => GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapUp: (details) {
+                if (liveBookingChart && livePoints.isEmpty) return;
                 if (live && livePoints.isNotEmpty) {
                   final count = livePoints.length;
                   final i = ((details.localPosition.dx / box.maxWidth) * count)
@@ -158,7 +202,9 @@ class DashboardTrendChart extends StatelessWidget {
                               left: 0,
                               top: i * (growth ? 42.0 : 31.5),
                               child: Text(
-                                '${(growth ? 30 : 320) - i * (growth ? 10 : 80)}',
+                                liveBookingChart
+                                    ? '${axisMaximum - i * (axisMaximum ~/ 4)}'
+                                    : '${(growth ? 30 : 320) - i * (growth ? 10 : 80)}',
                                 style: palette.text(9, color: palette.muted),
                               ),
                             ),
@@ -172,32 +218,50 @@ class DashboardTrendChart extends StatelessWidget {
                               ),
                             ),
                           ],
-                          Positioned(
-                            left: 30,
-                            top: growth ? 19 : 22,
-                            width: 282,
-                            height: growth ? 113 : 110,
-                            child: DashboardChartReveal(
-                              radial: false,
-                              child: SvgPicture.asset(
-                                dashboardAssets['$prefix.imgSeriesArea']!,
-                                fit: BoxFit.fill,
+                          if (liveBookingChart && livePoints.isNotEmpty)
+                            Positioned(
+                              left: 30,
+                              top: 7,
+                              width: 282,
+                              height: 126,
+                              child: CustomPaint(
+                                painter: _LiveBookingTrendPainter(
+                                  livePoints
+                                      .map((p) => p.bookingCount)
+                                      .toList(),
+                                  axisMaximum,
+                                  palette.brand,
+                                ),
                               ),
                             ),
-                          ),
-                          Positioned(
-                            left: 28.75,
-                            top: growth ? 17.75 : 20.75,
-                            width: 284.5,
-                            height: growth ? 90.5 : 88.5,
-                            child: DashboardChartReveal(
-                              radial: false,
-                              child: SvgPicture.asset(
-                                dashboardAssets['$prefix.imgSeriesPrimary']!,
-                                fit: BoxFit.fill,
+                          if (!liveBookingChart)
+                            Positioned(
+                              left: 30,
+                              top: growth ? 19 : 22,
+                              width: 282,
+                              height: growth ? 113 : 110,
+                              child: DashboardChartReveal(
+                                radial: false,
+                                child: SvgPicture.asset(
+                                  dashboardAssets['$prefix.imgSeriesArea']!,
+                                  fit: BoxFit.fill,
+                                ),
                               ),
                             ),
-                          ),
+                          if (!liveBookingChart)
+                            Positioned(
+                              left: 28.75,
+                              top: growth ? 17.75 : 20.75,
+                              width: 284.5,
+                              height: growth ? 90.5 : 88.5,
+                              child: DashboardChartReveal(
+                                radial: false,
+                                child: SvgPicture.asset(
+                                  dashboardAssets['$prefix.imgSeriesPrimary']!,
+                                  fit: BoxFit.fill,
+                                ),
+                              ),
+                            ),
                           if (growth)
                             Positioned(
                               left: 28.75,
@@ -212,18 +276,19 @@ class DashboardTrendChart extends StatelessWidget {
                                 ),
                               ),
                             ),
-                          Positioned(
-                            left: 308.5,
-                            top: growth ? 15.5 : 18.5,
-                            width: 7,
-                            height: 7,
-                            child: DashboardChartReveal(
-                              radial: false,
-                              child: SvgPicture.asset(
-                                dashboardAssets['$prefix.imgSelectedDataPoint']!,
+                          if (!liveBookingChart)
+                            Positioned(
+                              left: 308.5,
+                              top: growth ? 15.5 : 18.5,
+                              width: 7,
+                              height: 7,
+                              child: DashboardChartReveal(
+                                radial: false,
+                                child: SvgPicture.asset(
+                                  dashboardAssets['$prefix.imgSelectedDataPoint']!,
+                                ),
                               ),
                             ),
-                          ),
                         ],
                       ),
                     ),
@@ -304,72 +369,78 @@ class DashboardPeakChart extends StatelessWidget {
           style: palette.text(16, weight: FontWeight.w600),
         ),
         const SizedBox(height: 16),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: List.generate(
-            6,
-            (i) => Expanded(
-              child: Semantics(
-                button: true,
-                label: '${[6, 9, 12, 15, 18, 21][i]} hours, bookings',
-                child: InkWell(
-                  onTap: () {
-                    final courtList = courts;
-                    if (live && courtList != null && courtList.isNotEmpty) {
-                      final topCourt = courtList[i % courtList.length];
-                      final rate = topCourt.utilizationRate != null
-                          ? '${(topCourt.utilizationRate! * 100).toStringAsFixed(1)}%'
-                          : 'N/A';
+        if (live)
+          Text(
+            'Hourly booking data is not available yet.',
+            style: palette.text(12, color: palette.muted),
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: List.generate(
+              6,
+              (i) => Expanded(
+                child: Semantics(
+                  button: true,
+                  label: '${[6, 9, 12, 15, 18, 21][i]} hours, bookings',
+                  child: InkWell(
+                    onTap: () {
+                      final courtList = courts;
+                      if (live && courtList != null && courtList.isNotEmpty) {
+                        final topCourt = courtList[i % courtList.length];
+                        final rate = topCourt.utilizationRate != null
+                            ? '${(topCourt.utilizationRate! * 100).toStringAsFixed(1)}%'
+                            : 'N/A';
+                        dashboardOptions(
+                          context,
+                          palette,
+                          topCourt.courtName,
+                          [],
+                          subtitle:
+                              'Live utilization · ${topCourt.bookingCount} bookings · ${topCourt.bookedHours}h / ${topCourt.availableHours}h ($rate)',
+                        );
+                        return;
+                      }
                       dashboardOptions(
                         context,
                         palette,
-                        topCourt.courtName,
+                        '${[6, 9, 12, 15, 18, 21][i]}:00',
                         [],
-                        subtitle:
-                            'Live utilization · ${topCourt.bookingCount} bookings · ${topCourt.bookedHours}h / ${topCourt.availableHours}h ($rate)',
+                        subtitle: live
+                            ? 'Hourly slot distribution is not exposed by the API.'
+                            : 'Demo · ${[12, 25, 19, 34, 54, 31][i]} bookings',
                       );
-                      return;
-                    }
-                    dashboardOptions(
-                      context,
-                      palette,
-                      '${[6, 9, 12, 15, 18, 21][i]}:00',
-                      [],
-                      subtitle: live
-                          ? 'Hourly slot distribution is not exposed by the API.'
-                          : 'Demo · ${[12, 25, 19, 34, 54, 31][i]} bookings',
-                    );
-                  },
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      SizedBox(
-                        width: 27,
-                        height: [24.0, 50.0, 38.0, 68.0, 108.0, 62.0][i],
-                        child: DashboardChartReveal(
-                          vertical: true,
-                          child: Container(
-                            width: 27,
-                            height: [24.0, 50.0, 38.0, 68.0, 108.0, 62.0][i],
-                            decoration: BoxDecoration(
-                              color: i == 4 ? palette.brand : palette.accent,
-                              borderRadius: BorderRadius.circular(4),
+                    },
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        SizedBox(
+                          width: 27,
+                          height: [24.0, 50.0, 38.0, 68.0, 108.0, 62.0][i],
+                          child: DashboardChartReveal(
+                            vertical: true,
+                            child: Container(
+                              width: 27,
+                              height: [24.0, 50.0, 38.0, 68.0, 108.0, 62.0][i],
+                              decoration: BoxDecoration(
+                                color: i == 4 ? palette.brand : palette.accent,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        ['06', '09', '12', '15', '18', '21'][i],
-                        style: palette.text(10, color: palette.muted),
-                      ),
-                    ],
+                        const SizedBox(height: 8),
+                        Text(
+                          ['06', '09', '12', '15', '18', '21'][i],
+                          style: palette.text(10, color: palette.muted),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
         const SizedBox(height: 8),
       ],
     ),
@@ -396,9 +467,7 @@ class DashboardStatusChart extends StatelessWidget {
         ? courtList.where((c) => c.status.toUpperCase() == 'ACTIVE').length
         : 144;
     final int pendingCount = live
-        ? courtList
-              .where((c) => c.status.toUpperCase() == 'MAINTENANCE')
-              .length
+        ? courtList.where((c) => c.status.toUpperCase() == 'MAINTENANCE').length
         : 28;
     final int inactiveCount = live
         ? courtList
@@ -410,8 +479,9 @@ class DashboardStatusChart extends StatelessWidget {
               .length
         : 14;
     final int total = live ? (totalCourts ?? courtList.length) : 186;
-    String pct(int count) =>
-        total > 0 ? '$count (${((count * 100) / total).round()}%)' : '$count (0%)';
+    String pct(int count) => total > 0
+        ? '$count (${((count * 100) / total).round()}%)'
+        : '$count (0%)';
 
     return DashboardCard(
       palette: palette,
@@ -491,11 +561,7 @@ class DashboardStatusChart extends StatelessWidget {
                 ),
               );
               final legendValues = live
-                  ? [
-                      pct(activeCount),
-                      pct(pendingCount),
-                      pct(inactiveCount),
-                    ]
+                  ? [pct(activeCount), pct(pendingCount), pct(inactiveCount)]
                   : ['144 (77%)', '28 (15%)', '14 (8%)'];
               final legend = Column(
                 children: List.generate(

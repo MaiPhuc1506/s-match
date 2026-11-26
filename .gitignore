@@ -43,3 +43,4 @@ build/
 
 # Keep the SwiftPM lockfile in Runner.xcworkspace only.
 /mobile/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+mobile/ios/Flutter/GoogleOAuth.local.xcconfig

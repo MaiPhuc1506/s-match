@@ -9,8 +9,41 @@ describe('Match privacy and response projections (Prisma mock)', () => {
   let fixture: ReturnType<typeof makeMatchSecurityFixture>;
   let service: MatchesService;
   beforeEach(() => {
-    fixture = makeMatchSecurityFixture();
+    fixture = makeMatchSecurityFixture(new Date(Date.now() + 7 * 86400000));
     service = new MatchesService(fixture.prisma);
+  });
+
+  it('rejects nearby invitations without the player location-sharing consent', async () => {
+    fixture.prisma.playerProfile.findFirst.mockResolvedValue(null);
+    await expect(service.inviteUser(12, 10, 90)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(fixture.prisma.matchParticipant.create).not.toHaveBeenCalled();
+  });
+
+  it('persists a notification with an invitation in the match transaction', async () => {
+    await service.inviteUser(12, 10, 90);
+    expect(fixture.prisma.matchNotification.create).toHaveBeenCalledWith({
+      data: { userId: 90, matchId: 12, kind: 'INVITATION' },
+    });
+  });
+
+  it('rejects a consenting target outside the recommendation radius before creating an invitation', async () => {
+    fixture.prisma.playerProfile.findFirst.mockResolvedValueOnce({
+      userId: 10, latitude: 16, longitude: 108, skill: null,
+      user: { availabilities: [{ dayOfWeek: 1, startTime: '18:00' }] },
+    }).mockResolvedValueOnce({
+      userId: 90, latitude: 17, longitude: 108, skill: null,
+      user: { availabilities: [{ dayOfWeek: 1, startTime: '18:00' }] },
+    });
+    await expect(service.inviteUser(12, 10, 90)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(fixture.prisma.matchParticipant.create).not.toHaveBeenCalled();
+    expect(fixture.prisma.matchNotification.create).not.toHaveBeenCalled();
+  });
+
+  it('persists a notification to the organizer for a new request', async () => {
+    await service.requestToJoin(12, 90);
+    expect(fixture.prisma.matchNotification.create).toHaveBeenCalledWith({
+      data: { userId: 10, matchId: 12, kind: 'JOIN_REQUEST' },
+    });
   });
 
   it('filters PRIVATE in the public query and gives the same 404 as a missing match', async () => {
@@ -134,7 +167,7 @@ describe('Match privacy and response projections (Prisma mock)', () => {
       title: 'Fixture', startTime: '2026-10-20T18:00:00Z', endTime: '2026-10-20T19:00:00Z',
     }));
     expectSafeMatchResponse(await service.createFromBooking(10, 100, {
-      mode: 'DOUBLES', purpose: 'CASUAL', neededPlayers: 2, minSkillLevel: 1, maxSkillLevel: 5,
+      mode: 'DOUBLES', purpose: 'CASUAL', neededPlayers: 3, minSkillLevel: 1, maxSkillLevel: 5,
     } as any));
     expect(Object.keys(fixture.prisma.booking)).toEqual(['findUnique']);
   });

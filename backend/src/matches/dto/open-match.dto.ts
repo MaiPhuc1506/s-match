@@ -1,8 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MatchMode, MatchPurpose } from '@prisma/client';
-import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateOpenMatchDto {
+  @ApiPropertyOptional({ description: 'Optional match preferences' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
   @ApiProperty({ enum: MatchMode, default: MatchMode.DOUBLES })
   @IsEnum(MatchMode)
   mode: MatchMode;
@@ -31,6 +37,11 @@ export class CreateOpenMatchDto {
 }
 
 export class QueryOpenMatchDto {
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) date?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(5) skill?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(-90) @Max(90) latitude?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(-180) @Max(180) longitude?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0.1) @Max(500) distanceKm?: number;
   @ApiPropertyOptional({ enum: MatchMode })
   @IsOptional()
   @IsEnum(MatchMode)

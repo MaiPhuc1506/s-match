@@ -63,6 +63,16 @@ describe('SMM-34 lifecycle HTTP (real guard/service; simulated transactions, no 
     expect(fixture.privateMatch.participants).toEqual(participants);
     expect([...fixture.bookings]).toEqual(bookings);
   });
+  it('allows a JWT-authenticated host to finish before the scheduled end', async () => {
+    fixture.privateMatch.startTime = new Date(Date.now() - 60000);
+    fixture.privateMatch.endTime = new Date(Date.now() + 3600000);
+    const response = await complete();
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe('COMPLETED');
+    expect(prisma.matchNotification.create).toHaveBeenCalledWith({
+      data: { userId: 30, matchId: 11, kind: 'MATCH_COMPLETED' },
+    });
+  });
   it.each([Role.PLAYER, Role.OWNER, Role.ADMIN])('has no host bypass for another user with role %s', async (role) => {
     safeError(await complete(80, role), 403);
     expect(prisma.match.updateMany).not.toHaveBeenCalled();
@@ -78,8 +88,9 @@ describe('SMM-34 lifecycle HTTP (real guard/service; simulated transactions, no 
     safeError(await complete(), 409);
     expect(prisma.match.updateMany).not.toHaveBeenCalled();
   });
-  it('returns 409 before endTime', async () => {
-    fixture.privateMatch.endTime = new Date(Date.now() + 60000);
+  it('returns 409 before startTime', async () => {
+    fixture.privateMatch.startTime = new Date(Date.now() + 60000);
+    fixture.privateMatch.endTime = new Date(Date.now() + 3600000);
     safeError(await complete(), 409);
     expect(prisma.match.updateMany).not.toHaveBeenCalled();
   });

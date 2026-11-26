@@ -39,16 +39,27 @@ class RatingSummary {
 /// Uses the SMM-36 rating contract for both writes and reads. No second POST to
 /// SMM-34 Feedback: these are separate stores, not interchangeable endpoints.
 class RatingApi {
-  RatingApi({required this.userId, required this.token});
+  RatingApi({required this.userId, required this.token})
+    : _sessionVersion = ApiClient.instance.sessionVersion,
+      _initialTokenValid =
+          token.isNotEmpty && token == ApiClient.instance.token;
   factory RatingApi.current() => RatingApi(
     userId: (AuthService.instance.currentUser?['id'] as num?)?.toInt() ?? 0,
     token: ApiClient.instance.token ?? '',
   );
   final int userId;
   final String token;
+  final int _sessionVersion;
+  final bool _initialTokenValid;
   final _client = ApiClient.instance;
   void checkSession() {
-    if (userId <= 0 || token.isEmpty || token != _client.token) {
+    final activeUserId = (AuthService.instance.currentUser?['id'] as num?)
+        ?.toInt();
+    if (userId <= 0 ||
+        !_initialTokenValid ||
+        _client.token == null ||
+        _client.sessionVersion != _sessionVersion ||
+        activeUserId != userId) {
       throw const RatingFailure(
         'Your session changed. Sign in and reopen this screen.',
       );
@@ -65,7 +76,10 @@ class RatingApi {
       final response = await _client.dio.request<dynamic>(
         path,
         data: data,
-        options: Options(method: method, extra: {'expectedAuthToken': token}),
+        options: Options(
+          method: method,
+          extra: {'expectedAuthToken': _client.token},
+        ),
       );
       checkSession();
       return response.data;

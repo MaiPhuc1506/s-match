@@ -1,3 +1,5 @@
+import '../services/live_booking_service.dart';
+import '../../court_map/facility_images.dart';
 import '../../../core/theme/app_motion_widgets.dart';
 
 import 'package:dio/dio.dart';
@@ -5,6 +7,7 @@ import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_motion.dart';
 import 'booking_detail_screen.dart';
+import '../../match/screens/open_match_setup_screen.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -147,6 +150,14 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
         final b = Map<String, dynamic>.from(raw as Map);
         final court = b['court'] as Map;
         final facility = court['facility'] as Map;
+        final photos = FacilityImages.resolve(
+          name: facility['name']?.toString() ?? '',
+          address: facility['address']?.toString() ?? '',
+          photos:
+              (facility['photos'] as List?)?.whereType<String>().toList() ??
+              const [],
+        );
+        if (photos.isNotEmpty) b['photoAsset'] = photos.first;
         return BookingHistoryItem(
           source: b,
           id: '${b['id']}',
@@ -340,14 +351,45 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   // 2. Thẻ Booking Card (345×116, shadow nhẹ)
   Widget _buildBookingCard(BookingHistoryItem booking) {
     return InkWell(
-      onTap: () {
+      onTap: () async {
         if (widget.onSelectBooking != null) {
           widget.onSelectBooking!(booking);
         } else {
-          Navigator.of(context).push(
+          await Navigator.of(context).push(
             AppMotion.route(
               BookingDetailScreen(
                 bookingId: booking.id,
+                onOrganizeMatch:
+                    widget.live &&
+                        booking.source?['status'] == 'CONFIRMED' &&
+                        booking.source?['match'] == null &&
+                        (DateTime.tryParse('${booking.source?['startTime']}')
+                                ?.isAfter(DateTime.now()) ??
+                            false)
+                    ? () async {
+                        final navigator = Navigator.of(context);
+                        await navigator.push(
+                          AppMotion.route(
+                            OpenMatchSetupScreen(
+                              bookingId: int.parse(booking.id),
+                              courtLabel:
+                                  '${booking.facilityName} · ${booking.courtName}',
+                              timeLabel: booking.dateTimeText,
+                            ),
+                            name: '/open-match-setup',
+                          ),
+                        );
+                      }
+                    : null,
+                onCancelBooking:
+                    widget.live &&
+                        booking.source != null &&
+                        [
+                          'PENDING',
+                          'CONFIRMED',
+                        ].contains(booking.source!['status'])
+                    ? () => LiveBookingService().cancel(int.parse(booking.id))
+                    : null,
                 photoAsset: booking.source?['photoAsset'] as String?,
                 facilityName: booking.facilityName,
                 courtName: booking.courtName,
@@ -375,6 +417,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
               name: '/booking-detail-preview',
             ),
           );
+          if (mounted && widget.live) await _loadBookings();
         }
       },
       borderRadius: BorderRadius.circular(12),

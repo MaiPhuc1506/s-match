@@ -1,8 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UpdateProfileDto {
+  @ApiPropertyOptional({ description: 'Confirm completion of Google onboarding' })
+  @IsOptional()
+  @IsBoolean()
+  completeGoogleOnboarding?: boolean;
+
   @ApiPropertyOptional({ example: 'Nguyễn Văn A' })
   @IsOptional()
   @IsString()
@@ -53,4 +58,13 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   gender?: string;
+
+  @ApiPropertyOptional({
+    example: 'Da Nang, Vietnam',
+    description: 'Khu vực chơi (nhập tay, không bật chia sẻ GPS)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  playingArea?: string;
 }

@@ -1,11 +1,20 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateNested, IsObject } from 'class-validator';
 
 const trimString = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
 export const COMMENT_MAX_LENGTH = 500;
+
+export class SkillRatingsDto {
+  @IsOptional() @IsInt() @Min(1) @Max(5) smash?: number | null;
+  @IsOptional() @IsInt() @Min(1) @Max(5) defense?: number | null;
+  @IsOptional() @IsInt() @Min(1) @Max(5) netPlay?: number | null;
+  @IsOptional() @IsInt() @Min(1) @Max(5) stamina?: number | null;
+  @IsOptional() @IsInt() @Min(1) @Max(5) footwork?: number | null;
+  @IsOptional() @IsInt() @Min(1) @Max(5) serve?: number | null;
+}
 
 export class CreateRatingDto {
   @ApiProperty({ example: 12, description: 'ID trận đấu đã diễn ra' })
@@ -26,6 +35,10 @@ export class CreateRatingDto {
   @Min(1)
   @Max(5)
   score: number;
+
+  @ApiPropertyOptional({ type: SkillRatingsDto })
+  @IsOptional() @IsObject() @ValidateNested() @Type(() => SkillRatingsDto)
+  skillRatings?: SkillRatingsDto;
 
   @ApiPropertyOptional({ example: 4, minimum: 1, maximum: 5, description: 'Đúng giờ 1-5' })
   @IsOptional()

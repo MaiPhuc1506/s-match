@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
 /// Model biểu diễn một tài khoản test được lưu lại trong Developer Testing Hub.
@@ -52,7 +53,9 @@ class DevAccount {
 
   factory DevAccount.fromJson(Map<String, dynamic> json) {
     return DevAccount(
-      id: json['id'] as String? ?? 'acc_${DateTime.now().millisecondsSinceEpoch}',
+      id:
+          json['id'] as String? ??
+          'acc_${DateTime.now().millisecondsSinceEpoch}',
       label: json['label'] as String? ?? 'Unnamed Account',
       email: json['email'] as String? ?? '',
       role: json['role'] as String? ?? 'PLAYER',
@@ -91,6 +94,12 @@ class DevSavedAccountsRepository {
       email: 'player2@smatch.dev',
       role: 'PLAYER',
       note: 'Tài khoản Player phụ dùng để test mời trận / nhận request',
+    ),
+    const DevAccount(
+      id: 'seed_player_03',
+      label: 'Player 03',
+      email: 'player3@smatch.dev',
+      role: 'PLAYER',
     ),
     const DevAccount(
       id: 'seed_owner_01',
@@ -133,6 +142,15 @@ class DevSavedAccountsRepository {
           _cache = list
               .map((item) => DevAccount.fromJson(item as Map<String, dynamic>))
               .toList();
+          for (final account in defaultSeedAccounts) {
+            if (!_cache!.any(
+              (existing) =>
+                  existing.email.toLowerCase() == account.email.toLowerCase(),
+            )) {
+              _cache!.add(account);
+            }
+          }
+          await _persist();
           return List.unmodifiable(_cache!);
         }
       } catch (e) {
@@ -155,6 +173,21 @@ class DevSavedAccountsRepository {
     } else {
       accounts.insert(0, account);
     }
+    _cache = accounts;
+    await _persist();
+  }
+
+  /// Persist the order chosen in the developer hub.
+  Future<void> reorderAccounts(int oldIndex, int newIndex) async {
+    final accounts = (await getAccounts()).toList();
+    if (oldIndex < 0 ||
+        oldIndex >= accounts.length ||
+        newIndex < 0 ||
+        newIndex >= accounts.length) {
+      return;
+    }
+    final account = accounts.removeAt(oldIndex);
+    accounts.insert(newIndex, account);
     _cache = accounts;
     await _persist();
   }
@@ -207,4 +240,3 @@ class DevSavedAccountsRepository {
     }
   }
 }
-

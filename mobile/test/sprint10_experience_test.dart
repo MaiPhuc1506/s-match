@@ -18,11 +18,44 @@ import 'package:mobile/features/booking/screens/booking_detail_screen.dart';
 import 'package:mobile/features/booking/widgets/live_facility_schedule.dart';
 import 'package:mobile/features/court_map/widgets/court_maplibre_map.dart';
 import 'package:mobile/features/court_map/exploration_data.dart';
+import 'package:mobile/features/court_map/screens/court_preview_screen.dart';
 
 import 'support/fake_court_map_platform.dart';
 
 void main() {
   const catalogue = DemoCatalog();
+  const registeredFacilities = [
+    CourtLocation(
+      id: 101,
+      name: 'Hai Chau Badminton',
+      address: 'Hai Chau, Da Nang',
+      latitude: 16.061,
+      longitude: 108.2165,
+      courts: [
+        {
+          'id': 201,
+          'name': 'Court 1',
+          'status': 'ACTIVE',
+          'courtType': 'INDOOR',
+        },
+      ],
+    ),
+    CourtLocation(
+      id: 106,
+      name: 'Son Tra Badminton',
+      address: 'Son Tra, Da Nang',
+      latitude: 16.093,
+      longitude: 108.246,
+      courts: [
+        {
+          'id': 206,
+          'name': 'Court 1',
+          'status': 'ACTIVE',
+          'courtType': 'INDOOR',
+        },
+      ],
+    ),
+  ];
   Future<void> pump(
     WidgetTester tester,
     Widget screen, {
@@ -32,6 +65,11 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          nearbyCourtsProvider.overrideWith(
+            (ref) async => registeredFacilities,
+          ),
+        ],
         child: MaterialApp(key: UniqueKey(), home: screen),
       ),
     );
@@ -191,10 +229,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       tester
-          .widget<DemoCourtDetailScreen>(find.byType(DemoCourtDetailScreen))
-          .facilityId,
-      -1006,
+          .widget<CourtPreviewScreen>(find.byType(CourtPreviewScreen))
+          .location
+          ?.id,
+      106,
     );
+    await pump(tester, const DemoCourtDetailScreen(facilityId: -1006));
     await tester.drag(find.byType(TabBar), const Offset(-220, 0));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Reviews'));
@@ -303,7 +343,11 @@ void main() {
         onViewBookings: () {},
       ),
     );
-    await tester.tap(find.text('08:00 – 09:00'));
+    await tester.tap(
+      find.byKey(
+        ValueKey('slot-${catalogue.facilities.first.courtId(0)}-08:00 – 09:00'),
+      ),
+    );
     await tester.pump();
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();

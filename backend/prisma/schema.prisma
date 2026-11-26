@@ -34,6 +34,7 @@ model Role {
 
 model User {
   id                Int                @id @default(autoincrement())
+  googleIdentity    GoogleIdentity?
   email             String             @unique
   password          String
   fullName          String?
@@ -41,6 +42,7 @@ model User {
   roleId            Int
   role              Role               @relation(fields: [roleId], references: [id])
   refreshSessions   RefreshSession[]
+  passwordRecovery  PasswordRecovery?
   playerProfile     PlayerProfile?
   playingPreference PlayingPreference?
   availabilities    Availability[]
@@ -49,6 +51,7 @@ model User {
   bookings          Booking[]
   hostedMatches      Match[]            @relation("HostedMatches")
   matchParticipants  MatchParticipant[]
+  notifications      MatchNotification[]
   sentFeedback       Feedback[]         @relation("FeedbackSender")
   receivedFeedback   Feedback[]         @relation("FeedbackRecipient")
 
@@ -63,6 +66,13 @@ model User {
 
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
+}
+
+model GoogleIdentity {
+  onboardingPending Boolean @default(false)
+  subject String @id
+  userId Int @unique
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model RefreshSession {
@@ -89,11 +99,14 @@ model PlayerProfile {
   skillLevel String? @default("BEGINNER") // BEGINNER, INTERMEDIATE, ADVANCED
   bio        String?
   gender     String?
+  // Free-text playing area captured during Google onboarding (no GPS consent).
+  playingArea String?
 
   // SMM-28 — Candidate Data & Geo Search: vị trí gần nhất của người chơi
   latitude          Float?
   longitude         Float?
   locationUpdatedAt DateTime?
+  locationSharingEnabled Boolean @default(false)
 
   // SMM-12 / SMM-13: Bổ sung bảng Skill nối với PlayerProfile
   skill Skill?
@@ -115,6 +128,9 @@ model Skill {
   stamina         Float         @default(0)
   footwork        Float         @default(0)
   serve           Float         @default(0)
+  initialScores   Json?
+  initialSource   String?
+  progressHistory Json?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 }
@@ -171,6 +187,7 @@ model Facility {
   longitude      Float?
   contactPhone   String?
   description    String?
+  services       FacilityService[]
   courts         Court[]
   operatingHours OperatingHours[]
   createdAt      DateTime         @default(now())
@@ -203,6 +220,8 @@ model TimeSlot {
   dayOfWeek Int      // 0: Chủ Nhật, 1: Thứ 2, ..., 6: Thứ 7
   startTime String   // "18:00"
   endTime   String   // "19:00"
+  hourlyRate Float?  // Optional published hourly rate; price remains the full slot charge.
+  walkInPrice Float? // Walk-in charge for the entire slot.
   price     Float    // Giá cho khung giờ này (VNĐ)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -334,6 +353,18 @@ model MatchParticipant {
   @@index([status])
 }
 
+model MatchNotification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  matchId   Int
+  kind      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
 // SMM-34 / SMM-36 shared raw feedback. Aggregation/history are separate concerns.
 model Feedback {
   id              Int      @id @default(autoincrement())
@@ -421,6 +452,7 @@ model PlayerRating {
   score         Int      // Điểm tổng thể 1-5
   punctuality   Int?     // Đúng giờ 1-5 (tuỳ chọn)
   sportsmanship Int?     // Tinh thần thi đấu / thái độ 1-5 (tuỳ chọn)
+  skillRatings  Json?    // Optional per-axis observations, null means not observed
   comment       String?  // Nhận xét ngắn, tối đa 500 ký tự
 
   createdAt     DateTime @default(now())
@@ -449,4 +481,28 @@ model RatingHistory {
 
   @@index([userId, createdAt])
   @@index([ratingId])
+}
+
+model FacilityService {
+  id Int @id @default(autoincrement())
+  facilityId Int
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  name String
+  price Float
+  unit String
+  category String @default("BEVERAGE")
+  sortOrder Int @default(0)
+  sourceKey String
+  @@unique([facilityId, sourceKey])
+}
+
+model PasswordRecovery {
+  userId         Int      @id
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash       String
+  expiresAt      DateTime
+  lastSentAt     DateTime
+  attempts       Int      @default(0)
+  resetTokenHash String?
+  resetExpiresAt DateTime?
 }

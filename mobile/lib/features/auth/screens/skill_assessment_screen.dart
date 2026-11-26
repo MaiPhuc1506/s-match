@@ -5,7 +5,9 @@ import '../../../core/theme/app_motion.dart';
 import 'package:flutter/services.dart';
 
 import '../widgets/sprint2_presentation.dart';
+import '../../../core/network/api_client.dart';
 import '../widgets/profile_skill_radar.dart';
+import 'initial_skill_quiz_screen.dart';
 
 class SkillAssessmentScreen extends StatefulWidget {
   const SkillAssessmentScreen({super.key});
@@ -15,6 +17,30 @@ class SkillAssessmentScreen extends StatefulWidget {
 
 class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
   String _selected = 'Chart';
+  Map<String, dynamic>? profile;
+  String? error;
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    final client = ApiClient.instance;
+    final token = client.token;
+    try {
+      final response = await client.dio.get('/players/profile/me');
+      if (!mounted || client.token != token) return;
+      setState(
+        () => profile = Map<String, dynamic>.from(
+          response.data['playerProfile'] as Map,
+        ),
+      );
+    } catch (_) {
+      if (mounted) setState(() => error = 'Unable to load your skill profile.');
+    }
+  }
+
   final _chartKey = GlobalKey(), _detailsKey = GlobalKey();
   void _select(String label) {
     setState(() => _selected = label);
@@ -40,63 +66,124 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
   }) => Sprint2Style.font(size, lineHeight, weight: weight, color: color);
 
   @override
-  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
-    value: SystemUiOverlayStyle.dark,
-    child: Scaffold(
-      backgroundColor: Sprint2Style.background,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 393),
-          child: Column(
-            children: [
-              const Sprint2BackHeader(title: 'Skill Assessment'),
-              Expanded(
-                child: Sprint2FormBody(
-                  spacing: 8,
-                  button: _buildRetakeButton(),
-                  children: [
-                    _buildLevelCard(),
-                    Container(
-                      constraints: const BoxConstraints(minHeight: 56),
-                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 7),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F3EF),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'You’re improving!',
-                            style: Sprint2Style.font(
-                              13,
-                              18,
-                              weight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Keep playing to develop your badminton skills.',
-                            style: Sprint2Style.font(
-                              12,
-                              17,
-                              color: Sprint2Style.secondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    KeyedSubtree(key: _chartKey, child: _buildRadarCard()),
-                    KeyedSubtree(key: _detailsKey, child: _buildBreakdown()),
-                  ],
+  Widget build(BuildContext context) {
+    if (profile == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Skill Assessment')),
+        body: Center(
+          child: error == null
+              ? const CircularProgressIndicator()
+              : TextButton(
+                  onPressed: () {
+                    setState(() => error = null);
+                    load();
+                  },
+                  child: Text(error!),
                 ),
-              ),
-            ],
+        ),
+      );
+    }
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        backgroundColor: Sprint2Style.background,
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 393),
+            child: Column(
+              children: [
+                const Sprint2BackHeader(title: 'Skill Assessment'),
+                Expanded(
+                  child: Sprint2FormBody(
+                    spacing: 8,
+                    button: _buildRetakeButton(),
+                    children: [
+                      _buildLevelCard(),
+                      if (profile?['skill'] is Map) _buildSkillProgress(),
+                      Container(
+                        constraints: const BoxConstraints(minHeight: 56),
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 7),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F3EF),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'You’re improving!',
+                              style: Sprint2Style.font(
+                                13,
+                                18,
+                                weight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Keep playing to develop your badminton skills.',
+                              style: Sprint2Style.font(
+                                12,
+                                17,
+                                color: Sprint2Style.secondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      KeyedSubtree(key: _chartKey, child: _buildRadarCard()),
+                      KeyedSubtree(key: _detailsKey, child: _buildBreakdown()),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
+
+  Widget _buildSkillProgress() {
+    final skill = profile!['skill'] as Map;
+    final history = skill['progressHistory'];
+    final axes = history is Map ? history['axes'] : null;
+    var matches = 0, reviewers = 0;
+    if (axes is Map) {
+      for (final axis in axes.values) {
+        final steps = axis is Map ? axis['steps'] : null;
+        if (steps is List && steps.isNotEmpty && steps.last is Map) {
+          final last = steps.last as Map;
+          final m = (last['matchCount'] as num?)?.toInt() ?? 0;
+          final r = (last['reviewerCount'] as num?)?.toInt() ?? 0;
+          if (m > matches) matches = m;
+          if (r > reviewers) reviewers = r;
+        }
+      }
+    }
+    final established =
+        axes is Map &&
+        axes.values.any((axis) {
+          final steps = axis is Map ? axis['steps'] : null;
+          if (steps is! List || steps.isEmpty || steps.last is! Map) {
+            return false;
+          }
+          final last = steps.last as Map;
+          return (last['matchCount'] as num? ?? 0) >= 3 &&
+              (last['reviewerCount'] as num? ?? 0) >= 2;
+        });
+    final source = skill['initialSource'];
+    final label = established
+        ? 'Peer-adjusted skill'
+        : source == 'INITIAL_ESTIMATE'
+        ? 'Initial Skill Estimate'
+        : 'Existing skill baseline';
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Text(
+        '$label · Up to $matches rated matches, $reviewers reviewers per skill. Scores adjust gradually from observed feedback.',
+      ),
+    );
+  }
 
   Widget _buildLevelCard() => Container(
     height: 128,
@@ -126,7 +213,7 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
           left: 16,
           top: 34,
           child: Text(
-            'Intermediate',
+            _levelLabel,
             style: Sprint2Style.font(
               24,
               33,
@@ -139,7 +226,7 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
           left: 16,
           top: 72,
           child: Text(
-            'Level 3.4 • Solid foundation',
+            'Your saved skill profile',
             style: Sprint2Style.font(12, 17, color: Colors.white),
           ),
         ),
@@ -162,17 +249,30 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
           height: 7,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: const LinearProgressIndicator(
-              value: 150 / 220,
-              backgroundColor: Color(0x2EFFFFFF),
-              color: Color(0xFFC8EADD),
-              minHeight: 7,
-            ),
+            child: _overallScore == null
+                ? const SizedBox(height: 7)
+                : LinearProgressIndicator(
+                    value: _overallScore!.toDouble() / 5,
+                    backgroundColor: const Color(0x2EFFFFFF),
+                    color: const Color(0xFFC8EADD),
+                    minHeight: 7,
+                  ),
           ),
         ),
       ],
     ),
   );
+
+  num? get _overallScore => profile?['overallSkillScore'] as num?;
+
+  String get _levelLabel {
+    final raw = profile?['skillLevel'] as String?;
+    final label = raw == null || raw.isEmpty
+        ? 'Not assessed'
+        : raw[0].toUpperCase() + raw.substring(1).toLowerCase();
+    final score = _overallScore;
+    return score == null ? label : '$label · ${score.toStringAsFixed(1)}/5';
+  }
 
   Widget _buildRadarCard() => SizedBox(
     height: 264,
@@ -233,20 +333,34 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        const ProfileSkillRadar(assessment: true),
+        if (ProfileSkillRadar.assessedValues(profile?['skill'])
+            case final scores?)
+          ProfileSkillRadar(assessment: true, values: scores)
+        else
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('No skill assessment recorded yet.'),
+          ),
       ],
     ),
   );
 
   Widget _buildBreakdown() {
-    const skills = [
-      ('Smash', 4.0),
-      ('Serve', 3.0),
-      ('Defense', 3.5),
-      ('Footwork', 4.0),
-      ('Net Play', 3.0),
-      ('Stamina', 3.5),
-    ];
+    final raw = profile?['skill'];
+    if (raw is! Map || ProfileSkillRadar.assessedValues(raw) == null) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text('No skill scores recorded yet.'),
+      );
+    }
+    final skills = [
+      ('Smash', 'smash'),
+      ('Serve', 'serve'),
+      ('Defense', 'defense'),
+      ('Footwork', 'footwork'),
+      ('Net Play', 'netPlay'),
+      ('Stamina', 'stamina'),
+    ].map((axis) => (axis.$1, (raw[axis.$2] as num).toDouble())).toList();
     return SizedBox(
       height: 174,
       child: Column(
@@ -300,15 +414,16 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
       width: 345,
       height: 52,
       child: ElevatedButton(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Assessment is a UI preview. Retake Assessment is not connected to an API yet.',
-              ),
-            ),
-          );
-        },
+        onPressed: profile?['skill'] != null
+            ? null
+            : () async {
+                final saved = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(
+                    builder: (_) => const InitialSkillQuizScreen(),
+                  ),
+                );
+                if (saved == true && mounted) await load();
+              },
         style: ElevatedButton.styleFrom(
           elevation: 0,
           backgroundColor: const Color(0xFFE2EEE8),
@@ -329,7 +444,9 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
             ),
             const SizedBox(width: 6),
             Text(
-              'Retake Assessment',
+              profile?['skill'] == null
+                  ? 'Start Initial Estimate'
+                  : 'Assessment recorded',
               style: _style(
                 size: 14,
                 weight: FontWeight.w500,

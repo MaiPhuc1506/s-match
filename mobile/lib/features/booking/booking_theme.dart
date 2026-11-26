@@ -12,6 +12,10 @@ class BookingColors {
 
   // Màu thương hiệu chính (Primary Green)
   static const Color primary = AppColors.primary;
+  // Schedule-only tokens from the approved Figma; shared booking styles stay intact.
+  static const Color scheduleMint = AppColors.socialPressed;
+  static const Color scheduleDisabled = Color(0xFFDDE4E0);
+
   static const Color primaryPressed = Color(0xFF054D3F);
 
   // Màu chữ chính và phụ

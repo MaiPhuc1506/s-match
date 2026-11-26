@@ -7,6 +7,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { RolesGuard } from './roles.guard.js';
 import { Roles } from './roles.decorator.js';
 import { Role } from './roles.enum.js';
+import { GoogleLoginDto } from './dto/google-login.dto.js';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -27,6 +28,32 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Email hoặc mật khẩu không chính xác.' })
   login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @Post('google')
+  loginGoogle(@Body() dto: GoogleLoginDto) {
+    return this.authService.loginGoogle(dto.idToken);
+  }
+
+  @Get('google/onboarding')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  googleOnboardingStatus(@Req() req: any) {
+    return this.authService.googleOnboardingStatus(req.user.sub);
+  }
+
+  @Get('google/link')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  googleLinkStatus(@Req() req: any) {
+    return this.authService.googleLinkStatus(req.user.sub);
+  }
+
+  @Post('google/link')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  linkGoogle(@Req() req: any, @Body() dto: GoogleLoginDto) {
+    return this.authService.linkGoogle(req.user.sub, dto.idToken);
   }
 
   @Post('refresh')

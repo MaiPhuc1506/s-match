@@ -1,4 +1,6 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile/core/network/api_client.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -194,7 +196,18 @@ void main() {
       (tester) async {
         await setPhoneViewport(tester);
 
+        final client = ApiClient.instance;
+        final interceptor = InterceptorsWrapper(
+          onRequest: (options, handler) {
+            handler.resolve(
+              Response(requestOptions: options, statusCode: 200, data: []),
+            );
+          },
+        );
+        client.dio.interceptors.add(interceptor);
+        addTearDown(() => client.dio.interceptors.remove(interceptor));
         await tester.pumpWidget(const MaterialApp(home: MatchListScreen()));
+        await tester.pumpAndSettle();
 
         expect(find.byType(PlayerBottomNavigation), findsOneWidget);
         final nav = tester.widget<PlayerBottomNavigation>(

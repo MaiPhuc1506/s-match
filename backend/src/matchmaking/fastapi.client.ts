@@ -4,10 +4,10 @@ import { AxiosInstance, isAxiosError } from 'axios';
 import { finalize, firstValueFrom, from, timeout, TimeoutError } from 'rxjs';
 import { CandidateData, CandidateProfile } from './candidate-provider';
 import { isCandidateData, isRecord } from './candidate-data';
-import { RankedResult } from './ranked-result';
+import { MatchBreakdown, RankedResult } from './ranked-result';
 
 export const FASTAPI_HTTP = Symbol('FASTAPI_HTTP');
-export const FASTAPI_BREAKDOWN_KEYS = ['distance_score', 'skill_score'] as const;
+export const FASTAPI_BREAKDOWN_KEYS = ['skill_score', 'distance_score', 'time_score', 'reliability_score', 'style_score'] as const;
 
 function toFastApiProfile(profile: CandidateProfile) {
   return {
@@ -77,28 +77,27 @@ export class FastApiClient {
     const matchedUsers = body.matched_users.map((row: unknown) => {
       if (!isRecord(row) || typeof row.user_id !== 'string' || !allowed.has(row.user_id) ||
           row.user_id === data.currentUser.userId || seen.has(row.user_id) ||
-          typeof row.match_score !== 'number' || !Number.isFinite(row.match_score)) throw invalid();
+          typeof row.match_score !== 'number' || !Number.isFinite(row.match_score) || row.match_score < 0 || row.match_score > 100) throw invalid();
       if (row.distance_km !== undefined && row.distance_km !== null &&
           (typeof row.distance_km !== 'number' || !Number.isFinite(row.distance_km) || row.distance_km < 0)) {
         throw invalid();
       }
-      if (row.breakdown !== undefined && row.breakdown !== null) {
-        if (!isRecord(row.breakdown)) throw invalid();
-        const breakdownRecord = row.breakdown as Record<string, unknown>;
-        const keys = Object.keys(breakdownRecord);
-        if (
-          keys.length !== FASTAPI_BREAKDOWN_KEYS.length ||
-          !FASTAPI_BREAKDOWN_KEYS.every(
-            (key) =>
-              typeof breakdownRecord[key] === 'number' &&
-              Number.isFinite(breakdownRecord[key]),
-          )
-        ) {
-          throw invalid();
-        }
-      }
+      if (!isRecord(row.breakdown)) throw invalid();
+      const breakdownRecord = row.breakdown;
+      const keys = Object.keys(breakdownRecord);
+      if (keys.length !== FASTAPI_BREAKDOWN_KEYS.length || !FASTAPI_BREAKDOWN_KEYS.every((key) => {
+        const value = breakdownRecord[key];
+        return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100;
+      })) throw invalid();
+      const breakdown: MatchBreakdown = {
+        skill_score: breakdownRecord.skill_score as number,
+        distance_score: breakdownRecord.distance_score as number,
+        time_score: breakdownRecord.time_score as number,
+        reliability_score: breakdownRecord.reliability_score as number,
+        style_score: breakdownRecord.style_score as number,
+      };
       seen.add(row.user_id);
-      return { userId: row.user_id, matchScore: row.match_score };
+      return { userId: row.user_id, matchScore: row.match_score, breakdown };
     });
     return { matchedUsers, totalCandidatesProcessed: body.total_candidates_processed as number };
   }

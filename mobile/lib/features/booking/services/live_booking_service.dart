@@ -36,6 +36,18 @@ class LiveBookingService {
         .toList();
   }
 
+  Future<void> cancel(int bookingId) async {
+    final token = _token();
+    if (token == null) throw StateError('Please sign in to cancel a booking.');
+    await _dio.patch(
+      '/bookings/$bookingId/cancel',
+      options: Options(extra: {'expectedAuthToken': token}),
+    );
+    if (_token() != token) {
+      throw StateError('Session changed. Refresh your bookings.');
+    }
+  }
+
   Future<Map<String, dynamic>> book({
     int? facilityId,
     required int courtId,

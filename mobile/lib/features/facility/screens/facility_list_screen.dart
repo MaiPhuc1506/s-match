@@ -25,6 +25,7 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
   List<FacilityCardItem> _facilities = [];
   bool _isLoading = true;
   bool _loadFailed = false;
+  String _query = '';
 
   @override
   void initState() {
@@ -62,6 +63,8 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
             isOpen: hours is List && hours.isNotEmpty,
             contactPhone: facility['contactPhone'] as String?,
             description: facility['description'] as String?,
+            latitude: (facility['latitude'] as num?)?.toDouble(),
+            longitude: (facility['longitude'] as num?)?.toDouble(),
           );
         }).toList();
       }
@@ -70,6 +73,10 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final visibleFacilities = _facilities.where(
+      (facility) =>
+          '${facility.name} ${facility.address}'.toLowerCase().contains(_query),
+    );
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SingleChildScrollView(
@@ -104,52 +111,59 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 32),
                       child: Text('Bạn chưa có cơ sở nào.'),
+                    )
+                  else if (visibleFacilities.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 32),
+                      child: Text('Không tìm thấy cơ sở phù hợp.'),
                     ),
-                  ..._facilities.map(
-                    (item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: FacilityCard(
-                        facility: item,
-                        onTap: () async {
-                          await Navigator.of(context).push(
-                            PageRouteBuilder(
-                              pageBuilder: (
-                                context,
-                                animation,
-                                secondaryAnimation,
-                              ) => FacilityDetailScreen(facility: item),
-                              transitionDuration: const Duration(
-                                milliseconds: 250,
+                  if (!_isLoading && !_loadFailed)
+                    ...visibleFacilities.map(
+                      (item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: FacilityCard(
+                          facility: item,
+                          onTap: () async {
+                            await Navigator.of(context).push(
+                              PageRouteBuilder(
+                                pageBuilder: (
+                                  context,
+                                  animation,
+                                  secondaryAnimation,
+                                ) => FacilityDetailScreen(facility: item),
+                                transitionDuration: const Duration(
+                                  milliseconds: 250,
+                                ),
+                                transitionsBuilder:
+                                    (
+                                      context,
+                                      animation,
+                                      secondaryAnimation,
+                                      child,
+                                    ) => FadeTransition(
+                                      opacity: animation,
+                                      child: child,
+                                    ),
                               ),
-                              transitionsBuilder:
-                                  (
-                                    context,
-                                    animation,
-                                    secondaryAnimation,
-                                    child,
-                                  ) => FadeTransition(
-                                    opacity: animation,
-                                    child: child,
-                                  ),
-                            ),
-                          );
-                          _loadFacilities();
-                        },
-                        onEdit: () async {
-                          final res = await Navigator.of(context).push<dynamic>(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  AddEditFacilityScreen(facility: item),
-                            ),
-                          );
-                          if (res == true || res == 'deleted') {
+                            );
                             _loadFacilities();
-                          }
-                        },
-                        onDelete: () => _confirmDeleteFacility(item),
+                          },
+                          onEdit: () async {
+                            final res = await Navigator.of(context)
+                                .push<dynamic>(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        AddEditFacilityScreen(facility: item),
+                                  ),
+                                );
+                            if (res == true || res == 'deleted') {
+                              _loadFacilities();
+                            }
+                          },
+                          onDelete: () => _confirmDeleteFacility(item),
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -254,6 +268,9 @@ class _FacilityListScreenState extends State<FacilityListScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: TextField(
+                          onChanged: (value) => setState(
+                            () => _query = value.trim().toLowerCase(),
+                          ),
                           style: GoogleFonts.plusJakartaSans(fontSize: 14),
                           decoration: InputDecoration(
                             hintText: 'Search facilities...',

@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
 
 import 'package:mobile/core/theme/app_colors.dart';
 
 import '../services/facility_service.dart';
 import '../widgets/facility_card.dart';
+import '../../court_map/exploration_data.dart';
+import 'facility_location_picker.dart';
 
 class AddEditFacilityScreen extends StatefulWidget {
   final FacilityCardItem? facility;
@@ -23,6 +27,7 @@ class _AddEditFacilityScreenState extends State<AddEditFacilityScreen> {
   final _descriptionController = TextEditingController();
 
   bool _isLoading = false;
+  LatLng? _location;
 
   bool get _isEditing => widget.facility != null;
 
@@ -31,6 +36,9 @@ class _AddEditFacilityScreenState extends State<AddEditFacilityScreen> {
     super.initState();
     final f = widget.facility;
     if (f != null) {
+      if (f.latitude != null && f.longitude != null) {
+        _location = LatLng(f.latitude!, f.longitude!);
+      }
       _nameController.text = f.name;
       _addressController.text = f.address;
       _phoneController.text = f.contactPhone ?? '';
@@ -64,12 +72,22 @@ class _AddEditFacilityScreenState extends State<AddEditFacilityScreen> {
         address: address,
         contactPhone: phone.isNotEmpty ? phone : null,
         description: description.isNotEmpty ? description : null,
+        latitude: _location?.latitude,
+        longitude: _location?.longitude,
       );
 
       if (!mounted) return;
       setState(() => _isLoading = false);
 
       if (success) {
+        ProviderScope.containerOf(
+          context,
+          listen: false,
+        ).invalidate(nearbyCourtsProvider);
+        ProviderScope.containerOf(
+          context,
+          listen: false,
+        ).invalidate(facilityDetailProvider(widget.facility!.id));
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Cập nhật cơ sở thành công!'),
@@ -91,22 +109,24 @@ class _AddEditFacilityScreenState extends State<AddEditFacilityScreen> {
         address: address,
         contactPhone: phone.isNotEmpty ? phone : null,
         description: description.isNotEmpty ? description : null,
+        latitude: _location?.latitude,
+        longitude: _location?.longitude,
       );
 
       if (!mounted) return;
 
       if (newFacility != null) {
+        ProviderScope.containerOf(
+          context,
+          listen: false,
+        ).invalidate(nearbyCourtsProvider);
         final facilityId = newFacility['id'] as int;
         // Tự động khởi tạo khung giờ mở cửa mặc định cả tuần (06:00 - 22:00)
         await FacilityService.instance.updateOperatingHours(
           facilityId: facilityId,
           days: List.generate(
             7,
-            (d) => {
-              'dayOfWeek': d,
-              'openTime': '06:00',
-              'closeTime': '22:00',
-            },
+            (d) => {'dayOfWeek': d, 'openTime': '06:00', 'closeTime': '22:00'},
           ),
         );
 
@@ -249,6 +269,33 @@ class _AddEditFacilityScreenState extends State<AddEditFacilityScreen> {
 
               const SizedBox(height: 16),
 
+              OutlinedButton.icon(
+                onPressed: _isLoading
+                    ? null
+                    : () async {
+                        final selected = await Navigator.of(context)
+                            .push<LatLng>(
+                              MaterialPageRoute(
+                                builder: (_) => FacilityLocationPicker(
+                                  initialLocation: _location,
+                                ),
+                              ),
+                            );
+                        if (mounted && selected != null) {
+                          setState(() => _location = selected);
+                        }
+                      },
+                icon: const Icon(Icons.location_on_outlined),
+                label: Text(
+                  _location == null ? 'Set Location' : 'Edit Location',
+                ),
+              ),
+              if (_location != null)
+                Text(
+                  '${_location!.latitude.toStringAsFixed(5)}, ${_location!.longitude.toStringAsFixed(5)}',
+                ),
+              const SizedBox(height: 16),
+
               // 3. Số điện thoại liên hệ
               _buildLabel('Số điện thoại liên hệ'),
               const SizedBox(height: 8),
@@ -389,4 +436,3 @@ class _AddEditFacilityScreenState extends State<AddEditFacilityScreen> {
     );
   }
 }
-

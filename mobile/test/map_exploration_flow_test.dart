@@ -1,3 +1,6 @@
+import 'dart:math' show Point;
+
+import 'package:mobile/features/court_map/widgets/native_court_layers.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import 'support/fake_court_map_platform.dart';
@@ -50,6 +53,96 @@ void main() {
     }
   }
 
+  testWidgets('Marker taps update compact live facility preview', (
+    tester,
+  ) async {
+    final platform = FakeCourtMapPlatform();
+    MapLibrePlatform.createInstance = () => platform;
+    final facilities = [
+      CourtLocation.fromJson({
+        'id': 4,
+        'name': 'Hai Chau Badminton',
+        'address': 'Hai Chau, Da Nang, Vietnam',
+        'latitude': 16.061,
+        'longitude': 108.2165,
+        'courts': [
+          {
+            'id': 1,
+            'status': 'ACTIVE',
+            'timeSlots': [
+              {'startTime': '06:00', 'endTime': '07:00', 'price': 70000},
+            ],
+          },
+        ],
+        'operatingHours': [
+          {'openTime': '05:00', 'closeTime': '23:00'},
+        ],
+      }),
+      CourtLocation.fromJson({
+        'id': 13,
+        'name': 'Hoa Khanh Badminton',
+        'address': 'Hoa Khanh, Da Nang, Vietnam',
+        'latitude': 16.073,
+        'longitude': 108.152,
+        'courts': [
+          {
+            'id': 2,
+            'status': 'ACTIVE',
+            'timeSlots': [
+              {'startTime': '06:00', 'endTime': '07:00', 'price': 60000},
+            ],
+          },
+        ],
+        'operatingHours': [
+          {'openTime': '05:00', 'closeTime': '23:00'},
+        ],
+      }),
+    ];
+    await pump(
+      tester,
+      const FindCourtsMapScreen(),
+      overrides: [
+        nearbyCourtsProvider.overrideWith((ref) async => facilities),
+        facilityDetailProvider.overrideWith(
+          (ref, id) async => facilities.firstWhere((f) => f.id == id),
+        ),
+      ],
+    );
+    void marker(CourtLocation f) => platform.onFeatureTappedPlatform.call({
+      'id': '${f.id}',
+      'layerId': NativeCourtLayers.pins,
+      'point': const Point(100.0, 100.0),
+      'latLng': LatLng(f.latitude!, f.longitude!),
+    });
+    marker(facilities[0]);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byKey(const Key('preview-directions')), findsOneWidget);
+    expect(find.textContaining('From 70000 VND'), findsOneWidget);
+    marker(facilities[1]);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.textContaining('From 60000 VND'), findsOneWidget);
+    expect(find.textContaining('From 70000 VND'), findsNothing);
+    expect(find.byKey(const Key('preview-book')), findsOneWidget);
+    expect(find.byKey(const Key('preview-details')), findsNothing);
+    await tester.drag(
+      find.bySemanticsLabel('Expand facility preview'),
+      const Offset(0, -80),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.byKey(const Key('preview-details')), findsOneWidget);
+    await tester.drag(
+      find.bySemanticsLabel('Collapse facility preview'),
+      const Offset(0, 80),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.byKey(const Key('preview-details')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Selected facility is preserved in Preview and its court list', (
     tester,
   ) async {
@@ -70,10 +163,11 @@ void main() {
     expect(find.text('VNB Test'), findsOneWidget);
     expect(find.text('Sky Badminton'), findsNothing);
     expect(find.text('4.6 (128)'), findsNothing);
-    await tester.ensureVisible(find.text('See all'));
-    await tester.tap(find.text('See all'));
+    await tester.tap(find.text('Info'));
     await tester.pumpAndSettle();
-    expect(find.text('VNB Court 5'), findsWidgets);
+    await tester.ensureVisible(find.text('See all'));
+    expect(find.text('VNB Court 5'), findsOneWidget);
+    // View Courts now opens the shared live schedule; verified by the booking integration test.
     expect(tester.takeException(), isNull);
   });
 
