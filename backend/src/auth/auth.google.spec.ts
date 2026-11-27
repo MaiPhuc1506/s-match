@@ -67,7 +67,7 @@ describe('Google auth (mock provider and Prisma)', () => {
     expect(db.user.findFirst).toHaveBeenLastCalledWith({
       where: { id: 7, email: { equals: identity.email, mode: 'insensitive' } }, select: { id: true },
     });
-    expect(db.googleIdentity.create).toHaveBeenCalledWith({ data: { userId: 7, subject: identity.sub } });
+    expect(db.googleIdentity.create).toHaveBeenCalledWith({ data: { userId: 7, subject: identity.sub, localPasswordConfirmed: true } });
   });
   it('reports only the authenticated user link status', async () => {
     db.googleIdentity.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ userId: 7 });

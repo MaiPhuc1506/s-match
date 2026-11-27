@@ -23,6 +23,24 @@ describe('password recovery security', () => {
   it('fails closed if SMTP is not configured', async () => {
     await expect(service.request('test@example.com')).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
+  it('requires a recoverable local credential at every stage and gives a generic request response', async () => {
+    const smtp = { SMTP_HOST: 'smtp.example.invalid', SMTP_PORT: '587', SMTP_USER: 'test', SMTP_PASSWORD: 'test', SMTP_FROM: 'test@example.invalid' };
+    const configured = new PasswordRecoveryService(db, { get: (key: keyof typeof smtp) => smtp[key] } as ConfigService);
+    db.user.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    const email = 'player@example.invalid';
+    await expect(configured.request(email)).resolves.toEqual({ message: 'If the account exists, a verification code has been sent.' });
+    await expect(configured.verify(email, '000000')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(configured.reset(email, 'invalid', 'New-password1!')).rejects.toBeInstanceOf(BadRequestException);
+    for (const [query] of db.user.findFirst.mock.calls) {
+      expect(query.where.OR).toEqual([{ googleIdentity: null }, { googleIdentity: { is: { localPasswordConfirmed: true } } }]);
+    }
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+  it('rejects a consumed code even while its original expiry is in the future', async () => {
+    row.resetTokenHash = 'already-verified';
+    await expect(service.verify('test@example.com', '123456')).rejects.toBeInstanceOf(BadRequestException);
+    expect(db.passwordRecovery.update).not.toHaveBeenCalled();
+  });
   it('increments attempts on invalid code and does not issue a reset token', async () => {
     await expect(service.verify('test@example.com', '111111')).rejects.toBeInstanceOf(BadRequestException);
     expect(db.passwordRecovery.update).toHaveBeenCalledWith(expect.objectContaining({ data: { attempts: { increment: 1 } } }));

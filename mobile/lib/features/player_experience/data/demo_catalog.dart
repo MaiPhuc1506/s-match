@@ -52,10 +52,11 @@ class LearningItem {
     this.imageKey,
     this.description, {
     this.coachId,
+    this.videoAsset,
     this.steps = const [],
   });
   final String id, title, subtitle, imageKey, description;
-  final String? coachId;
+  final String? coachId, videoAsset;
   final List<String> steps;
   String get image => '$experienceAssets/learning/$imageKey.png';
 }
@@ -239,6 +240,7 @@ class DemoCatalog {
       'Smash · Technique',
       'smash_technique',
       'Practise a balanced preparation, a high contact point and a controlled recovery.',
+      videoAsset: 'assets/videos/tips/smash.mp4',
       steps: [
         'Starting position: stay balanced behind the shuttle.',
         'Racket preparation: raise the racket and turn your shoulders.',
@@ -252,6 +254,7 @@ class DemoCatalog {
       'Beginner · Footwork',
       'footwork_training',
       'Move efficiently while maintaining balance before and after every shot.',
+      videoAsset: 'assets/videos/tips/footwork.mp4',
       steps: [
         'Start in a ready position.',
         'Use a small split step.',
@@ -265,6 +268,7 @@ class DemoCatalog {
       'Beginner · Net play',
       'net_play',
       'Develop a relaxed grip and controlled touch near the net.',
+      videoAsset: 'assets/videos/tips/netplay.mp4',
       steps: [
         'Approach with the racket raised.',
         'Keep the grip relaxed.',

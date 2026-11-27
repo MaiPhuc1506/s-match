@@ -327,7 +327,7 @@ class PlayerHomeScreen extends ConsumerWidget {
                           context,
                           Icons.menu_book_outlined,
                           'Learn a new technique',
-                          'Practice guides · Videos coming soon',
+                          'Watch Video · Read Lesson',
                           const LearningScreen(tips: true),
                         ),
                         _heading(

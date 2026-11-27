@@ -73,7 +73,7 @@ export class AuthService {
   async login(loginDto: LoginDto) {
   const user = await this.prisma.user.findFirst({
     where: { email: { equals: loginDto.email.trim().toLowerCase(), mode: 'insensitive' } },
-    include: { role: true },
+    include: { role: true, googleIdentity: { select: { localPasswordConfirmed: true } } },
   });
 
   if (!user) {
@@ -85,6 +85,9 @@ export class AuthService {
     throw new UnauthorizedException('Sai email hoặc mật khẩu');
   }
 
+  if (user.googleIdentity?.localPasswordConfirmed === false) {
+    await this.prisma.googleIdentity.update({ where: { userId: user.id }, data: { localPasswordConfirmed: true } });
+  }
   return this.issueSession(user);
   }
 
@@ -147,7 +150,7 @@ export class AuthService {
         if (!user) throw new ConflictException('Google identity does not match this account');
         const existing = await db.googleIdentity.findUnique({ where: { userId } });
         if (existing && existing.subject !== subject) throw new ConflictException('Account already linked');
-        if (!existing) await db.googleIdentity.create({ data: { subject, userId } });
+        if (!existing) await db.googleIdentity.create({ data: { subject, userId, localPasswordConfirmed: true } });
         return { linked: true };
       });
     } catch (error) {

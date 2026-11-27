@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/demo_catalog.dart';
 import '../widgets/experience_widgets.dart';
+import '../widgets/lesson_video.dart';
 
 class LearningScreen extends ConsumerStatefulWidget {
   const LearningScreen({super.key, this.tips = false});
@@ -66,7 +67,7 @@ class _LearningScreenState extends ConsumerState<LearningScreen> {
             ),
           DemoNotice(
             text: widget.tips
-                ? 'Practice guides · Videos coming soon'
+                ? 'Practice guides · Video lessons'
                 : 'Demo coaching catalogue · No enrolment or payment',
           ),
           for (final item in items)
@@ -116,7 +117,7 @@ class LearningTile extends StatelessWidget {
                 Expanded(
                   child: Text(
                     kind == 'lesson'
-                        ? 'Read lesson · Video coming soon'
+                        ? 'Watch Video · Read Lesson'
                         : 'View details',
                     style: const TextStyle(color: mint),
                   ),
@@ -149,6 +150,7 @@ class LearningDetailScreen extends ConsumerWidget {
                 : catalogue.courses)
             .firstWhere((l) => l.id == itemId);
     return ExperienceScaffold(
+      mascot: kind != 'lesson',
       title: kind == 'coach'
           ? 'Coach Profile'
           : kind == 'lesson'
@@ -168,19 +170,10 @@ class LearningDetailScreen extends ConsumerWidget {
           Text(item.subtitle, style: const TextStyle(color: mint)),
           const SizedBox(height: 20),
           ExperienceCard(child: Text(item.description)),
-          if (kind == 'lesson')
-            const ExperienceCard(
-              child: Row(
-                children: [
-                  Icon(Icons.ondemand_video, color: mint),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Video coming soon\nRead the practice steps below.',
-                    ),
-                  ),
-                ],
-              ),
+          if (item.videoAsset case final asset?)
+            ExperienceCard(
+              padding: EdgeInsets.zero,
+              child: LessonVideo(key: ValueKey(asset), asset: asset),
             ),
           for (var i = 0; i < item.steps.length; i++)
             ExperienceCard(
