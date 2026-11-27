@@ -32,6 +32,21 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('history distinguishes unobserved dimensions from legacy stars', (tester) async {
+    const player = FeedbackPlayer('7', 'Teammate', '');
+    Widget card(Map<String, int?> observations) => Scaffold(
+      body: FeedbackReviewCard(entry: TeammateFeedback(
+        player: player, stars: 5, review: 'Good game', skillRatings: observations,
+      )),
+    );
+    await mount(tester, card({'smash': 4}));
+    expect(find.text('Smash · 4'), findsOneWidget);
+    expect(find.text('Serve · Not Observed'), findsOneWidget);
+    await mount(tester, card({}));
+    expect(find.textContaining('Not Observed'), findsNothing);
+    expect(find.text('Good game'), findsOneWidget);
+  });
+
   test('preview submission validates, prevents duplicates and retains given ratings', () async {
     final repo = FeedbackRepository(delay: Duration.zero, withSamples: false);
     final entries = feedbackTeammates

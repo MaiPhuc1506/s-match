@@ -252,9 +252,9 @@ void main() {
       await tester.ensureVisible(find.text('Save Changes'));
       await tester.tap(find.text('Save Changes'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('chưa được API hỗ trợ lưu'), findsOneWidget);
+      expect(find.textContaining('Hand and playing mode are not saved yet.'), findsOneWidget);
       final patch = requests.singleWhere((r) => r.method == 'PATCH');
-      expect((patch.data as Map).keys.toSet(), {'fullName', 'bio'});
+      expect(patch.data, {'fullName': 'Nguyễn Văn An'});
     },
   );
 }

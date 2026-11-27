@@ -1,7 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/network/api_client.dart';
 import 'rating_api.dart';
+
+const feedbackSkillLabels = {
+  'smash': 'Smash',
+  'defense': 'Defense',
+  'netPlay': 'Net Play',
+  'stamina': 'Stamina',
+  'footwork': 'Footwork',
+  'serve': 'Serve',
+};
 
 class FeedbackPlayer {
   const FeedbackPlayer(this.id, this.name, this.avatar);
@@ -244,6 +255,12 @@ class ApiFeedbackRepository extends FeedbackRepository {
         '',
       ),
       stars: (row['score'] as num).toInt(),
+      skillRatings: switch (row['skillRatings']) {
+        final Map values => {
+          for (final axis in feedbackSkillLabels.keys) axis: values[axis] as int?,
+        },
+        _ => const {},
+      },
       review: row['comment'] as String? ?? '',
       matchTitle: (row['match'] as Map?)?['title'] as String?,
       createdAt: DateTime.tryParse(row['createdAt'] as String? ?? ''),
@@ -257,10 +274,23 @@ class ApiFeedbackRepository extends FeedbackRepository {
     _error = null;
     notifyListeners();
     try {
-      final summary = await api.summary(api.userId);
-      final received = await api.ratings(given: false);
-      final given = await api.ratings(given: true);
-      final pending = await api.request('/ratings/pending') as List;
+      late final RatingSummary summary;
+      late final List<Map<String, dynamic>> received, given;
+      late final List pending;
+      await Future.wait<void>([
+        api.summary(api.userId).then((value) {
+          summary = value;
+        }),
+        api.ratings(given: false).then((value) {
+          received = value;
+        }),
+        api.ratings(given: true).then((value) {
+          given = value;
+        }),
+        api.request('/ratings/pending').then((value) {
+          pending = value as List;
+        }),
+      ]);
       api.checkSession();
       _summary = summary;
       _received = received.map((r) => _entry(r, false)).toList();

@@ -13,8 +13,9 @@ void main() {
     final requests = <String>[];
     final interceptor = InterceptorsWrapper(
       onRequest: (options, handler) {
-        if (!options.path.startsWith('/auth/password-recovery/'))
+        if (!options.path.startsWith('/auth/password-recovery/')) {
           return handler.next(options);
+        }
         requests.add(options.path);
         handler.resolve(
           Response(

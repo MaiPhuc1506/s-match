@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import '../storage/session_store.dart';
 
@@ -68,6 +67,18 @@ class ApiClient {
           }
           return handler.next(options);
         },
+        onResponse: (response, handler) {
+          final request = response.requestOptions;
+          if (request.extra.containsKey('expectedAuthToken') &&
+              request.extra['sessionVersion'] != _sessionVersion) {
+            return handler.reject(DioException(
+              requestOptions: request,
+              type: DioExceptionType.cancel,
+              message: 'Authentication session changed.',
+            ));
+          }
+          handler.next(response);
+        },
         onError: (err, handler) async {
           final isAuthEndpoint = err.requestOptions.path.startsWith('/auth/');
           final alreadyRetried =
@@ -120,7 +131,7 @@ class ApiClient {
           _token = newAccess;
           if (newRefresh != null && newRefresh.isNotEmpty) {
             _refreshToken = newRefresh;
-            unawaited(SessionStore.instance.updateRefreshToken(newRefresh));
+            unawaited(SessionStore.instance.updateRefreshToken(rt, newRefresh));
           }
           return true;
         }
@@ -139,32 +150,6 @@ class ApiClient {
       return await future;
     } finally {
       if (identical(_refreshInFlight, future)) _refreshInFlight = null;
-    }
-  }
-
-  /// Đăng nhập bằng tài khoản Demo Court Owner đã có sẵn trong Seed
-  Future<String?> ensureOwnerToken() async {
-    if (_token != null) return _token;
-    try {
-      final res = await dio.post(
-        '/auth/login',
-        data: {'email': 'owner@smatch.dev', 'password': 'Password123!'},
-      );
-      _token = res.data['accessToken'];
-      final user = res.data['user'];
-      if (user is Map<String, dynamic>) {
-        // Đồng bộ thông tin user hiện tại nếu AuthService chưa có
-        // Cần import AuthService hoặc truy cập qua AuthService.instance
-      }
-      return _token;
-    } on DioException catch (e) {
-      debugPrint(
-        '[AUTH ERROR] Đăng nhập chủ sân thất bại: ${e.response?.statusCode} - ${e.response?.data}',
-      );
-      return null;
-    } catch (e) {
-      debugPrint('[AUTH ERROR] Lỗi không xác định: $e');
-      return null;
     }
   }
 }

@@ -8,6 +8,9 @@ import 'package:mobile/features/match/screens/create_match_screen.dart';
 import 'package:mobile/features/match/screens/match_detail_open_screen.dart';
 import 'package:mobile/features/match/screens/match_invitations_screen.dart';
 
+// Legacy preview navigation is selected explicitly. The default list uses the live API.
+void _onPreviewMyMatches() {}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
@@ -54,10 +57,10 @@ void main() {
     expect(store.requestJoin(private), isFalse);
   });
 
-  testWidgets('Join from real list returns to list and retains pending state', (
+  testWidgets('Join from preview list returns to list and retains pending state', (
     tester,
   ) async {
-    await start(tester, const MatchListScreen());
+    await start(tester, const MatchListScreen(onMyMatches: _onPreviewMyMatches));
     await tester.tap(find.text('Friendly Doubles'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Join Match'));
@@ -77,7 +80,7 @@ void main() {
   testWidgets(
     'Create replaces form; Back reaches list and My Matches contains draft',
     (tester) async {
-      await start(tester, const MatchListScreen());
+      await start(tester, const MatchListScreen(onMyMatches: _onPreviewMyMatches));
       await tester.tap(find.text('+'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, 'UI flow practice');
@@ -100,7 +103,7 @@ void main() {
   testWidgets(
     'Inbox has default Accept/Decline and request tabs without injected callbacks',
     (tester) async {
-      await start(tester, const MatchListScreen());
+      await start(tester, const MatchListScreen(onMyMatches: _onPreviewMyMatches));
       await tester.tap(find.byTooltip('Match Requests'));
       await tester.pumpAndSettle();
       expect(find.byType(MatchInvitationsScreen), findsOneWidget);

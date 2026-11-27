@@ -171,10 +171,10 @@ class CourtLocation {
       latitude!.abs() <= 90 &&
       longitude!.abs() <= 180;
   String get ratingText => rating == null
-      ? (demo ? 'No reviews yet' : 'Chưa có đánh giá')
+      ? 'No reviews yet'
       : '${rating!.toStringAsFixed(1)}${reviewCount == null ? '' : ' ($reviewCount)'}';
   String get distanceText => distanceKm == null
-      ? (demo ? 'Distance unavailable' : 'Chưa có khoảng cách')
+      ? 'Distance unavailable'
       : '${distanceKm!.toStringAsFixed(1)} km';
   double? get startingHourlyRate {
     double? result;
@@ -502,7 +502,7 @@ class ApiPlayerDiscoveryRepository {
             'BEGINNER' => 'Beginner',
             'INTERMEDIATE' => 'Intermediate',
             'ADVANCED' => 'Advanced',
-            _ => 'Level not shared',
+            _ => 'Not assessed',
           },
           distance.toDouble(),
           '',

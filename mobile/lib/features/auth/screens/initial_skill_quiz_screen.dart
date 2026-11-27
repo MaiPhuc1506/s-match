@@ -29,23 +29,28 @@ class _InitialSkillQuizScreenState extends State<InitialSkillQuizScreen> {
     'Consistently',
   ];
   final answers = List<int?>.filled(6, null);
-  late final String? session = ApiClient.instance.token;
+  final session = ApiClient.instance.sessionVersion;
   bool busy = false;
 
   Future<void> submit() async {
     if (busy || answers.any((answer) => answer == null)) return;
     final client = ApiClient.instance;
-    if (session == null || session != client.token) return;
+    if (client.token == null || session != client.sessionVersion) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in again and reopen the skill quiz.')),
+      );
+      return;
+    }
     setState(() => busy = true);
     try {
       await client.dio.post(
         '/players/skill-assessment/initial',
         data: {'answers': answers},
-        options: Options(extra: {'expectedAuthToken': session}),
+        options: Options(extra: {'expectedAuthToken': client.token}),
       );
-      if (mounted && client.token == session) Navigator.pop(context, true);
+      if (mounted && client.sessionVersion == session) Navigator.pop(context, true);
     } on DioException catch (e) {
-      if (mounted && client.token == session) {
+      if (mounted && client.sessionVersion == session) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

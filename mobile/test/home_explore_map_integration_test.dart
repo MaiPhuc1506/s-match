@@ -464,9 +464,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Chưa có cơ sở đăng ký. Tải lại'), findsOneWidget);
+      expect(find.text('No facilities yet. Refresh'), findsOneWidget);
 
-      await tester.tap(find.text('Chưa có cơ sở đăng ký. Tải lại'));
+      await tester.tap(find.text('No facilities yet. Refresh'));
       await tester.pumpAndSettle();
       expect(find.text('CLB Cầu Lông Hải Châu Live'), findsWidgets);
     },

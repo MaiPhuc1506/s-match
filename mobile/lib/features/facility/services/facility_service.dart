@@ -23,8 +23,9 @@ class FacilityService {
 
   Future<List<Map<String, dynamic>>?> getMyFacilities() async {
     try {
-      if (await _client.ensureOwnerToken() == null) return null;
-      final res = await _client.dio.get('/facilities/my');
+      final token = _client.token;
+      if (token == null) return null;
+      final res = await _client.dio.get('/facilities/my', options: Options(extra: {'expectedAuthToken': token}));
       return (res.data as List)
           .map((facility) => Map<String, dynamic>.from(facility as Map))
           .toList();
@@ -55,13 +56,14 @@ class FacilityService {
     double? longitude,
   }) async {
     try {
-      final token = await _client.ensureOwnerToken();
+      final token = _client.token;
       if (token == null) {
         debugPrint('[CREATE FACILITY] Không có token chủ sân hợp lệ.');
         return null;
       }
       final res = await _client.dio.post(
         '/facilities',
+        options: Options(extra: {'expectedAuthToken': token}),
         data: {
           'name': name,
           'address': address,
@@ -96,10 +98,11 @@ class FacilityService {
     double? longitude,
   }) async {
     try {
-      final token = await _client.ensureOwnerToken();
+      final token = _client.token;
       if (token == null) return false;
       final res = await _client.dio.patch(
         '/facilities/$facilityId',
+        options: Options(extra: {'expectedAuthToken': token}),
         data: {
           'name': name,
           'address': address,
@@ -126,20 +129,20 @@ class FacilityService {
     int facilityId,
   ) async {
     try {
-      final token = await _client.ensureOwnerToken();
+      final token = _client.token;
       if (token == null) {
         return (
           success: false,
-          message: 'Không tìm thấy phiên đăng nhập. Vui lòng đăng nhập lại.',
+          message: 'Sign in again to manage your facilities.',
         );
       }
-      final res = await _client.dio.delete('/facilities/$facilityId');
+      final res = await _client.dio.delete('/facilities/$facilityId', options: Options(extra: {'expectedAuthToken': token}));
       if (res.statusCode == 200 || res.statusCode == 204) {
         return (success: true, message: null);
       }
       return (
         success: false,
-        message: 'Xóa thất bại với mã trạng thái ${res.statusCode}',
+        message: 'Could not delete this facility. Please try again.',
       );
     } on DioException catch (e) {
       String? errorMsg;
@@ -153,15 +156,15 @@ class FacilityService {
         }
       }
       errorMsg ??= (e.response?.statusCode == 403
-          ? 'Bạn không có quyền xóa cơ sở này (cơ sở thuộc chủ sân khác).'
+          ? 'Only the owner can delete this facility.'
           : e.response?.statusCode == 404
-          ? 'Không tìm thấy cơ sở cần xóa.'
-          : 'Lỗi máy chủ (${e.response?.statusCode ?? e.message})');
+          ? 'Facility not found.'
+          : 'Could not delete this facility. Please try again.');
       debugPrint('[DELETE FACILITY ERROR] $errorMsg');
       return (success: false, message: errorMsg);
     } catch (e) {
       debugPrint('[DELETE FACILITY ERROR] Lỗi: $e');
-      return (success: false, message: 'Đã xảy ra lỗi: $e');
+      return (success: false, message: 'Could not delete this facility. Please try again.');
     }
   }
 
@@ -173,13 +176,14 @@ class FacilityService {
     required String status,
   }) async {
     try {
-      final token = await _client.ensureOwnerToken();
+      final token = _client.token;
       if (token == null) {
         debugPrint('[ADD COURT] Không có token chủ sân hợp lệ.');
         return false;
       }
       final res = await _client.dio.post(
         '/facilities/$facilityId/courts',
+        options: Options(extra: {'expectedAuthToken': token}),
         data: {
           'name': name,
           'courtType': courtType.toUpperCase(), // INDOOR hoặc OUTDOOR
@@ -206,9 +210,11 @@ class FacilityService {
     required String status,
   }) async {
     try {
-      if (await _client.ensureOwnerToken() == null) return false;
+      final token = _client.token;
+      if (token == null) return false;
       final res = await _client.dio.patch(
         '/facilities/$facilityId/courts/$courtId',
+        options: Options(extra: {'expectedAuthToken': token}),
         data: {
           'name': name,
           'courtType': courtType.toUpperCase(),
@@ -229,9 +235,11 @@ class FacilityService {
     required bool isActive,
   }) async {
     try {
-      if (await _client.ensureOwnerToken() == null) return false;
+      final token = _client.token;
+      if (token == null) return false;
       final res = await _client.dio.patch(
         '/facilities/$facilityId/courts/$courtId/time-slots/$slotId',
+        options: Options(extra: {'expectedAuthToken': token}),
         data: {'isActive': isActive},
       );
       return res.statusCode == 200;
@@ -271,9 +279,11 @@ class FacilityService {
     required double price,
   }) async {
     try {
-      if (await _client.ensureOwnerToken() == null) return false;
+      final token = _client.token;
+      if (token == null) return false;
       final res = await _client.dio.post(
         '/facilities/$facilityId/courts/$courtId/time-slots',
+        options: Options(extra: {'expectedAuthToken': token}),
         data: {
           'dayOfWeek': dayOfWeek,
           'startTime': startTime,
@@ -294,13 +304,14 @@ class FacilityService {
     required List<Map<String, dynamic>> days,
   }) async {
     try {
-      final token = await _client.ensureOwnerToken();
+      final token = _client.token;
       if (token == null) {
         debugPrint('[UPDATE HOURS] Không có token chủ sân hợp lệ.');
         return false;
       }
       final res = await _client.dio.put(
         '/facilities/$facilityId/operating-hours/bulk',
+        options: Options(extra: {'expectedAuthToken': token}),
         data: {'days': days},
       );
       return res.statusCode == 200;

@@ -304,6 +304,18 @@ class FeedbackReviewCard extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         FeedbackStars(value: entry.stars),
+        if (entry.skillRatings.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 4,
+            children: [
+              for (final axis in feedbackSkillLabels.entries)
+                Text('${axis.value} · ${entry.skillRatings[axis.key] ?? 'Not Observed'}',
+                    style: feedbackText(13)),
+            ],
+          ),
+        ],
         if (entry.tags.isNotEmpty) ...[
           const SizedBox(height: 10),
           Wrap(

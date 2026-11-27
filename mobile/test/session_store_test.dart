@@ -16,12 +16,25 @@ void main() {
     expect(saved?.refreshToken, 'refresh-1');
     expect(saved?.user, user);
 
-    await SessionStore.instance.updateRefreshToken('refresh-2');
+    await SessionStore.instance.updateRefreshToken('refresh-1', 'refresh-2');
     expect((await SessionStore.instance.read())?.refreshToken, 'refresh-2');
     expect((await SessionStore.instance.read())?.user, user);
 
     await SessionStore.instance.clear();
     expect(await SessionStore.instance.read(), isNull);
+  });
+
+  test('a late refresh from the previous user cannot replace the new session', () async {
+    final store = SessionStore.instance;
+    await store.save(refreshToken: 'old', user: {'id': 3});
+    await Future.wait([
+      store.clear(),
+      store.save(refreshToken: 'new', user: {'id': 7}),
+      store.updateRefreshToken('old', 'rotated-old'),
+    ]);
+    final saved = await store.read();
+    expect(saved?.user['id'], 7);
+    expect(saved?.refreshToken, 'new');
   });
 
   test('ignores corrupt stored payloads', () async {

@@ -58,10 +58,9 @@ class _MatchCompletedScreenState extends State<MatchCompletedScreen>
         child: child,
       );
     }
-    final anim = CurvedAnimation(
-      parent: _controller,
+    final anim = _controller.drive(CurveTween(
       curve: Interval(delay / 900, (delay + 240) / 900, curve: Curves.easeOut),
-    );
+    ));
     return FadeTransition(
       opacity: anim,
       child: AnimatedBuilder(

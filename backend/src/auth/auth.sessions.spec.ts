@@ -99,7 +99,8 @@ describe('Authentication sessions (Prisma mock)', () => {
     const access = await tokens.verify(result.accessToken, 'access');
     const refresh = await tokens.verify(result.refreshToken, 'refresh');
     expect(prisma.user.findFirst).toHaveBeenCalledWith({
-      where: { email: { equals: input.email, mode: 'insensitive' } }, include: { role: true },
+      where: { email: { equals: input.email, mode: 'insensitive' } },
+      include: { role: true, googleIdentity: { select: { localPasswordConfirmed: true } } },
     });
     expect(access.sid).toBe(refresh.sid);
     expect(access.sub).toBe(user.id);

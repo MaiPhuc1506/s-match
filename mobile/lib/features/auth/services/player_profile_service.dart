@@ -92,11 +92,14 @@ class PlayerProfileService {
         'Vui lòng đăng nhập bằng tài khoản Player để lưu hồ sơ.',
       );
     }
+    final version = _client.sessionVersion;
+    final options = Options(extra: {'expectedAuthToken': token});
     try {
       final response = fullName == null
-          ? await _client.dio.get('/players/profile/me')
+          ? await _client.dio.get('/players/profile/me', options: options)
           : await _client.dio.patch(
               '/players/profile/me',
+              options: options,
               data: {
                 'fullName': fullName,
                 'bio': ?bio,
@@ -105,7 +108,7 @@ class PlayerProfileService {
               },
             );
       // Do not apply a response from an account that has since logged out/switched.
-      if (_client.token != token) {
+      if (_client.sessionVersion != version) {
         throw const PlayerProfileException(
           'Phiên đăng nhập đã thay đổi. Vui lòng mở lại hồ sơ.',
         );

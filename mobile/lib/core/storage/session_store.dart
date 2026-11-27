@@ -17,7 +17,29 @@ class SessionStore {
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
 
+  // Serialize Keychain operations across refresh, logout and account switches.
+  Future<void>? _pending;
+  Future<T> _ordered<T>(Future<T> Function() operation) {
+    final next = _pending?.then((_) => operation()) ?? Future.sync(operation);
+    late final Future<void> tail;
+    void release() {
+      if (identical(_pending, tail)) _pending = null;
+    }
+
+    tail = next.then<void>(
+      (_) => release(),
+      onError: (Object _, StackTrace _) => release(),
+    );
+    _pending = tail;
+    return next;
+  }
+
   Future<void> save({
+    required String refreshToken,
+    required Map<String, dynamic> user,
+  }) => _ordered(() => _save(refreshToken: refreshToken, user: user));
+
+  Future<void> _save({
     required String refreshToken,
     required Map<String, dynamic> user,
   }) async {
@@ -31,7 +53,10 @@ class SessionStore {
     }
   }
 
-  Future<({String refreshToken, Map<String, dynamic> user})?> read() async {
+  Future<({String refreshToken, Map<String, dynamic> user})?> read() =>
+      _ordered(_read);
+
+  Future<({String refreshToken, Map<String, dynamic> user})?> _read() async {
     try {
       final raw = await _storage.read(key: _key);
       if (raw == null || raw.isEmpty) return null;
@@ -46,17 +71,18 @@ class SessionStore {
     }
   }
 
-  Future<void> updateRefreshToken(String refreshToken) async {
-    final saved = await read();
-    if (saved == null) return;
-    await save(refreshToken: refreshToken, user: saved.user);
-  }
+  Future<void> updateRefreshToken(String previous, String refreshToken) =>
+      _ordered(() async {
+        final saved = await _read();
+        if (saved == null || saved.refreshToken != previous) return;
+        await _save(refreshToken: refreshToken, user: saved.user);
+      });
 
-  Future<void> clear() async {
+  Future<void> clear() => _ordered(() async {
     try {
       await _storage.delete(key: _key);
     } catch (_) {
       // Ignore: the in-memory session is cleared regardless.
     }
-  }
+  });
 }

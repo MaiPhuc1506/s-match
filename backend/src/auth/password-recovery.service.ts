@@ -24,6 +24,16 @@ export class PasswordRecoveryService {
     this.limits.set(key, entry);
   }
 
+  private recoveryAccount(email: string) {
+    return this.prisma.user.findFirst({
+      where: {
+        email: { equals: email.trim().toLowerCase(), mode: 'insensitive' },
+        OR: [{ googleIdentity: null }, { googleIdentity: { is: { localPasswordConfirmed: true } } }],
+      },
+      select: { id: true, email: true },
+    });
+  }
+
   async request(email: string) {
     const host = this.config.get<string>('SMTP_HOST');
     const port = Number(this.config.get<string>('SMTP_PORT'));
@@ -33,8 +43,7 @@ export class PasswordRecoveryService {
     if (!host || !Number.isInteger(port) || port < 1 || port > 65535 || !user || !pass || !from) {
       throw new ServiceUnavailableException('Password recovery email is not configured.');
     }
-    const normalized = email.trim().toLowerCase();
-    const account = await this.prisma.user.findFirst({ where: { email: { equals: normalized, mode: 'insensitive' } }, select: { id: true, email: true } });
+    const account = await this.recoveryAccount(email);
     if (!account) return generic;
     const code = randomInt(0, 1000000).toString().padStart(6, '0');
     const codeHash = await bcrypt.hash(code, 12);
@@ -53,7 +62,7 @@ export class PasswordRecoveryService {
   }
 
   async verify(email: string, code: string) {
-    const account = await this.prisma.user.findFirst({ where: { email: { equals: email.trim().toLowerCase(), mode: 'insensitive' } }, select: { id: true } });
+    const account = await this.recoveryAccount(email);
     if (!account) throw new BadRequestException('Invalid or expired verification code.');
     const result = await this.prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT "userId" FROM "PasswordRecovery" WHERE "userId" = ${account.id} FOR UPDATE`;
@@ -73,7 +82,7 @@ export class PasswordRecoveryService {
 
   async reset(email: string, token: string, password: string) {
     if (Buffer.byteLength(password, 'utf8') > 72) throw new BadRequestException('Password is too long.');
-    const account = await this.prisma.user.findFirst({ where: { email: { equals: email.trim().toLowerCase(), mode: 'insensitive' } }, select: { id: true } });
+    const account = await this.recoveryAccount(email);
     if (!account) throw new BadRequestException('Invalid or expired reset request.');
     const passwordHash = await bcrypt.hash(password, 12);
     const changed = await this.prisma.$transaction(async tx => {

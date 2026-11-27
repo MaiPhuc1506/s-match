@@ -1471,7 +1471,7 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
 
               if (isCollapsed)
                 Text(
-                  '${_courts.length} courts',
+                  '${_courts.length} ${_courts.length == 1 ? 'facility' : 'facilities'}',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w400,
@@ -1546,7 +1546,7 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
     if (state.hasError) {
       return TextButton(
         onPressed: () => ref.invalidate(nearbyCourtsProvider),
-        child: const Text('Không tải được sân. Thử lại'),
+        child: const Text('Could not load facilities. Retry'),
       );
     }
     final court = _currentCourt;
@@ -1555,7 +1555,7 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
         return Center(
           child: TextButton(
             onPressed: () => ref.invalidate(nearbyCourtsProvider),
-            child: const Text('Chưa có cơ sở đăng ký. Tải lại'),
+            child: const Text('No facilities yet. Refresh'),
           ),
         );
       }
@@ -1565,7 +1565,7 @@ class _FindCourtsMapScreenState extends ConsumerState<FindCourtsMapScreen> {
             _query = '';
             _filtersApplied = false;
           }),
-          child: const Text('Không có sân phù hợp. Xóa bộ lọc'),
+          child: const Text('No matching facilities. Clear filters'),
         ),
       );
     }

@@ -28,14 +28,6 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
   List<FeedbackPlayer> get players =>
       widget.match?.players ?? feedbackTeammates;
   late final _stars = List.filled(players.length, 0);
-  static const _axes = {
-    'smash': 'Smash',
-    'defense': 'Defense',
-    'netPlay': 'Net Play',
-    'stamina': 'Stamina',
-    'footwork': 'Footwork',
-    'serve': 'Serve',
-  };
   late final _skills = List.generate(players.length, (_) => <String, int?>{});
   late final _tags = List.generate(players.length, (_) => <String>{});
   late final _reviews = List.generate(
@@ -154,7 +146,7 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Please rate fairly based on what you actually observed during this match. Avoid personal bias, retaliation, or dishonest ratings. Your feedback helps keep matchmaking fair.',
+            'Rate each teammate fairly based on this match.',
             style: feedbackText(14, color: AppColors.textSecondary),
           ),
           for (var i = 0; i < players.length; i++) ...[
@@ -166,7 +158,7 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
                 children: [
                   FeedbackIdentity(
                     player: players[i],
-                    subtitle: 'Your doubles community',
+                    subtitle: 'Overall star rating',
                   ),
                   const SizedBox(height: 8),
                   FeedbackStars(
@@ -202,10 +194,10 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
                     style: feedbackText(12, weight: FontWeight.w600),
                   ),
                   Text(
-                    'Rate 1–5 based on what you observed, or leave Not Observed.',
+                    'Choose 1–5 for skills you saw. Leave the rest as Not Observed.',
                     style: feedbackText(11, color: AppColors.textSecondary),
                   ),
-                  for (final axis in _axes.entries)
+                  for (final axis in feedbackSkillLabels.entries)
                     Row(
                       children: [
                         Expanded(

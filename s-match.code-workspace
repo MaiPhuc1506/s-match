@@ -3,5 +3,19 @@
 		{
 			"path": "."
 		}
-	]
+	],
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "S-Match Dev Hub",
+				"type": "dart",
+				"request": "launch",
+				"cwd": "${workspaceFolder}/mobile",
+				"program": "${workspaceFolder}/mobile/lib/main_dev.dart",
+				"flutterMode": "debug",
+				"toolArgs": ["--dart-define-from-file=.env.dev-quick-login.json"]
+			}
+		]
+	}
 }

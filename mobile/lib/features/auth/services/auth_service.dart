@@ -331,10 +331,13 @@ class AuthService {
   /// Restores a persisted session on cold start. Returns true only when the
   /// stored refresh token is still accepted by the backend.
   Future<bool> restoreSession() async {
+    final initialVersion = _client.sessionVersion;
     final saved = await SessionStore.instance.read();
-    if (saved == null) return false;
+    if (_client.sessionVersion != initialVersion || saved == null) return false;
     _client.setToken(null, refreshToken: saved.refreshToken);
+    final version = _client.sessionVersion;
     final restored = await _client.tryRefreshSession();
+    if (_client.sessionVersion != version) return false;
     final rotated = _client.refreshToken;
     if (!restored || _client.token == null || rotated == null) {
       _client.clearToken();
@@ -351,9 +354,11 @@ class AuthService {
 
   /// Đăng xuất: Thu hồi phiên ở Backend và dọn dẹp sạch dữ liệu phiên ở thiết bị
   Future<void> logout() async {
+    final version = _client.sessionVersion;
+    final token = _client.token;
     try {
-      if (_client.token != null) {
-        await _client.dio.post('/auth/logout');
+      if (token != null) {
+        await _client.dio.post('/auth/logout', options: Options(extra: {'expectedAuthToken': token}));
       }
     } on DioException catch (e) {
       // Cho dù server lỗi hoặc mất mạng, vẫn cho phép đăng xuất sạch ở client
@@ -363,10 +368,12 @@ class AuthService {
     } catch (e) {
       debugPrint('[AUTH LOGOUT] Unexpected error: $e');
     } finally {
-      _client.clearToken();
-      _refreshToken = null;
-      currentUser = null;
-      await SessionStore.instance.clear();
+      if (_client.sessionVersion == version) {
+        _client.clearToken();
+        _refreshToken = null;
+        currentUser = null;
+        await SessionStore.instance.clear();
+      }
     }
   }
 }

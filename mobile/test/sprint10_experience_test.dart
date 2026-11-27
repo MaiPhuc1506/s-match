@@ -280,16 +280,23 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
-  testWidgets('Lesson content works with video deferred', (tester) async {
+  testWidgets('Lesson includes its video and expandable practice steps', (tester) async {
     await pump(
       tester,
       const LearningDetailScreen(itemId: 'smash', kind: 'lesson'),
     );
     expect(
-      find.text('Video coming soon\nRead the practice steps below.'),
+      find.byKey(const ValueKey('assets/videos/tips/smash.mp4')),
       findsOneWidget,
     );
-    await tester.scrollUntilVisible(find.text('Step 1'), 160);
+    final hideVideo = find.byTooltip('Hide video');
+    await tester.ensureVisible(hideVideo);
+    await tester.pumpAndSettle();
+    await tester.tap(hideVideo);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Show video'), findsOneWidget);
+    await tester.ensureVisible(find.text('Step 1'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Step 1'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Starting position:'), findsOneWidget);
