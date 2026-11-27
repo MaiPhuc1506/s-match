@@ -47,17 +47,16 @@ export class PlayersService {
       throw new NotFoundException('Không tìm thấy thông tin người dùng');
     }
 
-    if (!user.playerProfile) {
-      const newProfile = await this.prisma.playerProfile.create({
-        data: { userId },
-      });
-      return { ...user, playerProfile: { ...newProfile, skill: null, overallSkillScore: null } };
-    }
-
-    const overallSkillScore = assessmentScore(user.playerProfile.skill);
+    const profile = user.playerProfile ?? await this.prisma.playerProfile.upsert({
+      where: { userId },
+      create: { userId, skillLevel: null },
+      update: {},
+      include: { skill: true },
+    });
+    const overallSkillScore = assessmentScore(profile.skill);
     return { ...user, playerProfile: {
-      ...user.playerProfile, overallSkillScore,
-      skillLevel: effectiveSkillLevel(overallSkillScore, user.playerProfile.skillLevel),
+      ...profile, overallSkillScore,
+      skillLevel: effectiveSkillLevel(overallSkillScore, profile.skillLevel),
     } };
   }
 

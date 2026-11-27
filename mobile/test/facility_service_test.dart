@@ -12,7 +12,6 @@ void main() {
         onRequest: (options, handler) {
           requests.add(options);
           final data = switch (options.path) {
-            '/auth/login' => {'accessToken': 'test-token'},
             '/facilities/my' => [
               {
                 'id': 42,
@@ -37,6 +36,11 @@ void main() {
         () => ApiClient.instance.dio.interceptors.remove(interceptor),
       );
 
+      ApiClient.instance.clearToken();
+      expect(await FacilityService.instance.getMyFacilities(), isNull);
+      expect(requests, isEmpty);
+      ApiClient.instance.setToken('test-token');
+      addTearDown(ApiClient.instance.clearToken);
       final facilities = await FacilityService.instance.getMyFacilities();
       expect(facilities?.single['id'], 42);
 
@@ -80,24 +84,23 @@ void main() {
       );
 
       expect(requests.map((request) => request.path), [
-        '/auth/login',
         '/facilities/my',
         '/facilities/42/courts',
         '/facilities/42/operating-hours/bulk',
         '/facilities/42/courts/7',
         '/facilities/42/courts/7/time-slots/9',
       ]);
-      for (final request in requests.skip(1)) {
+      for (final request in requests) {
         expect(request.headers['Authorization'], 'Bearer test-token');
       }
-      expect(requests[2].data, {
+      expect(requests[1].data, {
         'name': 'Court 1',
         'courtType': 'INDOOR',
         'status': 'ACTIVE',
       });
-      expect(requests[3].data, {'days': days});
-      expect(requests[4].data['status'], 'MAINTENANCE');
-      expect(requests[5].data, {'isActive': false});
+      expect(requests[2].data, {'days': days});
+      expect(requests[3].data['status'], 'MAINTENANCE');
+      expect(requests[4].data, {'isActive': false});
     },
   );
 

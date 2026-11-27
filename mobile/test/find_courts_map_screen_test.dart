@@ -52,7 +52,7 @@ void main() {
     expect(find.text('Find Courts'), findsOneWidget);
     expect(find.text('Find Players'), findsOneWidget);
     expect(find.text('Nearby Courts'), findsOneWidget);
-    expect(find.text('3 courts'), findsOneWidget);
+    expect(find.text('3 facilities'), findsOneWidget);
     expect(find.text('Map'), findsOneWidget);
   });
 
@@ -75,7 +75,8 @@ void main() {
       expect(find.text('1.3 km · \$'), findsOneWidget);
 
       // Tap map canvas background
-      await tester.tapAt(const Offset(50, 200));
+      await tester.tapAt(const Offset(50, 300));
+      await tester.pump(const Duration(milliseconds: 151));
       await tester.pumpAndSettle();
 
       expect(find.text('1.3 km · \$'), findsNothing);
@@ -201,14 +202,14 @@ void main() {
     (tester) async {
       await pumpScreen(tester);
 
-      expect(find.text('3 courts'), findsOneWidget);
+      expect(find.text('3 facilities'), findsOneWidget);
       expect(find.text('VNB Court'), findsNothing);
 
       // Tap collapsed summary card
       await tester.tap(find.byKey(const Key('find_courts_sheet_summary')));
       await tester.pumpAndSettle();
 
-      expect(find.text('3 courts'), findsNothing);
+      expect(find.text('3 facilities'), findsNothing);
       expect(find.text('VNB Court'), findsOneWidget);
 
       // Scroll list to reveal third card
@@ -220,7 +221,7 @@ void main() {
       await tester.tap(find.byKey(const Key('find_courts_collapse_sheet')));
       await tester.pumpAndSettle();
 
-      expect(find.text('3 courts'), findsOneWidget);
+      expect(find.text('3 facilities'), findsOneWidget);
       expect(find.text('VNB Court'), findsNothing);
     },
   );

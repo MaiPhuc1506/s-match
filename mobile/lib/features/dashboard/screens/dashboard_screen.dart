@@ -1174,7 +1174,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       _note(
         data.preview
             ? 'UI preview · sample bookings only.'
-            : 'No live booking records are substituted with samples.',
+            : 'Bookings for the selected date and facility.',
       ),
     ];
   }
@@ -1706,7 +1706,7 @@ class OwnerBookingDetailScreen extends StatelessWidget {
                       ('detail.imgIconCalendar', dateText),
                       (
                         'detail.imgIconClock',
-                        '${booking.time}${duration == null ? '' : ' · $duration phút'}',
+                        '${booking.time}${duration == null ? '' : ' · $duration min'}',
                       ),
                       ('detail.imgVector', booking.player),
                       if (booking.facilityName != null)
@@ -1756,7 +1756,7 @@ class OwnerBookingDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Text(
-                preview ? 'UI preview · sample booking.' : 'Thông tin liên hệ và thao tác cập nhật đơn chưa có trong màn này.',
+                preview ? 'UI preview · sample booking.' : 'Booking details are read-only.',
                 style: p.text(11, color: p.muted),
               ),
             ],

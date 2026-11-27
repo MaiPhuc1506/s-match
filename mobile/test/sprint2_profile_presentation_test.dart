@@ -123,10 +123,11 @@ void main() {
       await tester.tap(find.text('View details'));
       await tester.pumpAndSettle();
       expect(find.byType(SkillAssessmentScreen), findsOneWidget);
-      await tester.ensureVisible(find.text('Retake Assessment'));
-      await tester.tap(find.text('Retake Assessment'));
+      await tester.ensureVisible(find.text('Start Initial Estimate'));
+      await tester.tap(find.text('Start Initial Estimate'));
       await tester.pumpAndSettle();
-      expect(find.byType(SkillAssessmentScreen), findsOneWidget);
+      expect(find.text('Initial Skill Estimate'), findsOneWidget);
+      Navigator.of(tester.element(find.text('Initial Skill Estimate'))).pop();
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
       Navigator.of(tester.element(find.byType(SkillAssessmentScreen))).pop();
@@ -202,6 +203,20 @@ void main() {
     testWidgets(
       '${screen.runtimeType} remains scrollable on compact displays',
       (tester) async {
+        if (screen is SkillAssessmentScreen) {
+          final client = ApiClient.instance;
+          client.setToken('skill-layout-test');
+          final interceptor = InterceptorsWrapper(onRequest: (options, handler) {
+            handler.resolve(Response(requestOptions: options, data: {
+              'playerProfile': {'skill': null, 'overallSkillScore': null},
+            }));
+          });
+          client.dio.interceptors.add(interceptor);
+          addTearDown(() {
+            client.dio.interceptors.remove(interceptor);
+            client.clearToken();
+          });
+        }
         await pump(tester, screen, size: const Size(320, 568));
         final button = screen is PlayerProfileScreen
             ? find.text('Đăng xuất')

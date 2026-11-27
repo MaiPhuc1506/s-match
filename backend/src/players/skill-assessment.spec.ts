@@ -12,6 +12,7 @@ describe('persisted skill assessment', () => {
     expect(assessmentScore(null)).toBeNull();
     expect(assessmentScore({ ...axes, footwork: 0 })).toBeNull();
     expect(assessmentScore({ ...axes, footwork: Number.NaN })).toBeNull();
+    expect(effectiveSkillLevel(null, 'BEGINNER')).toBeNull();
     expect(effectiveSkillLevel(null, 'INTERMEDIATE')).toBe('INTERMEDIATE');
   });
 });

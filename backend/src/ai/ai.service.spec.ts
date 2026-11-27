@@ -11,6 +11,7 @@ import { Role } from '../auth/roles.enum';
 import { PrismaService } from '../prisma/prisma.service';
 import { FASTAPI_HTTP } from '../matchmaking/fastapi.client';
 import { AI_HTTP_CLIENT } from './interfaces/llm-provider.interface';
+import { SwappableLlmProvider } from './providers/swappable-llm.provider';
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { AiToolsService } from './ai-tools.service';
@@ -521,6 +522,9 @@ describe('Smash Scot AI (AiController, AiService, AiToolsService & SwappableLlmP
     it('enforces max tool-call loop cap (MAX_TOOL_CALL_LOOPS = 3) when provider repeatedly calls tools', async () => {
       envOverrides.AI_PROVIDER = 'openai';
       envOverrides.OPENAI_API_KEY = 'test-openai-key';
+      // A result without a deterministic formatter requires another provider turn.
+      const formatter = jest.spyOn(SwappableLlmProvider.prototype, 'formatToolResult')
+        .mockReturnValue(undefined);
       // 3 tool call responses followed by 1 final synthesis response
       for (let i = 0; i < 3; i++) {
         aiHttp.post.mockResolvedValueOnce({
@@ -561,6 +565,7 @@ describe('Smash Scot AI (AiController, AiService, AiToolsService & SwappableLlmP
         message: 'Check my bookings repeatedly',
       });
 
+      formatter.mockRestore();
       expect(res.toolsUsed).toHaveLength(3);
       expect(res.reply).toBe('Here are your bookings after checking the schedule.');
       // 4th call must have tools omitted (empty array) so it cannot loop further

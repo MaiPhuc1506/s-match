@@ -25,7 +25,7 @@ describe('MatchmakingService (dependency mocks only)', () => {
     expect(provider.getCandidates).toHaveBeenCalledWith(8, findPlayerRequest);
     expect(client.recommend).toHaveBeenCalledWith(candidateData());
     expect(result).toEqual({ matchedUsers: [{ userId: '7', matchScore: 85, breakdown: fastApiResponse().matched_users[0].breakdown, profile: {
-      fullName: 'Fixture player 7', nickname: null, avatarUrl: null, skillLevel: null,
+      fullName: 'Fixture player 7', nickname: null, avatarUrl: null, playingArea: null, skillLevel: null,
     } }], totalCandidatesProcessed: 2 });
   });
   it('production provider returns unavailable, never fake success', async () => {
@@ -42,7 +42,7 @@ describe('MatchmakingService (dependency mocks only)', () => {
     expect(prisma.playerProfile.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.playerProfile.findMany).toHaveBeenCalledWith({
       where: { userId: { in: [7, 3] }, locationSharingEnabled: true, user: { role: { name: 'PLAYER' } } },
-      select: { userId: true, nickname: true, avatarUrl: true, skillLevel: true, skill: true, user: { select: { fullName: true } } },
+      select: { userId: true, nickname: true, avatarUrl: true, playingArea: true, skillLevel: true, skill: true, user: { select: { fullName: true } } },
     });
     expect(result.matchedUsers.map((row) => [row.userId, row.matchScore, row.profile.fullName])).toEqual([
       ['7', 85, 'Fixture player 7'], ['3', 80, 'Fixture player 3'],
@@ -51,11 +51,11 @@ describe('MatchmakingService (dependency mocks only)', () => {
   it('keeps zero scores, tied scores and optional display values without sorting', async () => {
     client.recommend.mockResolvedValue({ matchedUsers: [{ userId: '7', matchScore: 0 }, { userId: '3', matchScore: 0 }], totalCandidatesProcessed: 2 });
     prisma.playerProfile.findMany.mockResolvedValue([
-      recommendationProfile(3), { ...recommendationProfile(7), nickname: 'Seven', avatarUrl: 'https://example.test/avatar.png', skillLevel: 'INTERMEDIATE' },
+      recommendationProfile(3), { ...recommendationProfile(7), nickname: 'Seven', avatarUrl: 'https://example.test/avatar.png', playingArea: 'Hai Chau', skillLevel: 'INTERMEDIATE' },
     ]);
     const result = await service.getRecommendedMatches(8, findPlayerRequest);
     expect(result.matchedUsers.map((row) => [row.userId, row.matchScore])).toEqual([['7', 0], ['3', 0]]);
-    expect(result.matchedUsers[0].profile).toEqual({ fullName: 'Fixture player 7', nickname: 'Seven', avatarUrl: 'https://example.test/avatar.png', skillLevel: 'INTERMEDIATE' });
+    expect(result.matchedUsers[0].profile).toEqual({ fullName: 'Fixture player 7', nickname: 'Seven', avatarUrl: 'https://example.test/avatar.png', playingArea: 'Hai Chau', skillLevel: 'INTERMEDIATE' });
   });
   it('keeps missing display values null and never exposes extra database properties', async () => {
     prisma.playerProfile.findMany.mockResolvedValue([{
@@ -64,7 +64,7 @@ describe('MatchmakingService (dependency mocks only)', () => {
     }]);
     const result = await service.getRecommendedMatches(8, findPlayerRequest);
     expect(result.matchedUsers).toEqual([{ userId: '7', matchScore: 85, breakdown: fastApiResponse().matched_users[0].breakdown, profile: {
-      fullName: null, nickname: null, avatarUrl: null, skillLevel: null,
+      fullName: null, nickname: null, avatarUrl: null, playingArea: null, skillLevel: null,
     } }]);
   });
   it('drops missing or no-longer-PLAYER profiles without replacing them or changing processed count', async () => {

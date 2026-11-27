@@ -7,8 +7,9 @@ import 'dart:io';
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../features/auth/screens/admin_welcome_screen.dart';
-import '../../features/auth/screens/court_owner_welcome_screen.dart';
-import '../../features/auth/screens/player_welcome_screen.dart';
+import '../../features/dashboard/data/dashboard_repository.dart';
+import '../../features/dashboard/screens/dashboard_screen.dart';
+import '../../features/player_experience/screens/player_home_screen.dart';
 import '../../features/auth/services/auth_service.dart';
 import '../data/dev_saved_accounts_repository.dart';
 import 'dev_account_selector.dart';
@@ -29,7 +30,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
 
   List<DevAccount> _accounts = [];
   bool _isLoadingAccounts = true;
-  bool _ownerQuickLoginBusy = false;
+  bool _quickLoginBusy = false;
   String? _backendPingStatus;
 
   @override
@@ -123,12 +124,11 @@ class _DevTestingHubState extends State<DevTestingHub> {
 
     Widget targetScreen;
     if (role == 'COURT_OWNER' || role == 'COURT OWNER') {
-      targetScreen = const CourtOwnerWelcomeScreen();
+      targetScreen = const DashboardScreen(role: DashboardRole.owner);
     } else if (role == 'ADMIN') {
       targetScreen = const AdminWelcomeScreen();
     } else {
-      // Keep quick login consistent with the normal Player login flow.
-      targetScreen = const PlayerWelcomeScreen();
+      targetScreen = const PlayerHomeScreen();
     }
 
     Navigator.pushAndRemoveUntil(
@@ -141,81 +141,86 @@ class _DevTestingHubState extends State<DevTestingHub> {
   }
 
   Future<void> _triggerLoginForAccount(DevAccount account) async {
-    if (!kDebugMode) return;
-    final key = switch (account.email.toLowerCase()) {
-      'player@smatch.dev' => 'DEV_PLAYER_1_PASSWORD',
-      'player2@smatch.dev' => 'DEV_PLAYER_2_PASSWORD',
-      'player3@smatch.dev' => 'DEV_PLAYER_3_PASSWORD',
-      'owner@smatch.dev' => 'DEV_OWNER_PASSWORD',
-      'admin@smatch.dev' => 'DEV_ADMIN_PASSWORD',
-      _ => '',
-    };
-    var password = switch (account.email.toLowerCase()) {
-      'player@smatch.dev' => const String.fromEnvironment(
-        'DEV_PLAYER_1_PASSWORD',
-      ),
-      'player2@smatch.dev' => const String.fromEnvironment(
-        'DEV_PLAYER_2_PASSWORD',
-      ),
-      'player3@smatch.dev' => const String.fromEnvironment(
-        'DEV_PLAYER_3_PASSWORD',
-      ),
-      'owner@smatch.dev' => const String.fromEnvironment('DEV_OWNER_PASSWORD'),
-      'admin@smatch.dev' => const String.fromEnvironment('DEV_ADMIN_PASSWORD'),
-      _ => '',
-    };
-    if (key.isNotEmpty) {
-      try {
-        final file = File(
-          '${Directory.systemTemp.parent.path}/Documents/smatch_dev_quick_login.json',
-        );
-        if (await file.exists()) {
-          final data = jsonDecode(await file.readAsString());
-          if (data is Map && data[key] is String) {
-            password = data[key] as String;
+    if (!kDebugMode || _quickLoginBusy) return;
+    _quickLoginBusy = true;
+    try {
+      final email = account.email.toLowerCase();
+      final (key, compiledPassword) = switch (email) {
+        'player@smatch.dev' => const (
+          'DEV_PLAYER_1_PASSWORD',
+          String.fromEnvironment('DEV_PLAYER_1_PASSWORD'),
+        ),
+        'player2@smatch.dev' => const (
+          'DEV_PLAYER_2_PASSWORD',
+          String.fromEnvironment('DEV_PLAYER_2_PASSWORD'),
+        ),
+        'player3@smatch.dev' => const (
+          'DEV_PLAYER_3_PASSWORD',
+          String.fromEnvironment('DEV_PLAYER_3_PASSWORD'),
+        ),
+        'owner@smatch.dev' => const (
+          'DEV_OWNER_PASSWORD',
+          String.fromEnvironment('DEV_OWNER_PASSWORD'),
+        ),
+        'admin@smatch.dev' => const (
+          'DEV_ADMIN_PASSWORD',
+          String.fromEnvironment('DEV_ADMIN_PASSWORD'),
+        ),
+        _ => ('', ''),
+      };
+      var password = compiledPassword;
+      if (key.isNotEmpty && password.isEmpty) {
+        final files = [
+          if (Platform.isIOS)
+            File(
+              '${File(Platform.resolvedExecutable).parent.path}/smatch_dev_quick_login.json',
+            ),
+          File(
+            '${Directory.systemTemp.parent.path}/Documents/smatch_dev_quick_login.json',
+          ),
+        ];
+        for (final file in files) {
+          try {
+            if (!await file.exists()) continue;
+            final data = jsonDecode(await file.readAsString());
+            if (data is Map &&
+                data[key] is String &&
+                (data[key] as String).isNotEmpty) {
+              password = data[key] as String;
+              break;
+            }
+          } on FileSystemException {
+            continue;
+          } on FormatException {
+            continue;
           }
         }
-      } catch (_) {
-        // Missing development configuration falls back to the normal login dialog.
       }
-    }
-    if (!mounted) return;
-    if (account.email.toLowerCase() == 'owner@smatch.dev' &&
-        password.isNotEmpty) {
-      if (_ownerQuickLoginBusy) return;
-      _ownerQuickLoginBusy = true;
-      try {
-        final success = await _handleLogin(account.email, password);
-        if (success && mounted) {
-          _navigateToRoleScreen(_auth.currentUser?['role']?.toString() ?? '');
+      if (!mounted) return;
+      if (password.isNotEmpty && key != 'DEV_ADMIN_PASSWORD') {
+        if (await _handleLogin(account.email, password) && mounted) {
+          _navigateToRoleScreen(_auth.currentUser!['role'].toString());
         }
-      } finally {
-        _ownerQuickLoginBusy = false;
+        return;
       }
-      return;
+      await DevAccountSelector.showQuickLoginDialog(
+        context: context,
+        account: account,
+        initialPassword: password,
+        onLogin: _handleLogin,
+        onSuccess: (_) =>
+            _navigateToRoleScreen(_auth.currentUser!['role'].toString()),
+      );
+    } finally {
+      _quickLoginBusy = false;
     }
-    DevAccountSelector.showQuickLoginDialog(
-      context: context,
-      account: account,
-      initialPassword: password,
-      onLogin: (email, pass) => _handleLogin(email, pass),
-      onSuccess: (role) => _navigateToRoleScreen(role),
-    );
   }
 
-  void _triggerQuickRoleLogin(String role) {
+  void _triggerQuickRoleLogin(String role, String email) {
     final candidate = _accounts.firstWhere(
-      (a) => a.role.toUpperCase() == role.toUpperCase(),
-      orElse: () => DevAccount(
-        id: 'temp',
-        label: role,
-        email: role == 'COURT_OWNER'
-            ? 'owner@smatch.dev'
-            : role == 'ADMIN'
-            ? 'admin@smatch.dev'
-            : 'player@smatch.dev',
-        role: role,
-      ),
+      (account) => account.email.toLowerCase() == email,
+      orElse: () =>
+          DevAccount(id: 'temp', label: role, email: email, role: role),
     );
     _triggerLoginForAccount(candidate);
   }
@@ -491,7 +496,7 @@ class _DevTestingHubState extends State<DevTestingHub> {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => _triggerQuickRoleLogin(roleId),
+        onTap: () => _triggerQuickRoleLogin(roleId, accountSeed),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
           child: Column(

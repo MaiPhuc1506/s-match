@@ -72,6 +72,14 @@ class _CommunityRatingScreenState extends State<CommunityRatingScreen> {
     }
   }
 
+  String get reputationCaption {
+    final count = summary?.count ?? 0;
+    final reliability = summary?.reliability;
+    final label = '$count community ${count == 1 ? 'rating' : 'ratings'}';
+    if (count == 0 || reliability == null) return label;
+    return '$label · Reliability ${reliability.toStringAsFixed(2)}/5';
+  }
+
   @override
   Widget build(BuildContext context) => FeedbackScaffold(
     title: 'Community rating',
@@ -115,7 +123,7 @@ class _CommunityRatingScreenState extends State<CommunityRatingScreen> {
                     const SizedBox(height: 10),
                     Text(
                       widget.live
-                          ? '${summary?.count ?? 0} community ratings · Reliability ${summary?.reliability?.toStringAsFixed(2) ?? '—'}/5'
+                          ? reputationCaption
                           : '★★★★★  ·  32 community ratings',
                       style: feedbackText(
                         13,

@@ -45,6 +45,7 @@ class Sprint2BackHeader extends StatelessWidget {
             width: 44,
             height: 44,
             child: IconButton(
+              tooltip: 'Back',
               onPressed: () => Navigator.of(context).pop(),
               icon: SvgPicture.asset(
                 'assets/icons/register_back.svg',
@@ -93,21 +94,24 @@ class Sprint2FormBody extends StatelessWidget {
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: IntrinsicHeight(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(24, 16, 24, bottom),
-              child: AppStaggeredColumn(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (var i = 0; i < children.length; i++) ...[
-                    if (i > 0) SizedBox(height: spacing),
-                    children[i],
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(24, 16, 24, bottom),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                AppStaggeredColumn(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < children.length; i++) ...[
+                      if (i > 0) SizedBox(height: spacing),
+                      children[i],
+                    ],
+                    SizedBox(height: spacing),
                   ],
-                  SizedBox(height: spacing),
-                  const Spacer(),
-                  button,
-                ],
-              ),
+                ),
+                AppReveal(delay: (children.length * 90).clamp(0, 270), child: button),
+              ],
             ),
           ),
         ),

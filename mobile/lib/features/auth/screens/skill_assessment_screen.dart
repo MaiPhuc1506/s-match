@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_motion.dart';
@@ -28,9 +29,14 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
   Future<void> load() async {
     final client = ApiClient.instance;
     final token = client.token;
+    final version = client.sessionVersion;
+    if (token == null) {
+      setState(() => error = 'Sign in to view your skill profile.');
+      return;
+    }
     try {
-      final response = await client.dio.get('/players/profile/me');
-      if (!mounted || client.token != token) return;
+      final response = await client.dio.get('/players/profile/me', options: Options(extra: {'expectedAuthToken': token}));
+      if (!mounted || client.sessionVersion != version) return;
       setState(
         () => profile = Map<String, dynamic>.from(
           response.data['playerProfile'] as Map,
@@ -111,7 +117,7 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'You’re improving!',
+                              'Skill development',
                               style: Sprint2Style.font(
                                 13,
                                 18,

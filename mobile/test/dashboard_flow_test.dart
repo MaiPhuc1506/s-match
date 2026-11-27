@@ -256,7 +256,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('09/11/2026 · UTC+7'), findsOneWidget);
-    expect(find.text('18:00–18:30 · 30 phút'), findsOneWidget);
+    expect(find.text('18:00–18:30 · 30 min'), findsOneWidget);
     expect(find.text('Actual player'), findsOneWidget);
     expect(find.text('Owned Centre'), findsOneWidget);
     expect(find.textContaining('901234567'), findsNothing);

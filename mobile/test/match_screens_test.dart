@@ -6,6 +6,9 @@ import 'package:mobile/features/match/screens/match_detail_open_screen.dart';
 import 'package:mobile/features/match/screens/match_invitations_screen.dart';
 import 'package:mobile/features/match/screens/match_join_requests_screen.dart';
 
+// Legacy preview navigation is selected explicitly. The default list uses the live API.
+void _onPreviewMyMatches() {}
+
 void main() {
   Future<void> usePhoneViewport(WidgetTester tester) async {
     await tester.binding.setSurfaceSize(const Size(393, 852));
@@ -56,7 +59,7 @@ void main() {
     'MatchListScreen renders verified cards and can navigate to CreateMatchScreen',
     (tester) async {
       await usePhoneViewport(tester);
-      await tester.pumpWidget(const MaterialApp(home: MatchListScreen()));
+      await tester.pumpWidget(const MaterialApp(home: MatchListScreen(onMyMatches: _onPreviewMyMatches)));
 
       // Verify Title & Header
       expect(find.text('Matches'), findsAtLeastNWidgets(1));
@@ -90,7 +93,7 @@ void main() {
     tester,
   ) async {
     await usePhoneViewport(tester);
-    await tester.pumpWidget(const MaterialApp(home: MatchListScreen()));
+    await tester.pumpWidget(const MaterialApp(home: MatchListScreen(onMyMatches: _onPreviewMyMatches)));
 
     // Tap first match card
     await tester.tap(find.text('Friendly Doubles'));

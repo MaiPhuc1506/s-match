@@ -394,7 +394,8 @@ void main() {
       await tester.scrollUntilVisible(find.text('No ratings yet'), 180);
       expect(find.text('No ratings yet'), findsOneWidget);
       expect(find.text('4.9'), findsNothing);
-      expect(find.textContaining('Reliability 4.50/5'), findsOneWidget);
+      expect(find.text('0 community ratings'), findsOneWidget);
+      expect(find.textContaining('Reliability'), findsNothing);
     },
   );
 }

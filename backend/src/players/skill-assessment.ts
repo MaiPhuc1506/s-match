@@ -8,5 +8,7 @@ export function assessmentScore(skill?: Partial<Record<(typeof SKILL_AXES)[numbe
 
 // Existing recommendation buckets: levels 1–2, 3–4 and 5.
 export function effectiveSkillLevel(score: number | null, fallback: string | null): string | null {
-  return score === null ? fallback : score === 5 ? 'ADVANCED' : score >= 3 ? 'INTERMEDIATE' : 'BEGINNER';
+  // BEGINNER is also the database default on legacy profiles without an assessment.
+  if (score === null) return fallback === 'BEGINNER' ? null : fallback;
+  return score === 5 ? 'ADVANCED' : score >= 3 ? 'INTERMEDIATE' : 'BEGINNER';
 }

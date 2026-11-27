@@ -75,8 +75,8 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
     expect(provider.getCandidates).toHaveBeenCalledWith(8, expect.objectContaining(findPlayerRequest));
     expect(http.post.mock.calls[0][1].current_user.user_id).toBe('8');
     expect(response.body).toEqual({ matchedUsers: [
-      { userId: '7', matchScore: 85, breakdown: fastApiResponse().matched_users[0].breakdown, profile: { fullName: 'Fixture player 7', nickname: null, avatarUrl: null, skillLevel: null } },
-      { userId: '3', matchScore: 80, breakdown: fastApiResponse().matched_users[1].breakdown, profile: { fullName: 'Fixture player 3', nickname: null, avatarUrl: null, skillLevel: null } },
+      { userId: '7', matchScore: 85, breakdown: fastApiResponse().matched_users[0].breakdown, profile: { fullName: 'Fixture player 7', nickname: null, avatarUrl: null, playingArea: null, skillLevel: null } },
+      { userId: '3', matchScore: 80, breakdown: fastApiResponse().matched_users[1].breakdown, profile: { fullName: 'Fixture player 3', nickname: null, avatarUrl: null, playingArea: null, skillLevel: null } },
     ], totalCandidatesProcessed: 2 });
     expect(provider.getCandidates).toHaveBeenCalledTimes(1);
     expect(http.post).toHaveBeenCalledTimes(1);
@@ -199,7 +199,7 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
     expect(Object.keys(response.body).sort()).toEqual(['matchedUsers', 'totalCandidatesProcessed']);
     for (const entry of response.body.matchedUsers) {
       expect(Object.keys(entry).sort()).toEqual(['breakdown', 'matchScore', 'profile', 'userId']);
-      expect(Object.keys(entry.profile).sort()).toEqual(['avatarUrl', 'fullName', 'nickname', 'skillLevel']);
+      expect(Object.keys(entry.profile).sort()).toEqual(['avatarUrl', 'fullName', 'nickname', 'playingArea', 'skillLevel']);
     }
     expect(JSON.stringify(response.body)).not.toContain('PRIVATE_DETAILS');
   });
@@ -226,10 +226,10 @@ describe('SMM-26 Gateway HTTP (real guard/service/client, mocked Prisma/provider
     const response = await post();
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ matchedUsers: [{ userId: '7', matchScore: 85, breakdown: fastApiResponse().matched_users[0].breakdown, profile: {
-      fullName: null, nickname: 'Seven', avatarUrl: 'https://example.test/avatar.png', skillLevel: 'BEGINNER',
+      fullName: null, nickname: 'Seven', avatarUrl: 'https://example.test/avatar.png', playingArea: null, skillLevel: null,
     } }], totalCandidatesProcessed: 2 });
     expect(prisma.playerProfile.findMany.mock.calls[0][0].select).toEqual({
-      userId: true, nickname: true, avatarUrl: true, skillLevel: true, skill: true, user: { select: { fullName: true } },
+      userId: true, nickname: true, avatarUrl: true, playingArea: true, skillLevel: true, skill: true, user: { select: { fullName: true } },
     });
   });
   it('excludes candidates who revoke sharing while ranking is in progress', async () => {
